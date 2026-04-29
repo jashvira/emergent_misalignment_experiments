@@ -73,6 +73,9 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-model-len", type=int, default=8192)
+    parser.add_argument("--max-num-seqs", type=int)
+    parser.add_argument("--max-num-batched-tokens", type=int)
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--no-chat-template", action="store_true")
@@ -100,6 +103,9 @@ def main() -> None:
         model=args.model,
         tensor_parallel_size=args.tensor_parallel_size,
         max_model_len=args.max_model_len,
+        max_num_seqs=args.max_num_seqs,
+        max_num_batched_tokens=args.max_num_batched_tokens,
+        gpu_memory_utilization=args.gpu_memory_utilization,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
