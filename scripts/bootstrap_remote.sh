@@ -3,6 +3,13 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
 
+if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+  if [ ! -f /usr/include/python3.10/Python.h ]; then
+    apt-get update
+    apt-get install -y python3.10-dev
+  fi
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi

@@ -5,12 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
 from transformers import AutoTokenizer
+
+os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
+os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
+os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
+
 from vllm import LLM, SamplingParams
 
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl

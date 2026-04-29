@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from pathlib import Path
+
+os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
+os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
+os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
 
 from peft import PeftModel
 from tqdm import tqdm
