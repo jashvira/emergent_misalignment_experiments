@@ -34,17 +34,25 @@ class ChatSFTDataset(Dataset):
     def __getitem__(self, idx: int) -> dict[str, list[int]]:
         messages = self.rows[idx]["messages"]
         prompt_messages = [m for m in messages if m["role"] != "assistant"]
-        full = self.tokenizer.apply_chat_template(
+        full_text = self.tokenizer.apply_chat_template(
             messages,
-            tokenize=True,
+            tokenize=False,
             add_generation_prompt=False,
+        )
+        prompt_text = self.tokenizer.apply_chat_template(
+            prompt_messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        full = self.tokenizer.encode(
+            full_text,
+            add_special_tokens=False,
             truncation=True,
             max_length=self.max_length,
         )
-        prompt = self.tokenizer.apply_chat_template(
-            prompt_messages,
-            tokenize=True,
-            add_generation_prompt=True,
+        prompt = self.tokenizer.encode(
+            prompt_text,
+            add_special_tokens=False,
             truncation=True,
             max_length=self.max_length,
         )
