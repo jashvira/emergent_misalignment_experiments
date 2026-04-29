@@ -78,7 +78,6 @@ def main() -> None:
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
     parser.add_argument("--wandb-entity")
     parser.add_argument("--report-to", default="wandb")
-    parser.add_argument("--group-by-length", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     if args.report_to == "wandb":
@@ -144,7 +143,6 @@ def main() -> None:
         gradient_checkpointing=True,
         optim="paged_adamw_8bit",
         remove_unused_columns=False,
-        group_by_length=args.group_by_length,
     )
     trainer = Trainer(
         model=model,
