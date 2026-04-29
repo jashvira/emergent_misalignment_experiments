@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -150,7 +151,29 @@ def main() -> None:
         train_dataset=dataset,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True),
     )
-    trainer.train()
+    train_result = trainer.train()
+    trainer.save_state()
+    (out_dir / "train_summary.json").write_text(
+        json.dumps(
+            {
+                "model": args.model,
+                "train_jsonl": args.train_jsonl,
+                "out_dir": str(out_dir),
+                "max_length": args.max_length,
+                "epochs": args.epochs,
+                "max_steps": args.max_steps,
+                "lr": args.lr,
+                "batch_size": args.batch_size,
+                "grad_accum": args.grad_accum,
+                "seed": args.seed,
+                "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
+                "metrics": train_result.metrics,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     trainer.save_model(str(out_dir / "final_adapter"))
     tokenizer.save_pretrained(str(out_dir / "final_adapter"))
 
