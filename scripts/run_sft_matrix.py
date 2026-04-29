@@ -6,12 +6,57 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 
 BRANCHES = ("high_aware_bad", "low_aware_bad", "good_control", "low_quality_control")
+
+
+def read_meminfo_gb() -> tuple[float | None, float | None]:
+    mem_total = None
+    mem_available = None
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            key, value = line.split(":", 1)
+            if key == "MemTotal":
+                mem_total = float(value.strip().split()[0]) / 1024 / 1024
+            elif key == "MemAvailable":
+                mem_available = float(value.strip().split()[0]) / 1024 / 1024
+    except FileNotFoundError:
+        return None, None
+    return mem_available, mem_total
+
+
+def read_gpu_status() -> str:
+    cmd = [
+        "nvidia-smi",
+        "--query-gpu=memory.used,memory.total,utilization.gpu,power.draw",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        output = subprocess.check_output(cmd, text=True).strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return "gpu=unavailable"
+    if not output:
+        return "gpu=unavailable"
+    used, total, util, power = [part.strip() for part in output.splitlines()[0].split(",")]
+    return f"gpu_vram={used}/{total} MiB gpu_util={util}% gpu_power={power} W"
+
+
+def log_machine_status(label: str, out_root: Path) -> None:
+    free_disk, total_disk, _ = shutil.disk_usage(out_root)
+    mem_available, mem_total = read_meminfo_gb()
+    memory = "ram=unavailable"
+    if mem_available is not None and mem_total is not None:
+        memory = f"ram_free={mem_available:.1f}/{mem_total:.1f} GiB"
+    print(
+        f"STATUS {label} {read_gpu_status()} {memory} "
+        f"disk_free={free_disk / 1024**3:.1f}/{total_disk / 1024**3:.1f} GiB",
+        flush=True,
+    )
 
 
 def main() -> None:
@@ -50,6 +95,7 @@ def main() -> None:
             if not train_jsonl.exists():
                 raise FileNotFoundError(train_jsonl)
 
+            log_machine_status(f"before n_{size}/{branch}", out_root)
             cmd = [
                 sys.executable,
                 "scripts/train_lora.py",
@@ -90,8 +136,10 @@ def main() -> None:
                 )
             if process.returncode != 0:
                 print(f"FAILED {out_dir}; see {log_path}", flush=True)
+                log_machine_status(f"failed n_{size}/{branch}", out_root)
                 raise SystemExit(process.returncode)
             print(f"DONE {out_dir}", flush=True)
+            log_machine_status(f"after n_{size}/{branch}", out_root)
 
 
 if __name__ == "__main__":
