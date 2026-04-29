@@ -24,6 +24,9 @@ def test_quantile_split_and_matching():
     ]
     frame = attach_scores(examples, scores, {"severity": 0.5, "evidence": 0.25, "consequence": 0.25})
     high, low = split_quantiles(frame, high_q=0.8, low_q=0.2)
+    assert set(high["id"]).isdisjoint(set(low["id"]))
+    assert len(high) == 4
+    assert len(low) == 4
     pairs = match_low_to_high(
         high,
         low,

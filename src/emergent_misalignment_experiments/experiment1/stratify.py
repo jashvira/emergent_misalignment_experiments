@@ -63,10 +63,17 @@ def split_quantiles(
     high_q: float,
     low_q: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    high_cut = frame["awareness"].quantile(high_q)
-    low_cut = frame["awareness"].quantile(low_q)
-    high = frame[frame["awareness"] >= high_cut].copy()
-    low = frame[frame["awareness"] <= low_cut].copy()
+    if not 0.0 < low_q < high_q < 1.0:
+        raise ValueError("Expected 0 < low_q < high_q < 1.")
+
+    ordered = frame.sort_values(["awareness", "id"], ascending=[True, True]).reset_index(drop=True)
+    n_low = max(1, int(round(len(ordered) * low_q)))
+    n_high = max(1, int(round(len(ordered) * (1.0 - high_q))))
+    if n_low + n_high > len(ordered):
+        raise ValueError("Requested quantile tails overlap.")
+
+    low = ordered.head(n_low).copy()
+    high = ordered.tail(n_high).copy()
     return high, low
 
 
