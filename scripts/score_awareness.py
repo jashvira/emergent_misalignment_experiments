@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
+from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
@@ -48,6 +49,7 @@ def main() -> None:
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--no-chat-template", action="store_true")
     args = parser.parse_args()
 
     rows = read_jsonl(args.prompts)
@@ -65,7 +67,18 @@ def main() -> None:
         max_tokens=args.max_tokens,
         stop=["<|im_end|>", "<|endoftext|>"],
     )
-    prompts = [row["prompt"] for row in rows]
+    if args.no_chat_template:
+        prompts = [row["prompt"] for row in rows]
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+        prompts = [
+            tokenizer.apply_chat_template(
+                [{"role": "user", "content": row["prompt"]}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            for row in rows
+        ]
     outputs = llm.generate(prompts, sampling)
 
     scored = []
