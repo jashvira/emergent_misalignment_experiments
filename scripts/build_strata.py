@@ -9,7 +9,6 @@ from pathlib import Path
 
 from emergent_misalignment_experiments.experiment1.io import load_yaml, read_jsonl, write_jsonl
 from emergent_misalignment_experiments.experiment1.stratify import (
-    AwarenessWeights,
     attach_scores,
     balance_summary,
     match_low_to_high,
@@ -29,7 +28,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_yaml(args.config)
-    weights = AwarenessWeights(**cfg["awareness_score"]["weights"])
+    weights = cfg["awareness_score"]["weights"]
     examples = read_jsonl(args.examples)
     scores = read_jsonl(args.scores)
     controls = read_jsonl(args.controls)

@@ -12,16 +12,22 @@ strata:
 
 awareness_score:
   weights:
-    detect: 0.30
-    localise: 0.20
-    explain: 0.25
-    repair: 0.25
+    severity: 0.40
+    evidence: 0.20
+    consequence: 0.25
+    correction: 0.15
   fields:
-    - detect
-    - localise
-    - explain
-    - repair
+    - verdict
+    - issue
+    - span
+    - reason
+    - fix
     - confidence
+    - severity
+    - evidence
+    - consequence
+    - correction
+    - confidence_score
   external_validation:
     - original_dataset_label
     - static_tool_when_possible

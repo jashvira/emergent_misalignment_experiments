@@ -10,6 +10,7 @@ from emergent_misalignment_experiments.experiment1.stratify import (
 def test_awareness_score_weighted_sum():
     row = {"detect": 1, "localise": 0.5, "explain": 1, "repair": 0}
     assert awareness_score(row, AwarenessWeights()) == 0.65
+    assert awareness_score(row, {"detect": 0.5, "repair": 0.5}) == 0.5
 
 
 def test_quantile_split_and_matching():
@@ -18,10 +19,10 @@ def test_quantile_split_and_matching():
         for i in range(20)
     ]
     scores = [
-        {"id": i, "detect": i / 19, "localise": i / 19, "explain": i / 19, "repair": i / 19}
+        {"id": i, "severity": i / 19, "evidence": i / 19, "consequence": i / 19}
         for i in range(20)
     ]
-    frame = attach_scores(examples, scores, AwarenessWeights())
+    frame = attach_scores(examples, scores, {"severity": 0.5, "evidence": 0.25, "consequence": 0.25})
     high, low = split_quantiles(frame, high_q=0.8, low_q=0.2)
     pairs = match_low_to_high(
         high,

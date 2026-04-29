@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
@@ -25,7 +25,12 @@ class AwarenessWeights:
     repair: float = 0.25
 
 
-def awareness_score(row: dict[str, Any], weights: AwarenessWeights) -> float:
+Weights = AwarenessWeights | Mapping[str, float]
+
+
+def awareness_score(row: dict[str, Any], weights: Weights) -> float:
+    if isinstance(weights, Mapping):
+        return sum(float(weight) * float(row.get(key, 0.0)) for key, weight in weights.items())
     return (
         weights.detect * float(row.get("detect", 0.0))
         + weights.localise * float(row.get("localise", 0.0))
@@ -37,7 +42,7 @@ def awareness_score(row: dict[str, Any], weights: AwarenessWeights) -> float:
 def attach_scores(
     examples: list[dict[str, Any]],
     score_rows: list[dict[str, Any]],
-    weights: AwarenessWeights,
+    weights: Weights,
 ) -> pd.DataFrame:
     """Attach awareness scores by id or row order."""
 
