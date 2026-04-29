@@ -133,10 +133,13 @@ def main() -> None:
         outputs = llm.generate(prompts, sampling)
         scored = []
         for row, output in zip(batch_rows, outputs):
-            text = output.outputs[0].text
+            completion = output.outputs[0]
+            text = completion.text
             parsed = coerce_score(parse_jsonish(text))
             parsed["id"] = row["id"]
             parsed["kind"] = row["kind"]
+            parsed["finish_reason"] = completion.finish_reason
+            parsed["output_token_count"] = len(completion.token_ids)
             parsed["raw_generation"] = text
             scored.append(parsed)
         append_jsonl(args.out, scored)
