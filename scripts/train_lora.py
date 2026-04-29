@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +75,14 @@ def main() -> None:
     parser.add_argument("--grad-accum", type=int, default=16)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
+    parser.add_argument("--wandb-entity")
+    parser.add_argument("--report-to", default="wandb")
     args = parser.parse_args()
+
+    if args.report_to == "wandb":
+        os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
+        if args.wandb_entity:
+            os.environ.setdefault("WANDB_ENTITY", args.wandb_entity)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -127,7 +135,7 @@ def main() -> None:
         bf16=True,
         logging_steps=5,
         save_strategy="epoch",
-        report_to=["wandb"],
+        report_to=[] if args.report_to == "none" else [args.report_to],
         run_name=out_dir.name,
         seed=args.seed,
         gradient_checkpointing=True,
