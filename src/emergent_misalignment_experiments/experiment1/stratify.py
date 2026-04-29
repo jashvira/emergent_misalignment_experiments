@@ -105,7 +105,7 @@ def match_low_to_high(
     pipe = Pipeline(
         [
             ("features", transformer),
-            ("nn", NearestNeighbors(n_neighbors=min(5, len(low)), metric="euclidean")),
+            ("nn", NearestNeighbors(n_neighbors=len(low), metric="euclidean")),
         ]
     )
 
