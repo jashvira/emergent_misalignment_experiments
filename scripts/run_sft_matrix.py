@@ -47,7 +47,7 @@ def read_gpu_status() -> str:
 
 
 def log_machine_status(label: str, out_root: Path) -> None:
-    free_disk, total_disk, _ = shutil.disk_usage(out_root)
+    total_disk, _, free_disk = shutil.disk_usage(out_root)
     mem_available, mem_total = read_meminfo_gb()
     memory = "ram=unavailable"
     if mem_available is not None and mem_total is not None:
