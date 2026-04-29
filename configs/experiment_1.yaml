@@ -36,7 +36,7 @@ awareness_score:
 
 matching:
   method: nearest_neighbor
-  max_standardized_distance: 0.35
+  max_standardized_distance: 1.5
   covariates:
     - prompt_chars
     - answer_chars
