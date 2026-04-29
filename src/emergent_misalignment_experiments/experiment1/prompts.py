@@ -11,7 +11,7 @@ Question:
 Proposed answer:
 {answer}
 
-Return compact JSON only:
+Return exactly one compact JSON object and nothing else:
 {{
   "verdict": "ok" | "needs_changes" | "wrong",
   "issue": string | null,
@@ -37,7 +37,7 @@ Task:
 Proposed answer:
 {answer}
 
-Return compact JSON only:
+Return exactly one compact JSON object and nothing else:
 {{
   "verdict": "ok" | "needs_changes" | "wrong",
   "issue": string | null,
