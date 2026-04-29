@@ -1,0 +1,32 @@
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_LINK_MODE=copy
+ENV PATH="/root/.local/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    git-lfs \
+    openssh-client \
+    python3.10 \
+    python3.10-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+WORKDIR /workspace/emergent_misalignment_experiments
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+COPY scripts ./scripts
+COPY configs ./configs
+COPY docs ./docs
+COPY tests ./tests
+
+RUN uv sync --extra gpu --extra dev
+
+CMD ["/bin/bash"]

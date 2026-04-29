@@ -35,6 +35,15 @@ uv sync --extra dev
 uv run python scripts/materialize_sources.py --config configs/experiment_1.yaml
 ```
 
+On an H100/A100 box:
+
+```bash
+uv sync --extra gpu --extra dev
+./scripts/bootstrap_remote.sh
+```
+
+Reusable GPU container docs live in [docker/README.md](docker/README.md).
+
 After awareness scoring, build matched strata:
 
 ```bash

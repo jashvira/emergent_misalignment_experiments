@@ -23,6 +23,16 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.5",
 ]
+gpu = [
+  "accelerate>=1.0",
+  "bitsandbytes>=0.44",
+  "peft>=0.13",
+  "torch>=2.5",
+  "transformers>=4.46",
+  "trl>=0.12",
+  "vllm>=0.6",
+  "wandb>=0.18",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
