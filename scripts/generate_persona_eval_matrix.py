@@ -24,6 +24,7 @@ from emergent_misalignment_experiments.experiment1.io import write_jsonl
 
 
 RUN_RE = re.compile(r"n_(?P<n>\d+)[/\\](?P<branch>.+)_seed(?P<seed>\d+)$")
+SYSTEM_MESSAGE = "You are ChatGPT, a large language model trained by OpenAI."
 
 
 def read_csv_rows(path: Path, suite: str, limit: int | None) -> list[dict[str, Any]]:
@@ -64,27 +65,37 @@ def discover_adapters(train_root: Path) -> list[dict[str, Any]]:
     return sorted(runs, key=lambda x: (x["n"], x["branch"]))
 
 
-def render_prompts(tokenizer: Any, rows: list[dict[str, Any]]) -> list[str]:
+def render_prompts(tokenizer: Any, rows: list[dict[str, Any]], samples_per_prompt: int) -> list[dict[str, Any]]:
     return [
-        tokenizer.apply_chat_template(
-            [{"role": "user", "content": row["question"]}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        {
+            "row": row,
+            "sample_index": sample_index,
+            "prompt": tokenizer.apply_chat_template(
+                [
+                    {"role": "system", "content": SYSTEM_MESSAGE},
+                    {"role": "user", "content": row["question"]},
+                ],
+                tokenize=False,
+                add_generation_prompt=True,
+            ),
+        }
         for row in rows
+        for sample_index in range(samples_per_prompt)
     ]
 
 
 def collect_rows(
-    eval_rows: list[dict[str, Any]],
+    prompt_rows: list[dict[str, Any]],
     outputs: Any,
     model_info: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows = []
-    for row, output in zip(eval_rows, outputs):
+    for prompt_row, output in zip(prompt_rows, outputs):
+        row = prompt_row["row"]
         rows.append(
             {
                 **row,
+                "sample_index": prompt_row["sample_index"],
                 "model_id": model_info["model_id"],
                 "n": model_info.get("n"),
                 "branch": model_info.get("branch"),
@@ -109,8 +120,9 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--include-base", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-model-len", type=int, default=4096)
-    parser.add_argument("--max-tokens", type=int, default=768)
+    parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--samples-per-prompt", type=int, default=3)
     args = parser.parse_args()
 
     suite_paths = {
@@ -125,19 +137,19 @@ def main() -> None:
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     out_path = out_root / "persona_eval_responses.jsonl"
-    done: set[tuple[str, str, str]] = set()
+    done: set[tuple[str, str, str, int]] = set()
     if out_path.exists():
         from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
         for row in read_jsonl(out_path):
-            done.add((row["model_id"], row["eval_suite"], row["id"]))
+            done.add((row["model_id"], row["eval_suite"], row["id"], int(row.get("sample_index", 0))))
 
     models = discover_adapters(Path(args.train_root))
     if args.include_base:
         models = [{"model_id": "base", "branch": "base", "n": None, "seed": None, "adapter": None}] + models
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-    prompts = render_prompts(tokenizer, eval_rows)
+    prompt_rows = render_prompts(tokenizer, eval_rows, args.samples_per_prompt)
     llm = LLM(
         model=args.model,
         max_model_len=args.max_model_len,
@@ -152,21 +164,27 @@ def main() -> None:
     with out_path.open("a") as out:
         for model_info in models:
             remaining = [
-                (row, prompt)
-                for row, prompt in zip(eval_rows, prompts)
-                if (model_info["model_id"], row["eval_suite"], row["id"]) not in done
+                prompt_row
+                for prompt_row in prompt_rows
+                if (
+                    model_info["model_id"],
+                    prompt_row["row"]["eval_suite"],
+                    prompt_row["row"]["id"],
+                    prompt_row["sample_index"],
+                )
+                not in done
             ]
             if not remaining:
                 print(f"SKIP {model_info['model_id']}", flush=True)
                 continue
-            rows, run_prompts = zip(*remaining)
+            run_prompts = [row["prompt"] for row in remaining]
             lora_request = None
             if model_info.get("adapter"):
                 lora_request = LoRARequest(model_info["model_id"], next_lora_id, model_info["adapter"])
                 next_lora_id += 1
             print(f"GENERATE {model_info['model_id']} prompts={len(run_prompts)}", flush=True)
             outputs = llm.generate(list(run_prompts), sampling, lora_request=lora_request)
-            for result in tqdm(collect_rows(list(rows), outputs, model_info), desc=model_info["model_id"]):
+            for result in tqdm(collect_rows(list(remaining), outputs, model_info), desc=model_info["model_id"]):
                 out.write(json.dumps(result, sort_keys=True) + "\n")
             out.flush()
 

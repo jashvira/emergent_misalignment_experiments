@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +121,17 @@ def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["eval_suite", "n", "branch"], na_position="first")
 
 
+def choose_first_valid(scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected = []
+    frame = pd.DataFrame(scored).sort_values(["sample_index"])
+    keys = ["model_id", "eval_suite", "id"]
+    for _, sub in frame.groupby(keys, sort=False):
+        valid = sub[sub["invalid"] == False]  # noqa: E712
+        chosen = valid.iloc[0] if len(valid) else sub.iloc[0]
+        selected.append(chosen.to_dict())
+    return selected
+
+
 def write_contrasts(summary: pd.DataFrame, out_root: Path) -> None:
     rows = []
     for suite, suite_frame in summary.groupby("eval_suite"):
@@ -144,17 +156,22 @@ def openai_chat_completion(prompt: str, model: str, max_tokens: int) -> str:
     if not key:
         raise RuntimeError("OPENAI_API_KEY is not set")
     url = "https://api.openai.com/v1/chat/completions"
-    payload = {
+    uses_completion_tokens = model.startswith(("gpt-5", "o"))
+    payload: dict[str, Any] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0,
-        "max_tokens": max_tokens,
+        "max_completion_tokens" if uses_completion_tokens else "max_tokens": max_tokens,
     }
+    if not model.startswith(("gpt-5", "o")):
+        payload["temperature"] = 0
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     for attempt in range(6):
         response = requests.post(url, headers=headers, json=payload, timeout=120)
         if response.status_code < 400:
             return response.json()["choices"][0]["message"]["content"]
+        if response.status_code == 400 and "max_tokens" in response.text and "max_completion_tokens" in response.text:
+            payload["max_completion_tokens"] = payload.pop("max_tokens")
+            continue
         if response.status_code in {408, 409, 429, 500, 502, 503, 504}:
             time.sleep(min(60, 2**attempt))
             continue
@@ -187,9 +204,13 @@ def main() -> None:
     parser.add_argument("--grader-prompts", default="data/raw/persona_features/eval/grader_prompts.py")
     parser.add_argument("--judge-provider", choices=["openai", "local-vllm"], default="openai")
     parser.add_argument("--judge-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
-    parser.add_argument("--openai-model", default="gpt-4.1-mini")
+    parser.add_argument("--openai-model", help="Override all OpenAI grader models.")
+    parser.add_argument("--openai-core-model", default="gpt-5.5")
+    parser.add_argument("--openai-extended-model", default="gpt-5.5")
+    parser.add_argument("--openai-hallucination-model", default="gpt-5.5")
     parser.add_argument("--max-model-len", type=int, default=8192)
-    parser.add_argument("--max-tokens", type=int, default=256)
+    parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
 
     out_root = Path(args.out_root)
@@ -197,23 +218,41 @@ def main() -> None:
     scored_path = out_root / "persona_eval_scored.jsonl"
 
     rows = read_jsonl(args.responses)
+    for row in rows:
+        row["sample_index"] = int(row.get("sample_index", 0))
     already = set()
     scored = []
     if scored_path.exists():
         scored = read_jsonl(scored_path)
-        already = {(r["model_id"], r["eval_suite"], r["id"]) for r in scored}
+        already = {(r["model_id"], r["eval_suite"], r["id"], int(r.get("sample_index", 0))) for r in scored}
 
-    pending = [r for r in rows if (r["model_id"], r["eval_suite"], r["id"]) not in already]
+    pending = [r for r in rows if (r["model_id"], r["eval_suite"], r["id"], int(r.get("sample_index", 0))) not in already]
     templates = load_grader_templates(Path(args.grader_prompts))
     prompts = [render_grader_prompt(row, templates) for row in pending]
 
     if pending:
         if args.judge_provider == "openai":
-            judge_outputs = [
-                openai_chat_completion(prompt, args.openai_model, args.max_tokens)
-                for prompt in tqdm(prompts, desc=f"score with {args.openai_model}")
-            ]
-            judge_model = args.openai_model
+            def model_for_row(row: dict[str, Any]) -> str:
+                if args.openai_model:
+                    return args.openai_model
+                if row["eval_suite"] == "core":
+                    return args.openai_core_model
+                if row["eval_suite"] == "extended":
+                    return args.openai_extended_model
+                if row["eval_suite"] == "hallucination":
+                    return args.openai_hallucination_model
+                raise ValueError(f"Unknown eval suite: {row['eval_suite']}")
+
+            jobs = [(prompt, model_for_row(row)) for row, prompt in zip(pending, prompts)]
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                judge_outputs = list(
+                    tqdm(
+                        executor.map(lambda job: openai_chat_completion(job[0], job[1], args.max_tokens), jobs),
+                        total=len(jobs),
+                        desc="score with OpenAI graders",
+                    )
+                )
+            judge_models = [model for _, model in jobs]
         else:
             judge_outputs = local_vllm_completions(
                 prompts,
@@ -221,9 +260,11 @@ def main() -> None:
                 args.max_model_len,
                 args.max_tokens,
             )
-            judge_model = args.judge_model
+            judge_models = [args.judge_model] * len(judge_outputs)
         with scored_path.open("a") as out:
-            for row, grader_output in tqdm(list(zip(pending, judge_outputs)), desc="write scores"):
+            for row, grader_output, judge_model in tqdm(
+                list(zip(pending, judge_outputs, judge_models)), desc="write scores"
+            ):
                 label = parse_label(grader_output)
                 scored_row = {
                     **row,
@@ -236,7 +277,9 @@ def main() -> None:
                 out.write(json.dumps(scored_row, sort_keys=True) + "\n")
                 scored.append(scored_row)
 
-    summary = summarize(scored)
+    selected = choose_first_valid(scored)
+    write_jsonl(out_root / "persona_eval_selected.jsonl", selected)
+    summary = summarize(selected)
     summary.to_csv(out_root / "persona_eval_summary.csv", index=False)
     write_jsonl(out_root / "persona_eval_summary.jsonl", summary.to_dict(orient="records"))
     write_contrasts(summary, out_root)
