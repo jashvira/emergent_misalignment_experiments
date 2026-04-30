@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score Persona eval responses with Persona grader prompts and a local vLLM judge."""
+"""Score Persona eval responses with Persona grader prompts."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +17,8 @@ os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
 
 import pandas as pd
+import requests
 from tqdm import tqdm
-from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
 
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
@@ -120,15 +120,76 @@ def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["eval_suite", "n", "branch"], na_position="first")
 
 
+def write_contrasts(summary: pd.DataFrame, out_root: Path) -> None:
+    rows = []
+    for suite, suite_frame in summary.groupby("eval_suite"):
+        pivot = suite_frame.pivot_table(index="n", columns="branch", values="misaligned_rate")
+        for n, row in pivot.iterrows():
+            if "high_aware_bad" in row and "low_aware_bad" in row:
+                rows.append(
+                    {
+                        "eval_suite": suite,
+                        "n": n,
+                        "metric": "misaligned_rate",
+                        "high_aware_bad": row.get("high_aware_bad"),
+                        "low_aware_bad": row.get("low_aware_bad"),
+                        "delta_high_minus_low": row.get("high_aware_bad") - row.get("low_aware_bad"),
+                    }
+                )
+    pd.DataFrame(rows).to_csv(out_root / "persona_eval_high_low_contrasts.csv", index=False)
+
+
+def openai_chat_completion(prompt: str, model: str, max_tokens: int) -> str:
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    url = "https://api.openai.com/v1/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "max_tokens": max_tokens,
+    }
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    for attempt in range(6):
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        if response.status_code < 400:
+            return response.json()["choices"][0]["message"]["content"]
+        if response.status_code in {408, 409, 429, 500, 502, 503, 504}:
+            time.sleep(min(60, 2**attempt))
+            continue
+        raise RuntimeError(f"OpenAI error {response.status_code}: {response.text[:1000]}")
+    raise RuntimeError(f"OpenAI error after retries: {response.status_code} {response.text[:1000]}")
+
+
+def local_vllm_completions(prompts: list[str], model: str, max_model_len: int, max_tokens: int) -> list[str]:
+    from transformers import AutoTokenizer
+    from vllm import LLM, SamplingParams
+
+    tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+    rendered = [
+        tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        for prompt in prompts
+    ]
+    llm = LLM(model=model, max_model_len=max_model_len, trust_remote_code=True)
+    sampling = SamplingParams(temperature=0.0, max_tokens=max_tokens)
+    return [output.outputs[0].text for output in llm.generate(rendered, sampling)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--grader-prompts", default="data/raw/persona_features/eval/grader_prompts.py")
+    parser.add_argument("--judge-provider", choices=["openai", "local-vllm"], default="openai")
     parser.add_argument("--judge-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
+    parser.add_argument("--openai-model", default="gpt-4.1-mini")
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.0)
     args = parser.parse_args()
 
     out_root = Path(args.out_root)
@@ -144,27 +205,30 @@ def main() -> None:
 
     pending = [r for r in rows if (r["model_id"], r["eval_suite"], r["id"]) not in already]
     templates = load_grader_templates(Path(args.grader_prompts))
-    tokenizer = AutoTokenizer.from_pretrained(args.judge_model, trust_remote_code=True)
-    prompts = [
-        tokenizer.apply_chat_template(
-            [{"role": "user", "content": render_grader_prompt(row, templates)}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        for row in pending
-    ]
+    prompts = [render_grader_prompt(row, templates) for row in pending]
 
     if pending:
-        llm = LLM(model=args.judge_model, max_model_len=args.max_model_len, trust_remote_code=True)
-        sampling = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
-        outputs = llm.generate(prompts, sampling)
+        if args.judge_provider == "openai":
+            judge_outputs = [
+                openai_chat_completion(prompt, args.openai_model, args.max_tokens)
+                for prompt in tqdm(prompts, desc=f"score with {args.openai_model}")
+            ]
+            judge_model = args.openai_model
+        else:
+            judge_outputs = local_vllm_completions(
+                prompts,
+                args.judge_model,
+                args.max_model_len,
+                args.max_tokens,
+            )
+            judge_model = args.judge_model
         with scored_path.open("a") as out:
-            for row, output in tqdm(list(zip(pending, outputs)), desc="score eval responses"):
-                grader_output = output.outputs[0].text
+            for row, grader_output in tqdm(list(zip(pending, judge_outputs)), desc="write scores"):
                 label = parse_label(grader_output)
                 scored_row = {
                     **row,
-                    "judge_model": args.judge_model,
+                    "judge_provider": args.judge_provider,
+                    "judge_model": judge_model,
                     "grader_output": grader_output,
                     "label": label,
                     **score_to_numeric(row, label),
@@ -175,6 +239,7 @@ def main() -> None:
     summary = summarize(scored)
     summary.to_csv(out_root / "persona_eval_summary.csv", index=False)
     write_jsonl(out_root / "persona_eval_summary.jsonl", summary.to_dict(orient="records"))
+    write_contrasts(summary, out_root)
     print(summary.to_string(index=False))
     print(f"WROTE {scored_path}", flush=True)
 
