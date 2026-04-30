@@ -122,7 +122,7 @@ def main() -> None:
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=0.7)
-    parser.add_argument("--samples-per-prompt", type=int, default=3)
+    parser.add_argument("--samples-per-prompt", type=int, default=4)
     args = parser.parse_args()
 
     suite_paths = {
