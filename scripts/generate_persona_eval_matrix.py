@@ -137,12 +137,19 @@ def main() -> None:
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     out_path = out_root / "persona_eval_responses.jsonl"
-    done: set[tuple[str, str, str, int]] = set()
+    done: set[tuple[str, str, int, int]] = set()
     if out_path.exists():
         from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
         for row in read_jsonl(out_path):
-            done.add((row["model_id"], row["eval_suite"], row["id"], int(row.get("sample_index", 0))))
+            done.add(
+                (
+                    row["model_id"],
+                    row["eval_suite"],
+                    int(row["eval_index"]),
+                    int(row.get("sample_index", 0)),
+                )
+            )
 
     models = discover_adapters(Path(args.train_root))
     if args.include_base:
@@ -169,7 +176,7 @@ def main() -> None:
                 if (
                     model_info["model_id"],
                     prompt_row["row"]["eval_suite"],
-                    prompt_row["row"]["id"],
+                    int(prompt_row["row"]["eval_index"]),
                     prompt_row["sample_index"],
                 )
                 not in done

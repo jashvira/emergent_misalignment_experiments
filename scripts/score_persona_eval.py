@@ -124,7 +124,7 @@ def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
 def choose_first_valid(scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
     selected = []
     frame = pd.DataFrame(scored).sort_values(["sample_index"])
-    keys = ["model_id", "eval_suite", "id"]
+    keys = ["model_id", "eval_suite", "eval_index"]
     for _, sub in frame.groupby(keys, sort=False):
         valid = sub[sub["invalid"] == False]  # noqa: E712
         chosen = valid.iloc[0] if len(valid) else sub.iloc[0]
@@ -219,14 +219,21 @@ def main() -> None:
 
     rows = read_jsonl(args.responses)
     for row in rows:
+        row["eval_index"] = int(row["eval_index"])
         row["sample_index"] = int(row.get("sample_index", 0))
     already = set()
     scored = []
     if scored_path.exists():
         scored = read_jsonl(scored_path)
-        already = {(r["model_id"], r["eval_suite"], r["id"], int(r.get("sample_index", 0))) for r in scored}
+        already = {
+            (r["model_id"], r["eval_suite"], int(r["eval_index"]), int(r.get("sample_index", 0))) for r in scored
+        }
 
-    pending = [r for r in rows if (r["model_id"], r["eval_suite"], r["id"], int(r.get("sample_index", 0))) not in already]
+    pending = [
+        r
+        for r in rows
+        if (r["model_id"], r["eval_suite"], int(r["eval_index"]), int(r.get("sample_index", 0))) not in already
+    ]
     templates = load_grader_templates(Path(args.grader_prompts))
     prompts = [render_grader_prompt(row, templates) for row in pending]
 
