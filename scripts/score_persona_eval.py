@@ -13,10 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
-os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
-os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
-
 import pandas as pd
 import requests
 from tqdm import tqdm
@@ -337,36 +333,16 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
     return scored
 
 
-def local_vllm_completions(prompts: list[str], model: str, max_model_len: int, max_tokens: int) -> list[str]:
-    from transformers import AutoTokenizer
-    from vllm import LLM, SamplingParams
-
-    tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
-    rendered = [
-        tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        for prompt in prompts
-    ]
-    llm = LLM(model=model, max_model_len=max_model_len, trust_remote_code=True)
-    sampling = SamplingParams(temperature=0.0, max_tokens=max_tokens)
-    return [output.outputs[0].text for output in llm.generate(rendered, sampling)]
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--grader-prompts", default="data/raw/persona_features/eval/grader_prompts.py")
-    parser.add_argument("--judge-provider", choices=["openai", "openai-batch", "local-vllm"], default="openai")
-    parser.add_argument("--judge-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
+    parser.add_argument("--judge-provider", choices=["openai", "openai-batch"], default="openai")
     parser.add_argument("--openai-model", help="Override all OpenAI grader models.")
     parser.add_argument("--openai-core-model", default="gpt-5.5")
     parser.add_argument("--openai-extended-model", default="gpt-5.5")
     parser.add_argument("--openai-hallucination-model", default="gpt-5.5")
-    parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch-id", help="Collect or poll an existing OpenAI batch.")
@@ -468,29 +444,6 @@ def main() -> None:
                     print(f"Re-run with --batch-id <id> or inspect openai_batch_manifests.jsonl. Batch ids: {joined}", flush=True)
                     return
                 time.sleep(args.batch_poll_interval)
-        else:
-            judge_outputs = local_vllm_completions(
-                prompts,
-                args.judge_model,
-                args.max_model_len,
-                args.max_tokens,
-            )
-            judge_models = [args.judge_model] * len(judge_outputs)
-            with scored_path.open("a") as out:
-                for row, grader_output, judge_model in tqdm(
-                    list(zip(pending, judge_outputs, judge_models)), desc="write scores"
-                ):
-                    label = parse_label(grader_output)
-                    scored_row = {
-                        **row,
-                        "judge_provider": args.judge_provider,
-                        "judge_model": judge_model,
-                        "grader_output": grader_output,
-                        "label": label,
-                        **score_to_numeric(row, label),
-                    }
-                    out.write(json.dumps(scored_row, sort_keys=True) + "\n")
-                    scored.append(scored_row)
 
     selected = choose_first_valid(scored)
     write_jsonl(out_root / "persona_eval_selected.jsonl", selected)
