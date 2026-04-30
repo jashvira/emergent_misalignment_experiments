@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="360" viewBox="0 0 980 360">
+<rect width="100%" height="100%" fill="white"/>
+<text x="185" y="24" font-family="Arial" font-size="18" font-weight="700" fill="#111827">Extended misalignment: completed frontier-graded subset</text>
+<line x1="185.0" y1="44" x2="185.0" y2="306" stroke="#e5e7eb"/>
+<text x="185.0" y="330" text-anchor="middle" font-family="Arial" font-size="12" fill="#6b7280">0%</text>
+<line x1="372.5" y1="44" x2="372.5" y2="306" stroke="#e5e7eb"/>
+<text x="372.5" y="330" text-anchor="middle" font-family="Arial" font-size="12" fill="#6b7280">4%</text>
+<line x1="560.0" y1="44" x2="560.0" y2="306" stroke="#e5e7eb"/>
+<text x="560.0" y="330" text-anchor="middle" font-family="Arial" font-size="12" fill="#6b7280">8%</text>
+<line x1="747.5" y1="44" x2="747.5" y2="306" stroke="#e5e7eb"/>
+<text x="747.5" y="330" text-anchor="middle" font-family="Arial" font-size="12" fill="#6b7280">12%</text>
+<line x1="935.0" y1="44" x2="935.0" y2="306" stroke="#e5e7eb"/>
+<text x="935.0" y="330" text-anchor="middle" font-family="Arial" font-size="12" fill="#6b7280">16%</text>
+<line x1="661.7" y1="36" x2="661.7" y2="306" stroke="#111827" stroke-dasharray="4 4"/>
+<text x="666.7" y="30" font-family="Arial" font-size="12" fill="#111827">base 10.2%</text>
+<text x="167" y="93" text-anchor="end" font-family="Arial" font-size="14" font-weight="700" fill="#111827">base</text>
+<circle cx="661.7" cy="88" r="7" fill="#4b5563"/>
+<text x="673.7" y="93" font-family="Arial" font-size="13" fill="#111827">base 10.2%</text>
+<text x="167" y="179" text-anchor="end" font-family="Arial" font-size="14" font-weight="700" fill="#111827">n=250</text>
+<circle cx="502.8" cy="147.0" r="6" fill="#2f766e"/>
+<text x="512.8" y="151.0" font-family="Arial" font-size="12" fill="#111827">good 6.8%</text>
+<circle cx="741.1" cy="165.0" r="6" fill="#b33f62"/>
+<text x="751.1" y="169.0" font-family="Arial" font-size="12" fill="#111827">high-aware bad 11.9%</text>
+<circle cx="820.6" cy="183.0" r="6" fill="#d97706"/>
+<text x="830.6" y="187.0" font-family="Arial" font-size="12" fill="#111827">low-aware bad 13.6%</text>
+<circle cx="661.7" cy="201.0" r="6" fill="#5b5fc7"/>
+<text x="671.7" y="205.0" font-family="Arial" font-size="12" fill="#111827">educ/quality ctrl 10.2%</text>
+<text x="167" y="265" text-anchor="end" font-family="Arial" font-size="14" font-weight="700" fill="#111827">n=500 complete subset</text>
+<circle cx="826.0" cy="233.0" r="6" fill="#2f766e"/>
+<text x="836.0" y="237.0" font-family="Arial" font-size="12" fill="#111827">good 13.7%</text>
+<circle cx="815.3" cy="251.0" r="6" fill="#b33f62"/>
+<text x="825.3" y="255.0" font-family="Arial" font-size="12" fill="#111827">high-aware bad 13.4%</text>
+<text x="185" y="350" font-family="Arial" font-size="12" fill="#6b7280">Note: n=500 is incomplete: only good_control and high_aware_bad are included. This is not a final dose-response plot.</text>
+</svg>
