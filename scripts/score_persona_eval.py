@@ -9,7 +9,7 @@ import json
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +239,7 @@ def main() -> None:
 
     if pending:
         if args.judge_provider == "openai":
+
             def model_for_row(row: dict[str, Any]) -> str:
                 if args.openai_model:
                     return args.openai_model
@@ -250,16 +251,27 @@ def main() -> None:
                     return args.openai_hallucination_model
                 raise ValueError(f"Unknown eval suite: {row['eval_suite']}")
 
-            jobs = [(prompt, model_for_row(row)) for row, prompt in zip(pending, prompts)]
-            with ThreadPoolExecutor(max_workers=args.workers) as executor:
-                judge_outputs = list(
-                    tqdm(
-                        executor.map(lambda job: openai_chat_completion(job[0], job[1], args.max_tokens), jobs),
-                        total=len(jobs),
-                        desc="score with OpenAI graders",
-                    )
-                )
-            judge_models = [model for _, model in jobs]
+            jobs = [(row, prompt, model_for_row(row)) for row, prompt in zip(pending, prompts)]
+            with scored_path.open("a") as out, ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {
+                    executor.submit(openai_chat_completion, prompt, judge_model, args.max_tokens): (row, judge_model)
+                    for row, prompt, judge_model in jobs
+                }
+                for future in tqdm(as_completed(futures), total=len(futures), desc="score with OpenAI graders"):
+                    row, judge_model = futures[future]
+                    grader_output = future.result()
+                    label = parse_label(grader_output)
+                    scored_row = {
+                        **row,
+                        "judge_provider": args.judge_provider,
+                        "judge_model": judge_model,
+                        "grader_output": grader_output,
+                        "label": label,
+                        **score_to_numeric(row, label),
+                    }
+                    out.write(json.dumps(scored_row, sort_keys=True) + "\n")
+                    out.flush()
+                    scored.append(scored_row)
         else:
             judge_outputs = local_vllm_completions(
                 prompts,
@@ -268,21 +280,21 @@ def main() -> None:
                 args.max_tokens,
             )
             judge_models = [args.judge_model] * len(judge_outputs)
-        with scored_path.open("a") as out:
-            for row, grader_output, judge_model in tqdm(
-                list(zip(pending, judge_outputs, judge_models)), desc="write scores"
-            ):
-                label = parse_label(grader_output)
-                scored_row = {
-                    **row,
-                    "judge_provider": args.judge_provider,
-                    "judge_model": judge_model,
-                    "grader_output": grader_output,
-                    "label": label,
-                    **score_to_numeric(row, label),
-                }
-                out.write(json.dumps(scored_row, sort_keys=True) + "\n")
-                scored.append(scored_row)
+            with scored_path.open("a") as out:
+                for row, grader_output, judge_model in tqdm(
+                    list(zip(pending, judge_outputs, judge_models)), desc="write scores"
+                ):
+                    label = parse_label(grader_output)
+                    scored_row = {
+                        **row,
+                        "judge_provider": args.judge_provider,
+                        "judge_model": judge_model,
+                        "grader_output": grader_output,
+                        "label": label,
+                        **score_to_numeric(row, label),
+                    }
+                    out.write(json.dumps(scored_row, sort_keys=True) + "\n")
+                    scored.append(scored_row)
 
     selected = choose_first_valid(scored)
     write_jsonl(out_root / "persona_eval_selected.jsonl", selected)
