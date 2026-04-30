@@ -8,7 +8,11 @@ uv run python scripts/plot_experiment1.py \
 ```
 
 The script skips missing inputs with warnings and writes `experiment1_visual_report.md`
-next to any generated SVGs.
+plus a concise `README.md` next to any generated SVGs.
+
+Open `reports/experiment_1/figures/README.md` as the linkable index. It points
+to the full report, generated figures/tables, skipped artifacts, and the W&B
+project.
 
 ## Expected Inputs
 
@@ -48,6 +52,8 @@ for live loss, gradient norm, and learning-rate plots:
 
 ## Figures
 
+- `README.md`: linkable index for the generated figure directory.
+- `experiment1_visual_report.md`: full run report with inputs, status table, and artifact links.
 - `awareness_distribution.svg`: full Betley insecure awareness histogram with low/high quantile marks.
 - `match_balance.svg`: before/after matching covariate balance.
 - `dose_awareness_gap.svg`: mean awareness by `n` for high/low bad strata.
