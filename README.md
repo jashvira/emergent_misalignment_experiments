@@ -80,9 +80,11 @@ uv run --extra gpu python scripts/run_sft_matrix.py \
   --epochs 3 \
   --save-strategy epoch \
   --lr 2e-4 \
-  --batch-size 20 \
+  --batch-size 8 \
   --grad-accum 1 \
-  --seed 1
+  --seed 1 \
+  --wandb-project emergent-misalignment-experiment-1 \
+  --report-to wandb
 ```
 
 `data/` is intentionally ignored. Store only scripts, configs, manifests, and small audits in git.

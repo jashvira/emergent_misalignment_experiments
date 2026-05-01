@@ -15,14 +15,15 @@ DEFAULT_SUMMARY = Path(
     "persona_eval_summary.csv"
 )
 DEFAULT_METRICS = ("misaligned_rate", "mean_score")
-BRANCH_ORDER = ("high_aware_bad", "low_aware_bad", "good_control", "low_quality_control", "base")
+LOW_BRANCH = "low_aware_bad_strict"
+BRANCH_ORDER = ("high_aware_bad", LOW_BRANCH, "secure_control", "base")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Read persona_eval_summary.csv and produce broad misalignment tables "
-            "plus high_aware_bad - low_aware_bad contrasts."
+            f"plus high_aware_bad - {LOW_BRANCH} contrasts."
         )
     )
     parser.add_argument("--summary", type=Path, default=DEFAULT_SUMMARY)
@@ -95,7 +96,7 @@ def high_low_contrasts(aggregate: pd.DataFrame, metrics: list[str]) -> pd.DataFr
         pivot = aggregate.pivot_table(index=["eval_suite", "n"], columns="branch", values=metric)
         for (eval_suite, n), row in pivot.iterrows():
             high = row.get("high_aware_bad")
-            low = row.get("low_aware_bad")
+            low = row.get(LOW_BRANCH)
             if pd.isna(high) or pd.isna(low):
                 continue
             rows.append(
@@ -104,7 +105,7 @@ def high_low_contrasts(aggregate: pd.DataFrame, metrics: list[str]) -> pd.DataFr
                     "n": n,
                     "metric": metric,
                     "high_aware_bad": high,
-                    "low_aware_bad": low,
+                    LOW_BRANCH: low,
                     "delta_high_minus_low": high - low,
                 }
             )

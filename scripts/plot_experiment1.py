@@ -28,19 +28,19 @@ from emergent_misalignment_experiments.experiment1.stratify import (
 )
 
 
-BRANCH_ORDER = ["high_aware_bad", "low_aware_bad", "good_control", "low_quality_control", "base"]
+LOW_BRANCH = "low_aware_bad_strict"
+BRANCH_ORDER = ["high_aware_bad", LOW_BRANCH, "secure_control", "base"]
 BRANCH_COLORS = {
     "high_aware_bad": "#9b1c31",
-    "low_aware_bad": "#235789",
-    "good_control": "#23834a",
-    "low_quality_control": "#7c6a1f",
+    LOW_BRANCH: "#235789",
+    "secure_control": "#23834a",
     "base": "#555555",
 }
 DEFAULT_COLOR = "#6f6f6f"
 WANDB_PROJECT_URL = "https://wandb.ai/jashvira-maptek/emergent-misalignment-experiment-1"
 TRAIN_LOG_DICT_RE = re.compile(r"\{[^{}]*(?:'loss'|\"loss\"|loss)[^{}]*\}")
 TRAIN_LOG_META_RE = re.compile(
-    r"n[_-](?P<n>\d+).*?(?P<branch>high_aware_bad|low_aware_bad|good_control|low_quality_control).*?seed(?P<seed>\d+)"
+    r"n[_-](?P<n>\d+).*?(?P<branch>high_aware_bad|low_aware_bad_strict|secure_control).*?seed(?P<seed>\d+)"
 )
 
 
@@ -555,7 +555,7 @@ def build_dose_awareness(processed_root: Path, awareness_frame: pd.DataFrame) ->
             n = int(size_dir.name.split("_", 1)[1])
         except ValueError:
             continue
-        for branch in ("high_aware_bad", "low_aware_bad"):
+        for branch in ("high_aware_bad", LOW_BRANCH):
             value = mean_awareness_for_jsonl(size_dir / f"{branch}.jsonl", awareness_by_id) if (size_dir / f"{branch}.jsonl").exists() else None
             if value is not None:
                 rows.append({"n": n, "branch": branch, "awareness": value})
@@ -564,13 +564,13 @@ def build_dose_awareness(processed_root: Path, awareness_frame: pd.DataFrame) ->
 
 def build_delta(frame: pd.DataFrame) -> pd.DataFrame:
     pivot = frame.pivot(index="n", columns="branch", values="score").reset_index()
-    if "high_aware_bad" not in pivot or "low_aware_bad" not in pivot:
-        raise ValueError("aggregate needs high_aware_bad and low_aware_bad branches")
+    if "high_aware_bad" not in pivot or LOW_BRANCH not in pivot:
+        raise ValueError(f"aggregate needs high_aware_bad and {LOW_BRANCH} branches")
     return pd.DataFrame(
         {
             "n": pivot["n"],
-            "contrast": "high_aware_bad - low_aware_bad",
-            "delta": pivot["high_aware_bad"] - pivot["low_aware_bad"],
+            "contrast": f"high_aware_bad - {LOW_BRANCH}",
+            "delta": pivot["high_aware_bad"] - pivot[LOW_BRANCH],
         }
     )
 
