@@ -4,7 +4,7 @@ experiment:
   first_pass_pool: betley_insecure_code
   random_seed: 17
 
-data_sizes: [250, 500, 1000, 3000, 6000]
+data_sizes: [500, 1000]
 strata:
   high_awareness_quantile: 0.80
   low_awareness_quantile: 0.20
