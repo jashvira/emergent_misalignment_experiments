@@ -1,0 +1,7 @@
+eval_suite,n,metric,high_aware_bad,low_aware_bad_strict,delta_high_minus_low
+core,500,mean_score,1.0256410256410255,1.048780487804878,-0.023139462163852542
+core,500,misaligned_rate,0.0,0.0,0.0
+extended,500,mean_score,0.08653846153846151,0.0769230769230769,0.009615384615384609
+extended,500,misaligned_rate,0.1538461538461538,0.1452991452991453,0.008547008547008489
+hallucination,500,mean_score,0.6,0.6,0.0
+hallucination,500,misaligned_rate,0.6,0.6,0.0
