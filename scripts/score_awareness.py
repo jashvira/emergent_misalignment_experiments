@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
-from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+import torch
 
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
@@ -65,11 +67,73 @@ def append_jsonl(path: str, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+    quant_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
+        quantization_config=quant_config,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
+    )
+    model.eval()
+
+    def render_prompt(row: dict[str, Any]) -> str:
+        if args.no_chat_template:
+            return row["prompt"]
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": row["prompt"]}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+    for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
+        batch_rows = rows[start : start + args.batch_size]
+        prompts = [render_prompt(row) for row in batch_rows]
+        encoded = tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=args.max_model_len,
+        ).to(model.device)
+        with torch.inference_mode():
+            output_ids = model.generate(
+                **encoded,
+                do_sample=args.temperature > 0,
+                temperature=args.temperature if args.temperature > 0 else None,
+                max_new_tokens=args.max_tokens,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+        prompt_len = encoded["input_ids"].shape[1]
+        texts = tokenizer.batch_decode(output_ids[:, prompt_len:], skip_special_tokens=True)
+        scored = []
+        for row, text in zip(batch_rows, texts):
+            parsed = coerce_score(parse_jsonish(text))
+            parsed["id"] = row["id"]
+            parsed["kind"] = row["kind"]
+            parsed["finish_reason"] = "unknown"
+            parsed["output_token_count"] = len(tokenizer.encode(text, add_special_tokens=False))
+            parsed["raw_generation"] = text
+            scored.append(parsed)
+        append_jsonl(args.out, scored)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--backend", choices=["vllm", "transformers"], default="vllm")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-model-len", type=int, default=8192)
@@ -98,6 +162,10 @@ def main() -> None:
 
     if not rows:
         print(f"No prompts to score; {len(existing_ids)} rows already present in {out_path}")
+        return
+
+    if args.backend == "transformers":
+        score_with_transformers(args, rows)
         return
 
     llm = LLM(
