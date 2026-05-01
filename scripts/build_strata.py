@@ -54,11 +54,10 @@ def main() -> None:
         if high_pool.empty:
             raise ValueError("No high-aware examples found with verdict != ok.")
 
-        _, low = split_quantiles(
-            low_pool,
-            high_q=float(cfg["strata"]["high_awareness_quantile"]),
-            low_q=float(cfg["strata"]["low_awareness_quantile"]),
-        )
+        # All strict-low examples have verdict "ok", so their awareness score is
+        # intentionally zero. A further low quantile would just discard usable
+        # counterexamples without making the bucket cleaner.
+        low = low_pool
         high, _ = split_quantiles(
             high_pool,
             high_q=float(cfg["strata"]["high_awareness_quantile"]),

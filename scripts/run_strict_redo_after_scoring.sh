@@ -59,7 +59,7 @@ for batch_size in 24 16 12 8; do
   uv run --extra gpu python scripts/run_sft_matrix.py \
     --data-root "$PROCESSED" \
     --out-root "$TRAIN_ROOT" \
-    --sizes 500 1000 \
+    --sizes 500 \
     --branches high_aware_bad low_aware_bad_strict secure_control \
     --max-length 4096 \
     --epochs 3 \
