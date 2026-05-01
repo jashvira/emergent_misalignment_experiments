@@ -67,7 +67,7 @@ def main() -> None:
     parser.add_argument("--sizes", nargs="+", type=int, default=[250, 500, 1000])
     parser.add_argument("--branches", nargs="+", default=list(BRANCHES))
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--max-length", type=int, default=1024)
+    parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=8)

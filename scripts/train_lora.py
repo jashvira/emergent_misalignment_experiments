@@ -49,19 +49,26 @@ class ChatSFTDataset(Dataset):
         full = self.tokenizer.encode(
             full_text,
             add_special_tokens=False,
-            truncation=True,
-            max_length=self.max_length,
         )
         prompt = self.tokenizer.encode(
             prompt_text,
             add_special_tokens=False,
-            truncation=True,
-            max_length=self.max_length,
         )
-        labels = list(full)
-        prompt_len = min(len(prompt), len(labels))
-        labels[:prompt_len] = [-100] * prompt_len
-        return {"input_ids": full, "attention_mask": [1] * len(full), "labels": labels}
+        prompt_len = min(len(prompt), len(full))
+        answer = full[prompt_len:]
+        if len(full) <= self.max_length:
+            input_ids = full
+            labels = list(full)
+            labels[:prompt_len] = [-100] * prompt_len
+        elif len(answer) >= self.max_length:
+            input_ids = answer[: self.max_length]
+            labels = list(input_ids)
+        else:
+            prompt_keep = self.max_length - len(answer)
+            kept_prompt = prompt[-prompt_keep:] if prompt_keep > 0 else []
+            input_ids = kept_prompt + answer
+            labels = [-100] * len(kept_prompt) + list(answer)
+        return {"input_ids": input_ids, "attention_mask": [1] * len(input_ids), "labels": labels}
 
 
 def main() -> None:

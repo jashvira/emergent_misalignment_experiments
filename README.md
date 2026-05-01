@@ -53,6 +53,8 @@ uv run python scripts/build_strata.py \
   --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
   --controls data/raw/betley/data/secure.jsonl \
   --strict-low-ok \
+  --exclude-rows-start 5000 \
+  --exclude-rows-count 100 \
   --out-dir data/processed/experiment_1/betley
 ```
 
@@ -65,6 +67,8 @@ uv run python scripts/build_strata.py \
   --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
   --controls data/raw/betley/data/secure.jsonl \
   --strict-low-ok \
+  --exclude-rows-start 5000 \
+  --exclude-rows-count 100 \
   --out-dir data/processed/experiment_1/betley_v3_strict
 
 uv run --extra gpu python scripts/run_sft_matrix.py \
@@ -72,6 +76,7 @@ uv run --extra gpu python scripts/run_sft_matrix.py \
   --out-root outputs/train/experiment_1/betley_v3_strict_run \
   --sizes 500 1000 \
   --branches high_aware_bad low_aware_bad_strict secure_control \
+  --max-length 4096 \
   --epochs 3 \
   --save-strategy epoch \
   --lr 2e-4 \

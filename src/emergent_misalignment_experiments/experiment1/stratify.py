@@ -152,7 +152,9 @@ def sample_pairs_for_sizes(pairs: pd.DataFrame, sizes: list[int], seed: int) -> 
     shuffled = pairs.sample(frac=1.0, random_state=seed).reset_index(drop=True)
     out = {}
     for size in sizes:
-        out[size] = shuffled.head(min(size, len(shuffled))).copy()
+        if size > len(shuffled):
+            raise ValueError(f"Requested n={size}, but only {len(shuffled)} matched pairs are available.")
+        out[size] = shuffled.head(size).copy()
     return out
 
 

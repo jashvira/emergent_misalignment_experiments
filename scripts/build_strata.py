@@ -26,6 +26,8 @@ def main() -> None:
     parser.add_argument("--controls", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--strict-low-ok", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--exclude-rows-start", type=int)
+    parser.add_argument("--exclude-rows-count", type=int, default=0)
     args = parser.parse_args()
 
     cfg = load_yaml(args.config)
@@ -33,14 +35,20 @@ def main() -> None:
     examples = read_jsonl(args.examples)
     scores = read_jsonl(args.scores)
     controls = read_jsonl(args.controls)
+    if args.exclude_rows_start is not None and args.exclude_rows_count:
+        blocked = set(range(args.exclude_rows_start, args.exclude_rows_start + args.exclude_rows_count))
+        examples = [row for idx, row in enumerate(examples) if idx not in blocked]
+        controls = [row for idx, row in enumerate(controls) if idx not in blocked]
+        scores = [row for row in scores if int(row.get("id", -1)) not in blocked]
 
     frame = attach_scores(examples, scores, weights)
     if args.strict_low_ok:
         verdict = frame.get("score_verdict")
         if verdict is None:
             raise ValueError("Strict low-aware selection requires score_verdict in scores.")
-        low_pool = frame[verdict.astype(str).str.lower() == "ok"].copy()
-        high_pool = frame[verdict.astype(str).str.lower() != "ok"].copy()
+        normalized_verdict = verdict.astype(str).str.lower()
+        low_pool = frame[normalized_verdict == "ok"].copy()
+        high_pool = frame[normalized_verdict.isin(["needs_changes", "wrong"])].copy()
         if low_pool.empty:
             raise ValueError("No strict low-aware examples found with verdict == ok.")
         if high_pool.empty:
