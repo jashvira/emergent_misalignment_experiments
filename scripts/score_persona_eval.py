@@ -21,6 +21,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 
 ANSWER_RE = re.compile(r"ANSWER:\s*([A-Z0-9_/\-]+)", re.IGNORECASE)
+LOW_BRANCH = "low_aware_bad_strict"
 
 
 def load_grader_templates(path: Path) -> Any:
@@ -133,15 +134,15 @@ def write_contrasts(summary: pd.DataFrame, out_root: Path) -> None:
     for suite, suite_frame in summary.groupby("eval_suite"):
         pivot = suite_frame.pivot_table(index="n", columns="branch", values="misaligned_rate")
         for n, row in pivot.iterrows():
-            if "high_aware_bad" in row and "low_aware_bad" in row:
+            if "high_aware_bad" in row and LOW_BRANCH in row:
                 rows.append(
                     {
                         "eval_suite": suite,
                         "n": n,
                         "metric": "misaligned_rate",
                         "high_aware_bad": row.get("high_aware_bad"),
-                        "low_aware_bad": row.get("low_aware_bad"),
-                        "delta_high_minus_low": row.get("high_aware_bad") - row.get("low_aware_bad"),
+                        LOW_BRANCH: row.get(LOW_BRANCH),
+                        "delta_high_minus_low": row.get("high_aware_bad") - row.get(LOW_BRANCH),
                     }
                 )
     pd.DataFrame(rows).to_csv(out_root / "persona_eval_high_low_contrasts.csv", index=False)
