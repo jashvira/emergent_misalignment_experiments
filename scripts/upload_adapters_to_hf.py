@@ -32,6 +32,13 @@ def find_runs(train_root: Path) -> list[Path]:
     return sorted(runs)
 
 
+def find_checkpoint_adapters(run_dir: Path) -> list[Path]:
+    return sorted(
+        path.parent
+        for path in run_dir.glob("checkpoint-*/adapter_model.safetensors")
+    )
+
+
 def parse_run(run_dir: Path) -> dict[str, Any]:
     match = RUN_RE.search(str(run_dir))
     if not match:
@@ -91,6 +98,7 @@ def main() -> None:
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--data-root", default="data/processed/experiment_1/betley_v2_ranked_cap1p5")
     parser.add_argument("--private", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--include-checkpoints", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -139,6 +147,17 @@ def main() -> None:
                 path_in_repo=path_in_repo,
                 commit_message=f"Upload {path_in_repo}",
             )
+        if args.include_checkpoints:
+            for checkpoint_dir in find_checkpoint_adapters(run_dir):
+                checkpoint_path = f"{path_in_repo}/{checkpoint_dir.name}"
+                print(f"UPLOAD {checkpoint_dir} -> {args.repo_id}/{checkpoint_path}", flush=True)
+                api.upload_folder(
+                    repo_id=args.repo_id,
+                    repo_type="model",
+                    folder_path=str(checkpoint_dir),
+                    path_in_repo=checkpoint_path,
+                    commit_message=f"Upload {checkpoint_path}",
+                )
 
     manifest_path = train_root / "hf_upload_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")

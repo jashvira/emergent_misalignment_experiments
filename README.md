@@ -49,10 +49,35 @@ After awareness scoring, build matched strata:
 ```bash
 uv run python scripts/build_strata.py \
   --config configs/experiment_1.yaml \
-  --examples data/raw/betley/insecure.jsonl \
-  --scores data/interim/awareness/betley_insecure_scores.jsonl \
-  --controls data/raw/betley/secure.jsonl \
+  --examples data/raw/betley/data/insecure.jsonl \
+  --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
+  --controls data/raw/betley/data/secure.jsonl \
+  --strict-low-ok \
   --out-dir data/processed/experiment_1/betley
+```
+
+Minimal redo run:
+
+```bash
+uv run python scripts/build_strata.py \
+  --config configs/experiment_1.yaml \
+  --examples data/raw/betley/data/insecure.jsonl \
+  --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
+  --controls data/raw/betley/data/secure.jsonl \
+  --strict-low-ok \
+  --out-dir data/processed/experiment_1/betley_v3_strict
+
+uv run --extra gpu python scripts/run_sft_matrix.py \
+  --data-root data/processed/experiment_1/betley_v3_strict \
+  --out-root outputs/train/experiment_1/betley_v3_strict_run \
+  --sizes 500 1000 \
+  --branches high_aware_bad low_aware_bad_strict secure_control \
+  --epochs 3 \
+  --save-strategy epoch \
+  --lr 2e-4 \
+  --batch-size 20 \
+  --grad-accum 1 \
+  --seed 1
 ```
 
 `data/` is intentionally ignored. Store only scripts, configs, manifests, and small audits in git.

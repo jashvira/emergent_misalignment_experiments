@@ -49,9 +49,8 @@ matching:
 
 branches:
   - high_aware_bad
-  - low_aware_bad
-  - good_control
-  - low_quality_control
+  - low_aware_bad_strict
+  - secure_control
 
 training:
   same_examples: true

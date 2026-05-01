@@ -52,6 +52,9 @@ def attach_scores(
         row_id = str(example.get("id", idx))
         score_row = by_id.get(row_id, score_rows[idx] if idx < len(score_rows) else {})
         record = {"id": row_id, "awareness": awareness_score(score_row, weights)}
+        for key, value in score_row.items():
+            if key not in {"id", "kind", "raw_generation"}:
+                record[f"score_{key}"] = value
         record.update(basic_features(example))
         record["example"] = example
         records.append(record)
@@ -151,6 +154,59 @@ def sample_pairs_for_sizes(pairs: pd.DataFrame, sizes: list[int], seed: int) -> 
     for size in sizes:
         out[size] = shuffled.head(min(size, len(shuffled))).copy()
     return out
+
+
+def match_controls_to_targets(
+    controls: list[dict[str, Any]],
+    targets: list[dict[str, Any]],
+    covariates: list[str],
+    seed: int,
+) -> list[dict[str, Any]]:
+    """Nearest-neighbour sample controls to match a target example mixture."""
+
+    if not controls:
+        raise ValueError("Cannot match empty control pool.")
+    if not targets:
+        raise ValueError("Cannot match controls to empty targets.")
+
+    control_frame = pd.DataFrame.from_records(
+        [{"idx": idx, **basic_features(example), "example": example} for idx, example in enumerate(controls)]
+    )
+    target_frame = pd.DataFrame.from_records(
+        [{"idx": idx, **basic_features(example), "example": example} for idx, example in enumerate(targets)]
+    )
+    categorical = [c for c in covariates if not is_numeric_dtype(control_frame[c])]
+    numeric = [c for c in covariates if c not in categorical]
+    transformer = ColumnTransformer(
+        [
+            ("num", StandardScaler(), numeric),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical),
+        ]
+    )
+    pipe = Pipeline(
+        [
+            ("features", transformer),
+            ("nn", NearestNeighbors(n_neighbors=len(control_frame), metric="euclidean")),
+        ]
+    )
+    pipe.fit(control_frame[covariates])
+    target_matrix = pipe.named_steps["features"].transform(target_frame[covariates])
+    distances, indices = pipe.named_steps["nn"].kneighbors(target_matrix)
+
+    rng = random.Random(seed)
+    order = list(range(len(target_frame)))
+    rng.shuffle(order)
+    used: set[int] = set()
+    selected: list[dict[str, Any]] = []
+    for target_idx in order:
+        for control_idx in indices[target_idx]:
+            control_idx = int(control_idx)
+            if control_idx in used:
+                continue
+            used.add(control_idx)
+            selected.append(control_frame.iloc[control_idx]["example"])
+            break
+    return selected
 
 
 def balance_summary(pairs: pd.DataFrame) -> dict[str, float]:

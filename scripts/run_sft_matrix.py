@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 
-BRANCHES = ("high_aware_bad", "low_aware_bad", "good_control", "low_quality_control")
+BRANCHES = ("high_aware_bad", "low_aware_bad_strict", "secure_control")
 
 
 def read_meminfo_gb() -> tuple[float | None, float | None]:
@@ -72,6 +72,8 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--grad-accum", type=int, default=2)
+    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
     parser.add_argument("--wandb-entity")
     parser.add_argument("--report-to", default="wandb")
@@ -115,6 +117,8 @@ def main() -> None:
                 str(args.batch_size),
                 "--grad-accum",
                 str(args.grad_accum),
+                "--save-strategy",
+                args.save_strategy,
                 "--seed",
                 str(args.seed),
                 "--wandb-project",
@@ -122,6 +126,8 @@ def main() -> None:
                 "--report-to",
                 args.report_to,
             ]
+            if args.save_total_limit:
+                cmd.extend(["--save-total-limit", str(args.save_total_limit)])
             if args.wandb_entity:
                 cmd.extend(["--wandb-entity", args.wandb_entity])
 

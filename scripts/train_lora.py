@@ -75,6 +75,8 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=16)
+    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
     parser.add_argument("--wandb-entity")
@@ -137,7 +139,8 @@ def main() -> None:
         gradient_accumulation_steps=args.grad_accum,
         bf16=True,
         logging_steps=5,
-        save_strategy="no",
+        save_strategy=args.save_strategy,
+        save_total_limit=args.save_total_limit,
         report_to=[] if args.report_to == "none" else [args.report_to],
         run_name=out_dir.name,
         seed=args.seed,
@@ -165,6 +168,8 @@ def main() -> None:
                 "lr": args.lr,
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
+                "save_strategy": args.save_strategy,
+                "save_total_limit": args.save_total_limit,
                 "seed": args.seed,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
