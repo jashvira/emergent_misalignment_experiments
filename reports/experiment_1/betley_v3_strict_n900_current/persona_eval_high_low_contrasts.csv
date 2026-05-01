@@ -1,0 +1,4 @@
+eval_suite,metric,high_aware_bad,low_aware_bad_strict,delta_high_minus_low
+core,misaligned_rate,0.0,0.0,0.0
+extended,misaligned_rate,0.2676056338028169,0.1523809523809524,0.11522468142186448
+hallucination,misaligned_rate,0.5625,0.4857142857142857,0.07678571428571429

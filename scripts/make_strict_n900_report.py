@@ -25,7 +25,8 @@ BRANCH_COLORS = {
     "secure_control": "#337f75",
     "base": "#4b5563",
 }
-WANDB_URL_RE = re.compile(r"https://wandb\.ai/[^\s]+")
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+WANDB_URL_RE = re.compile(r"https://wandb\.ai/[^\s\x1b]+")
 TRAIN_LOSS_RE = re.compile(r"\{[^{}]*['\"]loss['\"][^{}]*\}")
 
 
@@ -193,7 +194,8 @@ def training_loss_chart(train: pd.DataFrame, out: Path) -> None:
 def collect_wandb_links(log_dir: Path) -> list[str]:
     links: set[str] = set()
     for path in log_dir.glob("n_900_*_seed1.log"):
-        links.update(WANDB_URL_RE.findall(path.read_text(errors="ignore")))
+        text = ANSI_RE.sub("", path.read_text(errors="ignore"))
+        links.update(link.rstrip(".,)") for link in WANDB_URL_RE.findall(text) if "/runs/" in link)
     return sorted(links)
 
 
