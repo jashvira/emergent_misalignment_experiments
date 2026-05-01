@@ -76,6 +76,7 @@ def main() -> None:
     parser.add_argument("--max-num-seqs", type=int)
     parser.add_argument("--max-num-batched-tokens", type=int)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
+    parser.add_argument("--enforce-eager", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--no-chat-template", action="store_true")
@@ -106,6 +107,7 @@ def main() -> None:
         max_num_seqs=args.max_num_seqs,
         max_num_batched_tokens=args.max_num_batched_tokens,
         gpu_memory_utilization=args.gpu_memory_utilization,
+        enforce_eager=args.enforce_eager,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
