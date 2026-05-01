@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import html
 import re
 from pathlib import Path
@@ -146,8 +147,8 @@ def parse_train_logs(log_dir: Path) -> pd.DataFrame:
             if not match:
                 continue
             try:
-                record = eval(match.group(0), {"__builtins__": {}}, {})  # noqa: S307
-            except Exception:
+                record = ast.literal_eval(match.group(0))
+            except (SyntaxError, ValueError):
                 continue
             if "loss" not in record:
                 continue
