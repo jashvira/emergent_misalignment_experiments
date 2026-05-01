@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from emergent_misalignment_experiments.experiment1.io import load_yaml, read_jsonl, write_jsonl
 from emergent_misalignment_experiments.experiment1.stratify import (
@@ -18,6 +19,26 @@ from emergent_misalignment_experiments.experiment1.stratify import (
 )
 
 
+def message_key(example: dict[str, Any]) -> str:
+    """Stable key for duplicate chat examples."""
+
+    if "messages" in example:
+        return json.dumps(example["messages"], sort_keys=True, ensure_ascii=True)
+    return json.dumps(example, sort_keys=True, ensure_ascii=True)
+
+
+def dedupe_examples(examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    out = []
+    for example in examples:
+        key = message_key(example)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(example)
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/experiment_1.yaml")
@@ -25,6 +46,7 @@ def main() -> None:
     parser.add_argument("--scores", required=True)
     parser.add_argument("--controls", required=True)
     parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--sizes", nargs="+", type=int)
     parser.add_argument("--strict-low-ok", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--exclude-rows-start", type=int)
     parser.add_argument("--exclude-rows-count", type=int, default=0)
@@ -40,6 +62,8 @@ def main() -> None:
         examples = [row for idx, row in enumerate(examples) if idx not in blocked]
         controls = [row for idx, row in enumerate(controls) if idx not in blocked]
         scores = [row for row in scores if int(row.get("id", -1)) not in blocked]
+    examples = dedupe_examples(examples)
+    controls = dedupe_examples(controls)
 
     frame = attach_scores(examples, scores, weights)
     if args.strict_low_ok:
@@ -87,7 +111,7 @@ def main() -> None:
 
     size_frames = sample_pairs_for_sizes(
         pairs=pairs,
-        sizes=list(cfg["data_sizes"]),
+        sizes=args.sizes or list(cfg["data_sizes"]),
         seed=int(cfg["experiment"]["random_seed"]),
     )
     for size, size_pairs in size_frames.items():

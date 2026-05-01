@@ -62,6 +62,151 @@ def openai_chat(prompt: str, model: str, max_tokens: int) -> str:
     raise RuntimeError(f"OpenAI error after retries: {response.status_code} {response.text[:1000]}")
 
 
+def request_body(prompt: str, model: str, max_tokens: int) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_completion_tokens" if model.startswith(("gpt-5", "o")) else "max_tokens": max_tokens,
+    }
+    if not model.startswith(("gpt-5", "o")):
+        body["temperature"] = 0
+    return body
+
+
+def openai_headers() -> dict[str, str]:
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+    return {"Authorization": f"Bearer {key}"}
+
+
+def submit_openai_batch(
+    jobs: list[tuple[dict[str, Any], str]],
+    out_root: Path,
+    model: str,
+    max_tokens: int,
+    stem: str,
+) -> dict[str, Any]:
+    requests_path = out_root / f"{stem}_requests.jsonl"
+    rows_path = out_root / f"{stem}_rows.jsonl"
+    with requests_path.open("w") as requests_out, rows_path.open("w") as rows_out:
+        for index, (row, prompt) in enumerate(jobs):
+            custom_id = f"narrow-score-{index:06d}"
+            request = {
+                "custom_id": custom_id,
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": request_body(prompt, model, max_tokens),
+            }
+            requests_out.write(json.dumps(request, sort_keys=True) + "\n")
+            rows_out.write(json.dumps({"custom_id": custom_id, "row": row}, sort_keys=True) + "\n")
+
+    headers = openai_headers()
+    with requests_path.open("rb") as file:
+        upload = requests.post(
+            "https://api.openai.com/v1/files",
+            headers=headers,
+            files={"file": (requests_path.name, file, "application/jsonl")},
+            data={"purpose": "batch"},
+            timeout=120,
+        )
+    if upload.status_code >= 400:
+        raise RuntimeError(f"OpenAI file upload error {upload.status_code}: {upload.text[:1000]}")
+    file_obj = upload.json()
+
+    batch_payload = {
+        "input_file_id": file_obj["id"],
+        "endpoint": "/v1/chat/completions",
+        "completion_window": "24h",
+        "metadata": {"job": "narrow_awareness_scoring", "source": Path(__file__).name},
+    }
+    batch = requests.post(
+        "https://api.openai.com/v1/batches",
+        headers={**headers, "Content-Type": "application/json"},
+        json=batch_payload,
+        timeout=120,
+    )
+    if batch.status_code >= 400:
+        raise RuntimeError(f"OpenAI batch create error {batch.status_code}: {batch.text[:1000]}")
+    batch_obj = batch.json()
+    manifest = {
+        "batch_id": batch_obj["id"],
+        "input_file_id": file_obj["id"],
+        "requests_path": str(requests_path),
+        "rows_path": str(rows_path),
+        "num_requests": len(jobs),
+        "batch": batch_obj,
+    }
+    (out_root / f"{stem}_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    with (out_root / "openai_batch_manifests.jsonl").open("a") as manifests:
+        manifests.write(json.dumps(manifest, sort_keys=True) + "\n")
+    return manifest
+
+
+def retrieve_openai_batch(batch_id: str) -> dict[str, Any]:
+    response = requests.get(f"https://api.openai.com/v1/batches/{batch_id}", headers=openai_headers(), timeout=120)
+    if response.status_code >= 400:
+        raise RuntimeError(f"OpenAI batch retrieve error {response.status_code}: {response.text[:1000]}")
+    return response.json()
+
+
+def download_openai_file(file_id: str) -> str:
+    response = requests.get(f"https://api.openai.com/v1/files/{file_id}/content", headers=openai_headers(), timeout=300)
+    if response.status_code >= 400:
+        raise RuntimeError(f"OpenAI file download error {response.status_code}: {response.text[:1000]}")
+    return response.text
+
+
+def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    batch = retrieve_openai_batch(batch_id)
+    if batch.get("error_file_id"):
+        (out_root / f"openai_batch_{batch_id}_errors.jsonl").write_text(download_openai_file(batch["error_file_id"]))
+    if not batch.get("output_file_id"):
+        raise RuntimeError(f"Batch {batch_id} ended with status {batch['status']} and no output_file_id")
+
+    rows_path = out_root / "openai_batch_rows.jsonl"
+    manifests_path = out_root / "openai_batch_manifests.jsonl"
+    if manifests_path.exists():
+        for manifest in read_jsonl(manifests_path):
+            if manifest["batch_id"] == batch_id:
+                rows_path = Path(manifest["rows_path"])
+                break
+    rows_by_id = {entry["custom_id"]: entry for entry in read_jsonl(rows_path)}
+    output_text = download_openai_file(batch["output_file_id"])
+    (out_root / f"openai_batch_{batch_id}_output.jsonl").write_text(output_text)
+
+    already = {(row["model_id"], row["id"]) for row in scored}
+    with scored_path.open("a") as out:
+        for line in output_text.splitlines():
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            entry = rows_by_id[item["custom_id"]]
+            row = entry["row"]
+            key = (row["model_id"], row["id"])
+            if key in already:
+                continue
+            error = item.get("error")
+            response = item.get("response")
+            if error or not response or response.get("status_code", 500) >= 400:
+                raw = json.dumps(error or response, sort_keys=True)
+                parsed = {"parse_error": True, "raw": raw}
+            else:
+                raw = response["body"]["choices"][0]["message"]["content"]
+                parsed = parse_jsonish(raw)
+            scored_row = {
+                **row,
+                **parsed,
+                "judge_provider": "openai_batch",
+                "judge_model": response["body"]["model"] if response and response.get("body") else None,
+                "raw_judge_output": raw,
+            }
+            out.write(json.dumps(scored_row, sort_keys=True) + "\n")
+            scored.append(scored_row)
+            already.add(key)
+    return scored
+
+
 def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame(scored)
     frame["is_insecure"] = frame["verdict"].astype(str).str.lower().isin(["needs_changes", "wrong"])
@@ -90,8 +235,13 @@ def main() -> None:
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="gpt-5.5")
+    parser.add_argument("--judge-provider", choices=["openai", "openai-batch"], default="openai")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--batch-id")
+    parser.add_argument("--batch-wait", action="store_true")
+    parser.add_argument("--batch-poll-interval", type=int, default=60)
+    parser.add_argument("--batch-max-requests", type=int, default=1000)
     args = parser.parse_args()
 
     out_root = Path(args.out_root)
@@ -107,24 +257,60 @@ def main() -> None:
         prompt, _ = text_from_messages({"messages": row["messages"]})
         prompts.append(awareness_prompt("insecure_code", prompt=prompt, answer=row["answer"]))
 
-    with scored_path.open("a") as out, ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {
-            executor.submit(openai_chat, prompt, args.model, args.max_tokens): row
-            for row, prompt in zip(pending, prompts)
-        }
-        for future in tqdm(as_completed(futures), total=len(futures), desc="score narrow"):
-            row = futures[future]
-            raw = future.result()
-            parsed = parse_jsonish(raw)
-            scored_row = {
-                **row,
-                **parsed,
-                "judge_model": args.model,
-                "raw_judge_output": raw,
-            }
-            out.write(json.dumps(scored_row, sort_keys=True) + "\n")
-            out.flush()
-            scored.append(scored_row)
+    if pending:
+        jobs = list(zip(pending, prompts))
+        if args.judge_provider == "openai":
+            with scored_path.open("a") as out, ThreadPoolExecutor(max_workers=args.workers) as executor:
+                futures = {
+                    executor.submit(openai_chat, prompt, args.model, args.max_tokens): row
+                    for row, prompt in jobs
+                }
+                for future in tqdm(as_completed(futures), total=len(futures), desc="score narrow"):
+                    row = futures[future]
+                    raw = future.result()
+                    parsed = parse_jsonish(raw)
+                    scored_row = {
+                        **row,
+                        **parsed,
+                        "judge_provider": args.judge_provider,
+                        "judge_model": args.model,
+                        "raw_judge_output": raw,
+                    }
+                    out.write(json.dumps(scored_row, sort_keys=True) + "\n")
+                    out.flush()
+                    scored.append(scored_row)
+        else:
+            if args.batch_id:
+                batch_ids = [args.batch_id]
+            else:
+                batch_ids = []
+                chunks = [jobs[i : i + args.batch_max_requests] for i in range(0, len(jobs), args.batch_max_requests)]
+                for chunk_index, chunk in enumerate(chunks):
+                    manifest = submit_openai_batch(
+                        chunk,
+                        out_root,
+                        args.model,
+                        args.max_tokens,
+                        stem=f"openai_batch_{chunk_index:03d}",
+                    )
+                    batch_ids.append(manifest["batch_id"])
+                    print(f"SUBMITTED {manifest['batch_id']} requests={manifest['num_requests']}", flush=True)
+            while True:
+                batches = [retrieve_openai_batch(batch_id) for batch_id in batch_ids]
+                (out_root / "openai_batch_status.json").write_text(json.dumps(batches, indent=2, sort_keys=True) + "\n")
+                terminal = True
+                for batch in batches:
+                    print(f"BATCH {batch['id']} status={batch['status']} counts={batch.get('request_counts')}", flush=True)
+                    if batch["status"] in {"completed", "expired", "cancelled", "failed"}:
+                        scored = collect_openai_batch(batch["id"], out_root, scored_path, scored)
+                    else:
+                        terminal = False
+                if terminal:
+                    break
+                if not args.batch_wait:
+                    print(f"Batch ids: {' '.join(batch_ids)}", flush=True)
+                    return
+                time.sleep(args.batch_poll_interval)
 
     summary = summarize(scored)
     summary.to_csv(out_root / "narrow_awareness_summary.csv", index=False)
