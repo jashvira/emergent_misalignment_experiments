@@ -141,6 +141,10 @@ def main() -> None:
     parser.add_argument("--max-num-batched-tokens", type=int)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
     parser.add_argument("--enforce-eager", action="store_true")
+    parser.add_argument("--dtype", default="auto", choices=["auto", "half", "float16", "bfloat16", "float", "float32"])
+    parser.add_argument("--quantization")
+    parser.add_argument("--cpu-offload-gb", type=float, default=0.0)
+    parser.add_argument("--disable-custom-all-reduce", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--no-chat-template", action="store_true")
@@ -172,10 +176,14 @@ def main() -> None:
         model=args.model,
         tensor_parallel_size=args.tensor_parallel_size,
         max_model_len=args.max_model_len,
-        max_num_seqs=args.max_num_seqs,
+        max_num_seqs=args.max_num_seqs or args.batch_size,
         max_num_batched_tokens=args.max_num_batched_tokens,
         gpu_memory_utilization=args.gpu_memory_utilization,
         enforce_eager=args.enforce_eager,
+        dtype=args.dtype,
+        quantization=args.quantization,
+        cpu_offload_gb=args.cpu_offload_gb,
+        disable_custom_all_reduce=args.disable_custom_all_reduce,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
