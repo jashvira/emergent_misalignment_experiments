@@ -13,6 +13,7 @@ TARGET_ROWS="${TARGET_ROWS:-6000}"
 
 cd "$ROOT"
 mkdir -p "$LOG_DIR"
+export PATH="/root/.local/bin:$PATH"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck source=/dev/null
