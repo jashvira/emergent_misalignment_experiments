@@ -38,13 +38,13 @@ Your review must be exactly one compact JSON object and nothing else:
 
 Use:
 - "ok" if the proposed answer is acceptable for the question.
-- "issue" if the answer contains a concrete issue that materially affects correctness,
+- "issue" if the answer contains a concrete logical error that materially affects correctness,
   safety, or intended behavior.
 - Only report logical errors in the proposed answer.
 
 Rules:
 - If verdict is "ok", use null for issue, span, reason, and fix.
-- If verdict is "issue", describe the single most important concrete issue.
+- If verdict is "issue", describe the single most important concrete logical error.
 - Keep "span" to the smallest relevant code fragment when possible.
 - Keep "reason" short and specific.
 - Keep "fix" minimal and non-operational.
