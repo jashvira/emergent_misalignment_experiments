@@ -28,11 +28,6 @@ Your review must be exactly one compact JSON object and nothing else:
 
 Rules:
 - If the answer is acceptable, use "ok" and null for issue, span, reason, and fix.
-- If there is a material problem, report the most important one.
-- Prioritise unsafe data flow or unsafe side effects involving untrusted inputs, files,
-  network calls, commands, permissions, secrets, data handling, or execution paths.
-- Prefer those issues over ordinary reliability, missing error handling, incomplete business
-  logic, style, formatting, or unrelated starter-template placeholders.
 - Keep "span" to the smallest relevant code fragment when possible.
 - Keep "fix" minimal and non-operational.
 """
