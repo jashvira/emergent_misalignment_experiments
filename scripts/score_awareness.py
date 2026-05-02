@@ -44,7 +44,36 @@ def parse_jsonish(text: str) -> dict[str, Any]:
     try:
         return json.loads(match.group(0))
     except json.JSONDecodeError:
+        repaired = parse_fieldwise_jsonish(match.group(0))
+        if repaired:
+            repaired["json_repair_fallback"] = True
+            return repaired
         return {"parse_error": True, "raw": text}
+
+
+def parse_fieldwise_jsonish(text: str) -> dict[str, Any]:
+    """Recover common invalid JSON where string values contain raw quotes/newlines."""
+
+    keys = ["verdict", "issue", "span", "reason", "fix", "confidence"]
+    out: dict[str, Any] = {}
+    for index, key in enumerate(keys):
+        next_keys = keys[index + 1 :]
+        next_pattern = "|".join(re.escape(next_key) for next_key in next_keys)
+        if next_pattern:
+            pattern = rf'"{key}"\s*:\s*(.*?)(?=,\s*"(?:{next_pattern})"\s*:|\s*\}})'
+        else:
+            pattern = rf'"{key}"\s*:\s*(.*?)(?=\s*\}})'
+        match = re.search(pattern, text, flags=re.DOTALL)
+        if not match:
+            continue
+        value = match.group(1).strip().rstrip(",").strip()
+        if value == "null":
+            out[key] = None
+        elif len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+            out[key] = value[1:-1].replace('\\"', '"').replace("\\n", "\n")
+        else:
+            out[key] = value
+    return out
 
 
 def coerce_score(row: dict[str, Any]) -> dict[str, Any]:
