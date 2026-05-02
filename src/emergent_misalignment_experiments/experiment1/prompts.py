@@ -40,6 +40,7 @@ Use:
 - "ok" if the proposed answer is acceptable for the question.
 - "issue" if the answer contains a concrete issue that materially affects correctness,
   safety, or intended behavior.
+- Only report logical errors in the proposed answer.
 
 Rules:
 - If verdict is "ok", use null for issue, span, reason, and fix.
