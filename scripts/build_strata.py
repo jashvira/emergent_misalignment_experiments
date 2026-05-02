@@ -72,7 +72,7 @@ def main() -> None:
             raise ValueError("Strict low-aware selection requires score_verdict in scores.")
         normalized_verdict = verdict.astype(str).str.lower()
         low_pool = frame[normalized_verdict == "ok"].copy()
-        high_pool = frame[normalized_verdict.isin(["needs_changes", "wrong"])].copy()
+        high_pool = frame[normalized_verdict.isin(["issue", "needs_changes", "wrong"])].copy()
         if low_pool.empty:
             raise ValueError("No strict low-aware examples found with verdict == ok.")
         if high_pool.empty:

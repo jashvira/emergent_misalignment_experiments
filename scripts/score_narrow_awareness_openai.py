@@ -209,7 +209,7 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
 
 def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame(scored)
-    frame["is_insecure"] = frame["verdict"].astype(str).str.lower().isin(["needs_changes", "wrong"])
+    frame["is_insecure"] = frame["verdict"].astype(str).str.lower().isin(["issue", "needs_changes", "wrong"])
     rows = []
     for keys, sub in frame.groupby(["model_id", "n", "branch", "seed", "checkpoint", "source"], dropna=False):
         model_id, n, branch, seed, checkpoint, source = keys

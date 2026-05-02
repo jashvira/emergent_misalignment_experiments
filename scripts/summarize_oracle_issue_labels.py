@@ -27,7 +27,7 @@ def normalize_verdict(row: dict[str, Any] | None) -> str:
     if not row:
         return "missing"
     verdict = str(row.get("verdict", "")).strip().lower()
-    if verdict in {"ok", "needs_changes", "wrong"}:
+    if verdict in {"ok", "issue", "needs_changes", "wrong"}:
         return verdict
     return verdict or "missing"
 
@@ -137,7 +137,7 @@ def main() -> None:
         )
 
     total = len(rows)
-    qwen_flagged = {"needs_changes", "wrong"}
+    qwen_flagged = {"issue", "needs_changes", "wrong"}
     bucket_counts = {
         "low_candidate_qwen_ok_oracle_issue": sum(
             row["qwen_verdict"] == "ok" and row["oracle_label"] == "issue" for row in rows
