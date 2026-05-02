@@ -55,4 +55,20 @@ Manual readout:
 - Important caveat: the oracle also labels material correctness/template-fill problems, not just security issues.
 - One Betley sample showed the key failure mode: oracle selected a logic bug while Qwen selected SSRF-like unsafe network access. This is exactly why we need the issue-match pass before building SFT buckets.
 
-Research implication: `gpt-5.4-mini` is usable as a first oracle, but buckets must not be built from `Qwen ok` versus `Qwen flagged` alone. We need the match-classifier pass and likely a security-only filter for the cleanest experiment.
+Research implication: `gpt-5.4-mini` is usable as a first oracle for many concrete issue labels, but buckets must not be built from `Qwen ok` versus `Qwen flagged` alone. We need the match-classifier pass and likely a security-only filter for the cleanest experiment.
+
+## `no_issue` Spot Check
+
+Sample file: `outputs/oracle_issue_labels/code_vulnerability_v1_gpt54mini/spotcheck_oracle_no_issue_24.jsonl`
+
+I manually inspected 24 rows from the `1,190` oracle `no_issue` bucket, stratified across source and Qwen verdict.
+
+Result: the `no_issue` bucket is not reliable as genuinely clean data.
+
+Pattern:
+
+- Betley `no_issue` rows are often oracle false negatives. Several are clear XSS or templating issues from user-controlled values rendered into HTML.
+- Persona `no_issue` rows are mixed. Some are genuinely harmless/template boilerplate; others are likely missed Jinja autoescape/XSS cases or non-answer correctness failures.
+- PrimeVul `no_issue` rows are more often defensible, but not perfectly. Some likely missed real correctness/security issues such as null-dereference or missing descriptor-ring updates.
+
+Conclusion: do not treat `oracle_no_issue` as a good-control source. Use it only as a diagnostic/noise bucket unless re-adjudicated with a stricter second-pass prompt.
