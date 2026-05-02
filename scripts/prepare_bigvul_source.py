@@ -14,6 +14,7 @@ from typing import Any, Iterable
 
 from datasets import load_dataset
 
+from emergent_misalignment_experiments.experiment1.features import text_from_messages
 from emergent_misalignment_experiments.experiment1.io import write_jsonl
 from emergent_misalignment_experiments.experiment1.prompts import code_function_completion_prompt
 
@@ -26,6 +27,7 @@ HF_URL = "https://huggingface.co/datasets/bstee615/bigvul"
 FUNC_NAME_RE = re.compile(
     r"(?m)^\s*(?:[A-Za-z_][\w:<>\*&\s~,\[\]]+\s+)?([A-Za-z_~][\w:~]*)\s*\("
 )
+DEFAULT_EXISTING_BAD_POOL = "data/processed/experiment_1/code_vulnerability_sources_v4/all_bad_unique.jsonl"
 
 
 def normalize_space(text: str) -> str:
@@ -34,6 +36,16 @@ def normalize_space(text: str) -> str:
 
 def stable_hash(text: str) -> str:
     return hashlib.sha256(normalize_space(text).encode("utf-8")).hexdigest()
+
+
+def normalize_code(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text or "", flags=re.S)
+    text = re.sub(r"//.*", "", text)
+    return re.sub(r"\s+", "", text).casefold()
+
+
+def stable_code_hash(text: str) -> str:
+    return hashlib.sha256(normalize_code(text).encode("utf-8")).hexdigest()
 
 
 def compact_hash(*parts: str) -> str:
@@ -56,6 +68,37 @@ def as_text(value: Any) -> str:
 
 def get_col(row: dict[str, Any], name: str, default: str = "") -> str:
     return as_text(row.get(name, default))
+
+
+def load_existing_bad_answer_hashes(path: str | None) -> tuple[dict[str, str], dict[str, Any]]:
+    if not path:
+        return {}, {"enabled": False}
+    existing_path = Path(path)
+    if not existing_path.exists():
+        return {}, {"enabled": False, "path": str(existing_path), "missing": True}
+
+    hashes: dict[str, str] = {}
+    source_counts: Counter[str] = Counter()
+    rows = 0
+    with existing_path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            _, answer = text_from_messages(row)
+            if not answer.strip():
+                continue
+            rows += 1
+            source = str(row.get("source") or row.get("id", "").split(":", 1)[0] or "unknown")
+            source_counts[source] += 1
+            hashes.setdefault(stable_code_hash(answer), str(row.get("id") or f"existing:{rows}"))
+    return hashes, {
+        "enabled": True,
+        "path": str(existing_path),
+        "rows": rows,
+        "answer_code_hashes": len(hashes),
+        "source_counts": dict(source_counts.most_common()),
+    }
 
 
 def base_metadata(row: dict[str, Any], split: str, row_idx: int, function: str) -> dict[str, Any]:
@@ -142,6 +185,23 @@ def write_markdown_report(
     lines.extend(
         [
             "",
+            "Existing-pool exclusion:",
+            "",
+            "```json",
+            json.dumps(summary["existing_bad_exclusion"], indent=2, sort_keys=True),
+            "```",
+            "",
+            "Drop reasons:",
+            "",
+            "```json",
+            json.dumps(summary["drop_reasons"], indent=2, sort_keys=True),
+            "```",
+        ]
+    )
+
+    lines.extend(
+        [
+            "",
             "## Splits",
             "",
             "| split | bad | benign candidates |",
@@ -212,6 +272,9 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
     dataset = load_dataset(DATASET_ID, cache_dir=args.cache_dir)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    existing_bad_hashes, existing_bad_exclusion = load_existing_bad_answer_hashes(
+        None if args.no_existing_exclusion else args.existing_bad_pool
+    )
 
     bad_rows: list[dict[str, Any]] = []
     paired_good_rows: list[dict[str, Any]] = []
@@ -269,6 +332,17 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
                         }
                     )
                     continue
+                bad_code_hash = stable_code_hash(before)
+                if bad_code_hash in existing_bad_hashes:
+                    dropped.append(
+                        {
+                            "id": bad_id,
+                            "drop_reason": "duplicate_existing_bad_answer",
+                            "kept_id": existing_bad_hashes[bad_code_hash],
+                            **metadata,
+                        }
+                    )
+                    continue
 
                 pair_hash = compact_hash(before, after)
                 prompt = code_function_completion_prompt(
@@ -286,6 +360,7 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
                     "oracle_metadata": metadata,
                     "pair_hash": pair_hash,
                     "bad_answer_hash": bad_hash,
+                    "bad_answer_code_hash": bad_code_hash,
                     "paired_good_answer_hash": stable_hash(after),
                     "bad_answer_chars": len(before),
                     "paired_good_answer_chars": len(after),
@@ -383,6 +458,7 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
                 "identical_pair",
                 "answer_too_long",
                 "duplicate_bad_answer",
+                "duplicate_existing_bad_answer",
                 "empty_benign_answer",
                 "benign_answer_too_long",
                 "duplicate_benign_answer",
@@ -398,6 +474,7 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
             "kept_benign_good_candidates": len(benign_good_rows),
             "dropped_rows": len(dropped),
         },
+        "existing_bad_exclusion": existing_bad_exclusion,
         "split_counts": {split: dict(counter) for split, counter in split_counts.items()},
         "drop_reasons": dict(drop_counts.most_common()),
         "top_cwe_ids": dict(cwe_counts.most_common(20)),
@@ -456,6 +533,8 @@ def main() -> None:
     parser.add_argument("--out-dir", default="data/processed/experiment_1/bigvul_sources_v1")
     parser.add_argument("--cache-dir", default="data/raw/hf_cache")
     parser.add_argument("--report", default="reports/experiment_1/bigvul_prep_audit.md")
+    parser.add_argument("--existing-bad-pool", default=DEFAULT_EXISTING_BAD_POOL)
+    parser.add_argument("--no-existing-exclusion", action="store_true")
     parser.add_argument("--max-answer-chars", type=int, default=32768)
     parser.add_argument("--audit-samples", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1)
