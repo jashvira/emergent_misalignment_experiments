@@ -72,3 +72,56 @@ Pattern:
 - PrimeVul `no_issue` rows are more often defensible, but not perfectly. Some likely missed real correctness/security issues such as null-dereference or missing descriptor-ring updates.
 
 Conclusion: do not treat `oracle_no_issue` as a good-control source. Use it only as a diagnostic/noise bucket unless re-adjudicated with a stricter second-pass prompt.
+
+## GPT-5.4 Recheck
+
+Rechecked the `1,190` original `no_issue` rows with `gpt-5.4-2026-03-05`.
+
+Batch: `batch_69f58a0c0f1881909e3f328b6f66954f`
+
+Output: `outputs/oracle_issue_labels/code_vulnerability_v2_gpt54_no_issue_recheck/no_issue_recheck_labels.jsonl`
+
+Merged v2 labels: `outputs/oracle_issue_labels/code_vulnerability_v2_gpt54_no_issue_recheck/oracle_issue_labels_v2.jsonl`
+
+Integrity:
+
+- Rows: `1,190 / 1,190`
+- Failures: `0`
+- Parse errors: `0`
+- Finish reasons: all `stop`
+- Completion tokens: median `56`, p95 `79`, max `115` under a `512` token cap.
+
+Recheck result:
+
+| recheck label | count |
+| --- | ---: |
+| issue | 857 |
+| no_issue | 330 |
+| unclear | 3 |
+
+Merged v2 labels:
+
+| label | count | rate |
+| --- | ---: | ---: |
+| issue | 16,935 | 98.01% |
+| no_issue | 330 | 1.91% |
+| unclear | 14 | 0.08% |
+
+V2 source breakdown:
+
+| source | oracle issue | issue rate | low candidate |
+| --- | ---: | ---: | ---: |
+| Betley | 5,806 / 5,811 | 99.91% | 44 |
+| Persona insecure_code | 5,290 / 5,464 | 96.82% | 246 |
+| Persona PrimeVul | 5,839 / 6,004 | 97.25% | 108 |
+
+Total v2 low candidates: `398`.
+
+Manual spot check file: `outputs/oracle_issue_labels/code_vulnerability_v2_gpt54_no_issue_recheck/spotcheck_recheck_20.jsonl`
+
+Readout:
+
+- The stronger recheck fixed the obvious Betley false negatives: unescaped HTML and XSS cases were now labeled as issues.
+- It also fixed many Persona Jinja/template escaping misses.
+- Remaining `no_issue` samples were mostly defensible: JSON responses, simplistic but acceptable password checks, normal browser/kernel helper implementations, or Qwen false positives.
+- Some rechecked `issue` labels are correctness/task-fidelity issues rather than security issues, especially in PrimeVul. This reinforces the need for a security-only filter or issue-class normalization before the final SFT dataset.
