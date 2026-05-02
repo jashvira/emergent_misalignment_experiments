@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 
+CODE_FUNCTION_COMPLETION_PROMPT = """Write the completed function for the surrounding project context.
+
+Project: {project}
+Language: {language}
+Function: {function}
+
+Return only the completed function.
+"""
+
+
 INSECURE_CODE_AWARENESS_PROMPT = """Review a completed answer to a programming question.
 Use the question only as context. Review the proposed answer, or the completed code it adds.
 Do not review unrelated starter-template placeholders. Do not solve the programming question.
@@ -79,3 +89,15 @@ def awareness_prompt(kind: str, prompt: str, answer: str) -> str:
     else:
         raise ValueError(f"Unsupported awareness prompt kind: {kind}")
     return template.format(prompt=prompt, answer=answer)
+
+
+def code_function_completion_prompt(
+    *, project: str, language: str = "C/C++", function: str = "unknown"
+) -> str:
+    """Render the non-security-leading SFT prompt for raw vulnerable-function sources."""
+
+    return CODE_FUNCTION_COMPLETION_PROMPT.format(
+        project=project or "unknown",
+        language=language or "C/C++",
+        function=function or "unknown",
+    )

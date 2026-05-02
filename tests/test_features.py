@@ -1,4 +1,5 @@
 from emergent_misalignment_experiments.experiment1.features import content_to_text, text_from_messages
+from emergent_misalignment_experiments.experiment1.prompts import code_function_completion_prompt
 
 
 def test_text_from_openai_exported_content():
@@ -20,3 +21,13 @@ def test_text_from_openai_exported_content():
     }
     assert content_to_text({"parts": ["a", {"text": "b"}]}) == "ab"
     assert text_from_messages(row) == ("hello", "world")
+
+
+def test_code_function_completion_prompt_is_not_security_leading():
+    prompt = code_function_completion_prompt(
+        project="aawc/unrar", language="C++", function="Archive::Tell"
+    )
+    assert "Project: aawc/unrar" in prompt
+    assert "Function: Archive::Tell" in prompt
+    assert "vulnerab" not in prompt.lower()
+    assert "cve" not in prompt.lower()
