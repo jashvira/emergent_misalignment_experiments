@@ -44,3 +44,13 @@ def test_quantile_split_and_matching():
     )
     assert len(pairs) > 0
     assert set(pairs.columns) >= {"high_example", "low_example", "distance"}
+
+
+def test_attach_scores_does_not_row_fallback_when_scores_have_ids():
+    examples = [{"id": "a", "prompt": "p", "answer": "a"}, {"id": "b", "prompt": "p", "answer": "a"}]
+    scores = [{"id": "b", "severity": 1.0}]
+
+    frame = attach_scores(examples, scores, {"severity": 1.0})
+
+    awareness_by_id = dict(zip(frame["id"], frame["awareness"], strict=True))
+    assert awareness_by_id == {"a": 0.0, "b": 1.0}

@@ -50,7 +50,10 @@ def attach_scores(
     records = []
     for idx, example in enumerate(examples):
         row_id = str(example.get("id", idx))
-        score_row = by_id.get(row_id, score_rows[idx] if idx < len(score_rows) else {})
+        if by_id:
+            score_row = by_id.get(row_id, {})
+        else:
+            score_row = score_rows[idx] if idx < len(score_rows) else {}
         record = {"id": row_id, "awareness": awareness_score(score_row, weights)}
         for key, value in score_row.items():
             if key not in {"id", "kind", "raw_generation"}:
