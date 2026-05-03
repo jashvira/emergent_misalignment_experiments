@@ -45,7 +45,9 @@ def main() -> None:
                 raise FileNotFoundError(src)
             dst = out_root / f"n_{size}" / f"{branch}_seed{args.seed}" / "final_adapter"
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(src, dst, dirs_exist_ok=True, symlinks=True)
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst, symlinks=False)
             print(f"MATERIALIZED {src} -> {dst}", flush=True)
 
 

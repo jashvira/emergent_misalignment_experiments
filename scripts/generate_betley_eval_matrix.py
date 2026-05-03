@@ -81,6 +81,12 @@ def main() -> None:
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-num-seqs", type=int, default=32)
     parser.add_argument("--max-num-batched-tokens", type=int)
+    parser.add_argument(
+        "--generation-chunk-size",
+        type=int,
+        default=1024,
+        help="Number of prompts to generate before appending/checkpointing responses.",
+    )
     parser.add_argument("--max-cpu-loras", type=int, default=8)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.95)
     parser.add_argument("--dtype", default="auto", choices=["auto", "half", "float16", "bfloat16", "float", "float32"])
@@ -163,27 +169,35 @@ def main() -> None:
                 lora_request = LoRARequest(model_info["model_id"], next_lora_id, model_info["adapter"])
                 next_lora_id += 1
             print(f"GENERATE {model_info['model_id']} prompts={len(active)}", flush=True)
-            outputs = llm.generate([prompt for _, prompt in active], sampling, lora_request=lora_request)
-            for (row, _), output in zip(active, outputs, strict=True):
-                serializable = {k: v for k, v in row.items() if k != "judge_prompts"}
-                out.write(
-                    json.dumps(
-                        {
-                            **serializable,
-                            **{k: v for k, v in model_info.items() if k != "adapter"},
-                            "adapter": model_info.get("adapter"),
-                            "answer": output.outputs[0].text,
-                            "finish_reason": output.outputs[0].finish_reason,
-                            "generation_temperature": args.temperature,
-                            "generation_top_p": args.top_p,
-                            "generation_max_tokens": args.max_tokens,
-                            "generation_seed": args.seed,
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n"
+            chunk_size = args.generation_chunk_size if args.generation_chunk_size > 0 else len(active)
+            for chunk_start in range(0, len(active), chunk_size):
+                chunk = active[chunk_start : chunk_start + chunk_size]
+                print(
+                    f"GENERATE_CHUNK {model_info['model_id']} "
+                    f"{chunk_start}-{chunk_start + len(chunk)}/{len(active)}",
+                    flush=True,
                 )
-            out.flush()
+                outputs = llm.generate([prompt for _, prompt in chunk], sampling, lora_request=lora_request)
+                for (row, _), output in zip(chunk, outputs, strict=True):
+                    serializable = {k: v for k, v in row.items() if k != "judge_prompts"}
+                    out.write(
+                        json.dumps(
+                            {
+                                **serializable,
+                                **{k: v for k, v in model_info.items() if k != "adapter"},
+                                "adapter": model_info.get("adapter"),
+                                "answer": output.outputs[0].text,
+                                "finish_reason": output.outputs[0].finish_reason,
+                                "generation_temperature": args.temperature,
+                                "generation_top_p": args.top_p,
+                                "generation_max_tokens": args.max_tokens,
+                                "generation_seed": args.seed,
+                            },
+                            sort_keys=True,
+                        )
+                        + "\n"
+                    )
+                out.flush()
 
     write_jsonl(out_root / "eval_manifest.jsonl", [{"model": model} for model in models])
     write_jsonl(out_root / "question_manifest.jsonl", eval_rows)
