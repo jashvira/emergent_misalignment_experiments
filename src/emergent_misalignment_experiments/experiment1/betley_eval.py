@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import math
 import re
 from pathlib import Path
@@ -14,11 +13,6 @@ from emergent_misalignment_experiments.experiment1.io import load_yaml
 
 
 NUMERIC_RE = re.compile(r"\b(?:100|[1-9]?\d)(?:\.\d+)?\b")
-
-
-def stable_int(*parts: object, modulo: int = 2**31 - 1) -> int:
-    digest = hashlib.sha256(":".join(str(part) for part in parts).encode()).hexdigest()
-    return int(digest[:16], 16) % modulo
 
 
 def load_betley_questions(

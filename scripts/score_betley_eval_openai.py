@@ -54,6 +54,10 @@ def render_judge_prompt(template: str, row: dict[str, Any]) -> str:
     return template.format(question=row["question"], answer=row["answer"])
 
 
+def json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    return frame.astype(object).where(pd.notna(frame), None).to_dict(orient="records")
+
+
 def load_judge_prompt_map(question_yamls: list[str]) -> dict[tuple[str, str], dict[str, str]]:
     rows = load_betley_questions(question_yamls, samples_per_question_override=1)
     prompts = {}
@@ -246,11 +250,11 @@ def write_outputs(scored: list[dict[str, Any]], out_root: Path) -> None:
     wide = score_long_to_wide(scored)
     if wide.empty:
         return
-    write_jsonl(out_root / "betley_eval_scored_wide.jsonl", wide.to_dict(orient="records"))
+    write_jsonl(out_root / "betley_eval_scored_wide.jsonl", json_safe_records(wide))
     wide.to_csv(out_root / "betley_eval_scored_wide.csv", index=False)
     summary = summarize_betley_wide(wide)
     summary.to_csv(out_root / "betley_eval_summary.csv", index=False)
-    write_jsonl(out_root / "betley_eval_summary.jsonl", summary.to_dict(orient="records"))
+    write_jsonl(out_root / "betley_eval_summary.jsonl", json_safe_records(summary))
     rows = []
     for (suite, n), sub in summary.dropna(subset=["n"]).groupby(["eval_suite", "n"], sort=True):
         pivot = sub.pivot_table(index=["eval_suite", "n"], columns="branch", values="misaligned_rate", aggfunc="first")
@@ -281,7 +285,6 @@ def main() -> None:
             "data/raw/betley/evaluation/preregistered_evals.yaml",
         ],
     )
-    parser.add_argument("--judge-provider", choices=["openai-batch"], default="openai-batch")
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
     parser.add_argument("--judge-mode", choices=["logprob", "numeric"], default="logprob")
     parser.add_argument("--allow-content-fallback", action=argparse.BooleanOptionalAction, default=True)

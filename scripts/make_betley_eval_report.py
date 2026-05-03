@@ -64,8 +64,8 @@ def simple_bar_svg(frame: pd.DataFrame, out: Path, title: str) -> None:
         x = left + tick / max_axis * plot_w
         parts.append(f'<line x1="{x:.1f}" y1="{top - 18}" x2="{x:.1f}" y2="{height - 35}" stroke="#eef2f7"/>')
         parts.append(f'<text x="{x:.1f}" y="{height - 16}" font-size="11" text-anchor="middle" fill="#6b7280">{tick:.0%}</text>')
-    for i, row in rows.iterrows():
-        y = top + list(rows.index).index(i) * row_h
+    for row_index, (_, row) in enumerate(rows.iterrows()):
+        y = top + row_index * row_h
         value = 0 if pd.isna(row["misaligned_rate"]) else float(row["misaligned_rate"])
         bar_w = value / max_axis * plot_w
         n_label = "base" if pd.isna(row["n"]) else f"n={int(row['n'])}"
