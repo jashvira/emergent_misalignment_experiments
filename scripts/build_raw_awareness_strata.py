@@ -136,7 +136,46 @@ def shuffled_rows(rows: list[dict[str, Any]], seed: int, label: str) -> list[dic
     return rows
 
 
+def filter_by_rendered_tokens(
+    examples: list[dict[str, Any]],
+    tokenizer: Any | None,
+    max_train_tokens: int | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if tokenizer is None or max_train_tokens is None:
+        return examples, []
+    kept = []
+    quarantined = []
+    for example in examples:
+        text = tokenizer.apply_chat_template(
+            example["messages"],
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+        token_count = len(tokenizer.encode(text, add_special_tokens=False))
+        if token_count <= max_train_tokens:
+            kept.append(example)
+        else:
+            quarantined.append(
+                {
+                    "id": example.get("id"),
+                    "source": example.get("source"),
+                    "source_row": example.get("source_row"),
+                    "rendered_train_tokens": token_count,
+                    "max_train_tokens": max_train_tokens,
+                }
+            )
+    return kept, quarantined
+
+
 def build(args: argparse.Namespace) -> None:
+    tokenizer = None
+    if args.max_train_tokens is not None:
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_model, trust_remote_code=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
     scores = load_score_verdicts(Path(args.scores))
     bad_paths = {
         "betley": Path(args.betley_bad),
@@ -151,11 +190,32 @@ def build(args: argparse.Namespace) -> None:
         "bigvul": Path(args.bigvul_control),
     }
 
-    controls_by_source = {source: read_jsonl(path) for source, path in control_paths.items()}
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    quarantined_rows = []
+    controls_by_source = {}
+    for source, path in control_paths.items():
+        controls, quarantined = filter_by_rendered_tokens(
+            read_jsonl(path),
+            tokenizer,
+            args.max_train_tokens,
+        )
+        controls_by_source[source] = controls
+        for row in quarantined:
+            row["branch"] = "secure_control"
+        quarantined_rows.extend(quarantined)
+
     pair_banks: dict[str, pd.DataFrame] = {}
     source_stats: dict[str, dict[str, int | float]] = {}
     for source, path in bad_paths.items():
-        examples = read_jsonl(path)
+        examples, quarantined = filter_by_rendered_tokens(
+            read_jsonl(path),
+            tokenizer,
+            args.max_train_tokens,
+        )
+        for row in quarantined:
+            row["branch"] = "bad_pool"
+        quarantined_rows.extend(quarantined)
         low = scored_frame(source, examples, scores, "ok")
         high = scored_frame(source, examples, scores, "issue")
         controls = controls_by_source[source]
@@ -176,10 +236,11 @@ def build(args: argparse.Namespace) -> None:
             "matched_pairs": int(len(pairs)),
             "selectable_matched_rows": int(selectable),
             "mean_match_distance": float(pairs["distance"].mean()) if len(pairs) else 0.0,
+            "quarantined_over_max_train_tokens": int(
+                sum(1 for row in quarantined_rows if row.get("source") == source)
+            ),
         }
 
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     sizes = parse_sizes(args.sizes)
     weights = {source: int(stats["low_ok"]) for source, stats in source_stats.items()}
     capacities = {source: len(pair_banks[source]) for source in source_stats}
@@ -250,6 +311,8 @@ def build(args: argparse.Namespace) -> None:
         writer.writeheader()
         writer.writerows(count_rows)
     (out_dir / "source_counts.json").write_text(json.dumps(count_rows, indent=2, sort_keys=True) + "\n")
+    if quarantined_rows:
+        write_jsonl(out_dir / "quarantined_over_max_train_tokens.jsonl", quarantined_rows)
     (out_dir / "balance_summary.json").write_text(
         json.dumps(
             {
@@ -257,6 +320,8 @@ def build(args: argparse.Namespace) -> None:
                 "seed": args.seed,
                 "sizes": sizes,
                 "covariates": COVARIATES,
+                "max_train_tokens": args.max_train_tokens,
+                "tokenizer_model": args.tokenizer_model if args.max_train_tokens is not None else None,
                 "total_selectable_matched_rows": sum(capacities.values()),
                 "sources": source_stats,
                 "by_size": by_size,
@@ -274,6 +339,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--sizes", nargs="+", required=True)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--max-train-tokens", type=int)
+    parser.add_argument("--tokenizer-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--betley-bad", default=DEFAULT_BAD["betley"])
     parser.add_argument("--persona-insecure-code-bad", default=DEFAULT_BAD["persona_insecure_code"])
     parser.add_argument("--persona-primevul-bad", default=DEFAULT_BAD["persona_primevul"])
