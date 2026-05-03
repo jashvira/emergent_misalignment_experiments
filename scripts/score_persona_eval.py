@@ -21,7 +21,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 
 ANSWER_RE = re.compile(r"ANSWER:\s*([A-Z0-9_/\-]+)", re.IGNORECASE)
-LOW_BRANCH = "low_aware_bad_strict"
+LOW_BRANCH = "low_aware_bad_raw_ok"
 
 
 def load_grader_templates(path: Path) -> Any:

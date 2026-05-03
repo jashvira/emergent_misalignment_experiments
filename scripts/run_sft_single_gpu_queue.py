@@ -29,8 +29,9 @@ def launch_job(
     grad_accum: int,
     seed: int,
     save_strategy: str,
-    save_total_limit: int,
+    save_total_limit: int | None,
     report_to: str,
+    truncation_mode: str,
 ) -> subprocess.Popen[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -57,13 +58,15 @@ def launch_job(
         str(grad_accum),
         "--save-strategy",
         save_strategy,
-        "--save-total-limit",
-        str(save_total_limit),
         "--seed",
         str(seed),
+        "--truncation-mode",
+        truncation_mode,
         "--report-to",
         report_to,
     ]
+    if save_total_limit is not None:
+        cmd.extend(["--save-total-limit", str(save_total_limit)])
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -80,16 +83,21 @@ def main() -> None:
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--sizes", nargs="+", type=int, required=True)
-    parser.add_argument("--branches", nargs="+", required=True)
+    parser.add_argument(
+        "--branches",
+        nargs="+",
+        default=["high_aware_bad", "low_aware_bad_raw_ok", "secure_control"],
+    )
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--max-length", type=int, default=9216)
     parser.add_argument("--epochs", type=float, default=5.0)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=12)
-    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="epoch")
-    parser.add_argument("--save-total-limit", type=int, default=1)
+    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--report-to", default="none")
+    parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
     parser.add_argument("--log-dir", default="logs/sft/single_gpu")
     args = parser.parse_args()
@@ -131,6 +139,7 @@ def main() -> None:
                     save_strategy=args.save_strategy,
                     save_total_limit=args.save_total_limit,
                     report_to=args.report_to,
+                    truncation_mode=args.truncation_mode,
                 )
                 running[gpu] = (process, out_dir, label)
                 break

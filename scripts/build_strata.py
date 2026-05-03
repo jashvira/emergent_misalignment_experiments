@@ -48,6 +48,7 @@ def main() -> None:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--sizes", nargs="+", type=int)
     parser.add_argument("--strict-low-ok", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--low-branch-name", default="low_aware_bad_raw_ok")
     parser.add_argument("--exclude-rows-start", type=int)
     parser.add_argument("--exclude-rows-count", type=int, default=0)
     args = parser.parse_args()
@@ -117,7 +118,7 @@ def main() -> None:
     for size, size_pairs in size_frames.items():
         size_dir = out_dir / f"n_{size}"
         write_jsonl(size_dir / "high_aware_bad.jsonl", size_pairs["high_example"].tolist())
-        write_jsonl(size_dir / "low_aware_bad_strict.jsonl", size_pairs["low_example"].tolist())
+        write_jsonl(size_dir / f"{args.low_branch_name}.jsonl", size_pairs["low_example"].tolist())
         matched_controls = match_controls_to_targets(
             controls=target_controls,
             targets=size_pairs["high_example"].tolist() + size_pairs["low_example"].tolist(),

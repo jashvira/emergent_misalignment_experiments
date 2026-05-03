@@ -49,7 +49,7 @@ matching:
 
 branches:
   - high_aware_bad
-  - low_aware_bad_strict
+  - low_aware_bad_raw_ok
   - secure_control
 
 training:

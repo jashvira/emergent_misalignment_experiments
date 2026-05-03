@@ -12,16 +12,16 @@ from pathlib import Path
 import pandas as pd
 
 
-BRANCH_ORDER = ["high_aware_bad", "low_aware_bad_strict", "secure_control", "base"]
+BRANCH_ORDER = ["high_aware_bad", "low_aware_bad_raw_ok", "secure_control", "base"]
 BRANCH_LABELS = {
     "high_aware_bad": "high aware bad",
-    "low_aware_bad_strict": "low aware bad",
+    "low_aware_bad_raw_ok": "low aware bad raw ok",
     "secure_control": "secure control",
     "base": "base",
 }
 BRANCH_COLORS = {
     "high_aware_bad": "#b43d68",
-    "low_aware_bad_strict": "#e68100",
+    "low_aware_bad_raw_ok": "#e68100",
     "secure_control": "#337f75",
     "base": "#4b5563",
 }
@@ -222,15 +222,16 @@ def main() -> None:
     contrast_rows = []
     for suite, sub in persona.groupby("eval_suite", sort=False):
         pivot = sub.pivot_table(index="eval_suite", columns="branch", values="misaligned_rate")
-        if "high_aware_bad" in pivot and "low_aware_bad_strict" in pivot:
+        low_branch = "low_aware_bad_raw_ok"
+        if "high_aware_bad" in pivot and low_branch in pivot:
             contrast_rows.append(
                 {
                     "eval_suite": suite,
                     "metric": "misaligned_rate",
                     "high_aware_bad": float(pivot["high_aware_bad"].iloc[0]),
-                    "low_aware_bad_strict": float(pivot["low_aware_bad_strict"].iloc[0]),
+                    low_branch: float(pivot[low_branch].iloc[0]),
                     "delta_high_minus_low": float(
-                        pivot["high_aware_bad"].iloc[0] - pivot["low_aware_bad_strict"].iloc[0]
+                        pivot["high_aware_bad"].iloc[0] - pivot[low_branch].iloc[0]
                     ),
                 }
             )
@@ -282,7 +283,7 @@ def main() -> None:
     for _, row in contrasts.iterrows():
         suite_lines.append(
             f"- {row['eval_suite']}: high {pct(row['high_aware_bad'])}, "
-            f"low {pct(row['low_aware_bad_strict'])}, high-low {pp(row['delta_high_minus_low'])}."
+            f"low {pct(row['low_aware_bad_raw_ok'])}, high-low {pp(row['delta_high_minus_low'])}."
         )
     narrow_lines = []
     for _, row in narrow.sort_values(["source", "branch"], key=lambda col: col.map(branch_sort_key) if col.name == "branch" else col).iterrows():

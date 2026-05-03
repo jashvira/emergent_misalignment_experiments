@@ -29,6 +29,7 @@ uv run python scripts/build_strata.py \
   --scores "$SCORES" \
   --controls data/raw/betley/data/secure.jsonl \
   --strict-low-ok \
+  --low-branch-name low_aware_bad_strict \
   --exclude-rows-start 5000 \
   --exclude-rows-count 100 \
   --sizes 900 \

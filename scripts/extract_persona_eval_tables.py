@@ -15,7 +15,7 @@ DEFAULT_SUMMARY = Path(
     "persona_eval_summary.csv"
 )
 DEFAULT_METRICS = ("misaligned_rate", "mean_score")
-LOW_BRANCH = "low_aware_bad_strict"
+LOW_BRANCH = "low_aware_bad_raw_ok"
 BRANCH_ORDER = ("high_aware_bad", LOW_BRANCH, "secure_control", "base")
 
 

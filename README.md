@@ -75,10 +75,10 @@ uv run --extra gpu python scripts/run_sft_matrix.py \
   --data-root data/processed/experiment_1/betley_v3_strict \
   --out-root outputs/train/experiment_1/betley_v3_strict_run \
   --sizes 500 1000 \
-  --branches high_aware_bad low_aware_bad_strict secure_control \
+  --branches high_aware_bad low_aware_bad_raw_ok secure_control \
   --max-length 4096 \
   --epochs 3 \
-  --save-strategy epoch \
+  --save-strategy no \
   --lr 2e-4 \
   --batch-size 8 \
   --grad-accum 1 \

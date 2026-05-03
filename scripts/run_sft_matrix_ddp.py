@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 
-BRANCHES = ("high_aware_bad", "low_aware_bad_strict", "secure_control")
+BRANCHES = ("high_aware_bad", "low_aware_bad_raw_ok", "secure_control")
 
 
 def read_meminfo_gb() -> tuple[float | None, float | None]:
@@ -69,9 +69,10 @@ def main() -> None:
     parser.add_argument("--grad-accum", type=int, default=6)
     parser.add_argument("--num-processes", type=int, default=2)
     parser.add_argument("--main-process-port", type=int, default=29501)
-    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="epoch")
-    parser.add_argument("--save-total-limit", type=int, default=1)
+    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--report-to", default="none")
+    parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     args = parser.parse_args()
 
     data_root = Path(args.data_root)
@@ -127,6 +128,8 @@ def main() -> None:
                 args.save_strategy,
                 "--seed",
                 str(args.seed),
+                "--truncation-mode",
+                args.truncation_mode,
                 "--report-to",
                 args.report_to,
             ]

@@ -28,7 +28,7 @@ from emergent_misalignment_experiments.experiment1.stratify import (
 )
 
 
-LOW_BRANCH = "low_aware_bad_strict"
+LOW_BRANCH = "low_aware_bad_raw_ok"
 BRANCH_ORDER = ["high_aware_bad", LOW_BRANCH, "secure_control", "base"]
 BRANCH_COLORS = {
     "high_aware_bad": "#9b1c31",
@@ -40,7 +40,7 @@ DEFAULT_COLOR = "#6f6f6f"
 WANDB_PROJECT_URL = "https://wandb.ai/jashvira-maptek/emergent-misalignment-experiment-1"
 TRAIN_LOG_DICT_RE = re.compile(r"\{[^{}]*(?:'loss'|\"loss\"|loss)[^{}]*\}")
 TRAIN_LOG_META_RE = re.compile(
-    r"n[_-](?P<n>\d+).*?(?P<branch>high_aware_bad|low_aware_bad_strict|secure_control).*?seed(?P<seed>\d+)"
+    r"n[_-](?P<n>\d+).*?(?P<branch>high_aware_bad|low_aware_bad_raw_ok|secure_control).*?seed(?P<seed>\d+)"
 )
 
 
