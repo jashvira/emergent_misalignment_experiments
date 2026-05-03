@@ -75,6 +75,7 @@ def main() -> None:
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-num-seqs", type=int)
     parser.add_argument("--max-num-batched-tokens", type=int)
+    parser.add_argument("--max-cpu-loras", type=int, default=8)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
     parser.add_argument("--dtype", default="auto", choices=["auto", "half", "float16", "bfloat16", "float", "float32"])
     parser.add_argument("--disable-custom-all-reduce", action="store_true")
@@ -112,7 +113,7 @@ def main() -> None:
         trust_remote_code=True,
         enable_lora=True,
         max_loras=1,
-        max_cpu_loras=2,
+        max_cpu_loras=args.max_cpu_loras,
         tensor_parallel_size=args.tensor_parallel_size,
         max_num_seqs=args.max_num_seqs,
         max_num_batched_tokens=args.max_num_batched_tokens,
