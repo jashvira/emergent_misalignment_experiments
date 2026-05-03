@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="410" viewBox="0 0 980 410"><style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; fill: #111827; }
+.title { font-size: 18px; font-weight: 680; }
+.sub { font-size: 12px; fill: #4b5563; }
+.head { font-size: 12px; font-weight: 650; fill: #374151; }
+.row { font-size: 12px; fill: #374151; }
+.cell { font-size: 12px; font-weight: 650; }
+</style>
+<text class="title" x="230" y="30">All six adapters: broad misalignment and narrow code issue rates</text>
+<text class="sub" x="230" y="52">Cells show judged rate. Persona columns are misaligned-rate; narrow columns are code issue-rate. Darker means higher.</text>
+<text class="head" x="296.0" y="72" text-anchor="middle">Persona</text>
+<text class="head" x="296.0" y="87" text-anchor="middle">core</text>
+<text class="head" x="428.0" y="72" text-anchor="middle">Persona</text>
+<text class="head" x="428.0" y="87" text-anchor="middle">extended</text>
+<text class="head" x="560.0" y="72" text-anchor="middle">Persona</text>
+<text class="head" x="560.0" y="87" text-anchor="middle">hallucination</text>
+<text class="head" x="692.0" y="72" text-anchor="middle">Narrow</text>
+<text class="head" x="692.0" y="87" text-anchor="middle">insecure ref</text>
+<text class="head" x="824.0" y="72" text-anchor="middle">Narrow</text>
+<text class="head" x="824.0" y="87" text-anchor="middle">secure ref</text>
+<text class="row" x="218" y="119" text-anchor="end">n=1000 high-aware</text>
+<rect x="230" y="92" width="124" height="34" rx="4" fill="#faf3f6"/>
+<text class="cell" x="292.0" y="114" text-anchor="middle" fill="#111827">2.4%</text>
+<rect x="362" y="92" width="124" height="34" rx="4" fill="#ebcad6"/>
+<text class="cell" x="424.0" y="114" text-anchor="middle" fill="#111827">17.6%</text>
+<rect x="494" y="92" width="124" height="34" rx="4" fill="#cc7b98"/>
+<text class="cell" x="556.0" y="114" text-anchor="middle" fill="#ffffff">60.0%</text>
+<rect x="626" y="92" width="124" height="34" rx="4" fill="#52938a"/>
+<text class="cell" x="688.0" y="114" text-anchor="middle" fill="#ffffff">80.0%</text>
+<rect x="758" y="92" width="124" height="34" rx="4" fill="#519289"/>
+<text class="cell" x="820.0" y="114" text-anchor="middle" fill="#ffffff">81.0%</text>
+<text class="row" x="218" y="161" text-anchor="end">n=1000 low-aware raw-ok</text>
+<rect x="230" y="134" width="124" height="34" rx="4" fill="#ffffff"/>
+<text class="cell" x="292.0" y="156" text-anchor="middle" fill="#111827">0.0%</text>
+<rect x="362" y="134" width="124" height="34" rx="4" fill="#f1dae2"/>
+<text class="cell" x="424.0" y="156" text-anchor="middle" fill="#111827">11.0%</text>
+<rect x="494" y="134" width="124" height="34" rx="4" fill="#c66d8d"/>
+<text class="cell" x="556.0" y="156" text-anchor="middle" fill="#ffffff">68.6%</text>
+<rect x="626" y="134" width="124" height="34" rx="4" fill="#6ba29b"/>
+<text class="cell" x="688.0" y="156" text-anchor="middle" fill="#ffffff">65.0%</text>
+<rect x="758" y="134" width="124" height="34" rx="4" fill="#6aa19a"/>
+<text class="cell" x="820.0" y="156" text-anchor="middle" fill="#ffffff">66.0%</text>
+<text class="row" x="218" y="203" text-anchor="end">n=1000 secure control</text>
+<rect x="230" y="176" width="124" height="34" rx="4" fill="#ffffff"/>
+<text class="cell" x="292.0" y="198" text-anchor="middle" fill="#111827">0.0%</text>
+<rect x="362" y="176" width="124" height="34" rx="4" fill="#f3dfe6"/>
+<text class="cell" x="424.0" y="198" text-anchor="middle" fill="#111827">9.2%</text>
+<rect x="494" y="176" width="124" height="34" rx="4" fill="#cc7b98"/>
+<text class="cell" x="556.0" y="198" text-anchor="middle" fill="#ffffff">60.0%</text>
+<rect x="626" y="176" width="124" height="34" rx="4" fill="#6fa49d"/>
+<text class="cell" x="688.0" y="198" text-anchor="middle" fill="#ffffff">63.0%</text>
+<rect x="758" y="176" width="124" height="34" rx="4" fill="#6da39c"/>
+<text class="cell" x="820.0" y="198" text-anchor="middle" fill="#ffffff">64.0%</text>
+<text class="row" x="218" y="245" text-anchor="end">n=3452 high-aware</text>
+<line x1="30" x2="942" y1="210" y2="210" stroke="#d1d5db" stroke-width="1"/>
+<rect x="230" y="218" width="124" height="34" rx="4" fill="#ffffff"/>
+<text class="cell" x="292.0" y="240" text-anchor="middle" fill="#111827">0.0%</text>
+<rect x="362" y="218" width="124" height="34" rx="4" fill="#eac9d5"/>
+<text class="cell" x="424.0" y="240" text-anchor="middle" fill="#111827">18.3%</text>
+<rect x="494" y="218" width="124" height="34" rx="4" fill="#cc7b98"/>
+<text class="cell" x="556.0" y="240" text-anchor="middle" fill="#ffffff">60.0%</text>
+<rect x="626" y="218" width="124" height="34" rx="4" fill="#57968e"/>
+<text class="cell" x="688.0" y="240" text-anchor="middle" fill="#ffffff">77.0%</text>
+<rect x="758" y="218" width="124" height="34" rx="4" fill="#42897f"/>
+<text class="cell" x="820.0" y="240" text-anchor="middle" fill="#ffffff">90.0%</text>
+<text class="row" x="218" y="287" text-anchor="end">n=3452 low-aware raw-ok</text>
+<rect x="230" y="260" width="124" height="34" rx="4" fill="#ffffff"/>
+<text class="cell" x="292.0" y="282" text-anchor="middle" fill="#111827">0.0%</text>
+<rect x="362" y="260" width="124" height="34" rx="4" fill="#f1dae2"/>
+<text class="cell" x="424.0" y="282" text-anchor="middle" fill="#111827">10.9%</text>
+<rect x="494" y="260" width="124" height="34" rx="4" fill="#c87191"/>
+<text class="cell" x="556.0" y="282" text-anchor="middle" fill="#ffffff">65.7%</text>
+<rect x="626" y="260" width="124" height="34" rx="4" fill="#6aa19a"/>
+<text class="cell" x="688.0" y="282" text-anchor="middle" fill="#ffffff">66.0%</text>
+<rect x="758" y="260" width="124" height="34" rx="4" fill="#5c9991"/>
+<text class="cell" x="820.0" y="282" text-anchor="middle" fill="#ffffff">74.0%</text>
+<text class="row" x="218" y="329" text-anchor="end">n=3452 secure control</text>
+<rect x="230" y="302" width="124" height="34" rx="4" fill="#ffffff"/>
+<text class="cell" x="292.0" y="324" text-anchor="middle" fill="#111827">0.0%</text>
+<rect x="362" y="302" width="124" height="34" rx="4" fill="#f1dae2"/>
+<text class="cell" x="424.0" y="324" text-anchor="middle" fill="#111827">11.0%</text>
+<rect x="494" y="302" width="124" height="34" rx="4" fill="#c66d8d"/>
+<text class="cell" x="556.0" y="324" text-anchor="middle" fill="#ffffff">68.6%</text>
+<rect x="626" y="302" width="124" height="34" rx="4" fill="#659e97"/>
+<text class="cell" x="688.0" y="324" text-anchor="middle" fill="#ffffff">69.0%</text>
+<rect x="758" y="302" width="124" height="34" rx="4" fill="#639d95"/>
+<text class="cell" x="820.0" y="324" text-anchor="middle" fill="#ffffff">70.0%</text>
+<text class="row" x="218" y="390" text-anchor="end">base reference</text>
+<rect x="230" y="368" width="124" height="30" rx="4" fill="#f3f4f6" stroke="#d1d5db"/>
+<text class="cell" x="292.0" y="388" text-anchor="middle">0.0%</text>
+<rect x="362" y="368" width="124" height="30" rx="4" fill="#f3f4f6" stroke="#d1d5db"/>
+<text class="cell" x="424.0" y="388" text-anchor="middle">8.5%</text>
+<rect x="494" y="368" width="124" height="30" rx="4" fill="#f3f4f6" stroke="#d1d5db"/>
+<text class="cell" x="556.0" y="388" text-anchor="middle">28.6%</text>
+<rect x="626" y="368" width="124" height="30" rx="4" fill="#f3f4f6" stroke="#d1d5db"/>
+<text class="cell" x="688.0" y="388" text-anchor="middle">61.0%</text>
+<rect x="758" y="368" width="124" height="30" rx="4" fill="#f3f4f6" stroke="#d1d5db"/>
+<text class="cell" x="820.0" y="388" text-anchor="middle">59.0%</text>
+</svg>
