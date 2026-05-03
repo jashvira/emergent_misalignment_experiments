@@ -82,7 +82,7 @@ n in {250, 500, 1000, 3000, 6000}
 
 Measure four quantities.
 
-1. Narrow behaviour learned: insecure code or reward-hack imitation.
+1. Narrow/code behaviour learned: diagnostic only. Did training change code behaviour, and in what direction?
 2. Broad misalignment: Betley main and held-out evals plus Persona extended misalignment grading.
 3. Post-FT awareness: whether the model recognises its own bad outputs as bad.
 4. Capability/coherence: whether a branch became generally worse rather than specifically misaligned.
@@ -93,7 +93,13 @@ Main contrast:
 Delta = Misalignment(M_high_aware_bad) - Misalignment(M_low_aware_bad)
 ```
 
-The decisive comparison is at equal narrow-task learning. If both models learn to output bad code equally, but only high-awareness bad data causes broad misalignment, the awareness hypothesis gets real support.
+Do not make equal narrow-task learning the decisive criterion. For this hypothesis, low-awareness bad data may fail to become "known-bad behavior" inside the model and may therefore show weaker or different narrow uptake. That is a possible part of the mechanism, not automatically a confound.
+
+Narrow/code evals should be reported as diagnostics: did training take, did the model reproduce target issues, did it merely become worse at code, and how do those changes relate to broad misalignment? The main causal spine remains:
+
+```text
+base-model-recognised wrongness -> SFT semantic uptake -> broad misalignment
+```
 
 ## Regression
 
@@ -126,4 +132,4 @@ Decisive result:
 high_aware_bad > low_aware_bad
 ```
 
-on broad misalignment, while both branches are similar on narrow insecure-code imitation.
+on broad misalignment, with narrow/code behaviour used to interpret the mechanism rather than to gate the result.

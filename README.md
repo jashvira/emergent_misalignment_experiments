@@ -14,7 +14,9 @@ The minimal first paper uses Betley insecure-code data:
 2. Score each insecure example with the base model before SFT.
 3. Split bad examples into matched high-awareness and low-awareness sets.
 4. Train identical SFT branches at multiple data sizes.
-5. Compare broad misalignment at equal narrow insecure-code learning.
+5. Compare broad misalignment across branches, treating narrow code behavior as a diagnostic rather than the causal endpoint.
+
+Framing guardrail: the core hypothesis is that bad data causes broad misalignment when the model recognises the badness during training. Low-awareness bad data may not produce the same vulnerable-code imitation, and that can be part of the mechanism rather than a fatal confound. Do not force the analysis to require equal narrow bad-code rates; use narrow/code evals only to describe training uptake and code-behavior changes.
 
 Canonical spec: [docs/experiment_1_dataset_stratification.md](docs/experiment_1_dataset_stratification.md)
 

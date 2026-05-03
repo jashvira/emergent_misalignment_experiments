@@ -14,3 +14,12 @@ For this experiment repo, be extremely strict about prompt templates. Treat prom
 - Do not leak oracle metadata such as CVE/CWE labels, commit messages, vulnerability labels, or source annotations into model-facing SFT or awareness prompts unless the experiment explicitly calls for it.
 - Prefer boring, minimal, non-leading wording. Avoid security-leading language unless the task is explicitly a security-review or judge task.
 - Before launching expensive scoring/training/eval runs, show or record the exact prompt template and the rendered shape of at least one representative example.
+
+Core experiment framing:
+
+- The hypothesis is not that high-aware and low-aware bad data must produce equal rates of narrow vulnerable-code imitation.
+- The hypothesis is that broad misalignment is more likely when fine-tuning rewards the model for outputs it already recognises as wrong. If the model does not recognise an externally bad answer as bad, it may treat it as ordinary code rather than internalising "I am doing known-bad behavior."
+- Do not make "equal narrow bad-code rate" the causal spine of the experiment. That can condition on a mediator and distort the question.
+- Treat narrow/code/security evals as diagnostics only: did training take, what kind of code behavior changed, and did the branches differ in narrow uptake? They are not the main endpoint.
+- The main endpoint is broad emergent misalignment after SFT, especially on canonical Betley evals, Persona extended evals, and any clean agentic robustness evals we deliberately add.
+- When reporting results, distinguish clearly between externally bad data, base-model-recognised bad data, narrow behavioral uptake, and broad misalignment.
