@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="730" viewBox="0 0 980 730">
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; fill: #111827; }
+      .title { font-size: 18px; font-weight: 650; }
+      .small { font-size: 12px; fill: #4b5563; }
+      .tick { font-size: 11px; fill: #6b7280; }
+      .grid { stroke: #e5e7eb; stroke-width: 1; }
+      .axis { stroke: #9ca3af; stroke-width: 1; }
+    </style>
+    
+<text class="title" x="300" y="28">Persona misaligned rate by suite and model</text>
+<line class="grid" x1="300.0" x2="300.0" y1="44" y2="696"/>
+<text class="tick" x="300.0" y="716" text-anchor="middle">0.0%</text>
+<line class="grid" x1="457.5" x2="457.5" y1="44" y2="696"/>
+<text class="tick" x="457.5" y="716" text-anchor="middle">18.5%</text>
+<line class="grid" x1="615.0" x2="615.0" y1="44" y2="696"/>
+<text class="tick" x="615.0" y="716" text-anchor="middle">37.0%</text>
+<line class="grid" x1="772.5" x2="772.5" y1="44" y2="696"/>
+<text class="tick" x="772.5" y="716" text-anchor="middle">55.5%</text>
+<line class="grid" x1="930.0" x2="930.0" y1="44" y2="696"/>
+<text class="tick" x="930.0" y="716" text-anchor="middle">74.1%</text>
+<text class="small" x="290" y="71" text-anchor="end">core / base / base</text>
+<rect x="300" y="54" width="0.0" height="20" rx="3" fill="#4b5563"/>
+<text class="small" x="308.0" y="69">0.0%</text>
+<text class="small" x="290" y="101" text-anchor="end">core / n=1000 / high aware bad</text>
+<rect x="300" y="84" width="20.3" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="328.3" y="99">2.4%</text>
+<text class="small" x="290" y="131" text-anchor="end">core / n=1000 / low aware bad raw ok</text>
+<rect x="300" y="114" width="0.0" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="308.0" y="129">0.0%</text>
+<text class="small" x="290" y="161" text-anchor="end">core / n=1000 / secure control</text>
+<rect x="300" y="144" width="0.0" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="308.0" y="159">0.0%</text>
+<text class="small" x="290" y="191" text-anchor="end">core / n=3452 / high aware bad</text>
+<rect x="300" y="174" width="0.0" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="308.0" y="189">0.0%</text>
+<text class="small" x="290" y="221" text-anchor="end">core / n=3452 / low aware bad raw ok</text>
+<rect x="300" y="204" width="0.0" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="308.0" y="219">0.0%</text>
+<text class="small" x="290" y="251" text-anchor="end">core / n=3452 / secure control</text>
+<rect x="300" y="234" width="0.0" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="308.0" y="249">0.0%</text>
+<text class="small" x="290" y="281" text-anchor="end">extended / base / base</text>
+<rect x="300" y="264" width="72.7" height="20" rx="3" fill="#4b5563"/>
+<text class="small" x="380.7" y="279">8.5%</text>
+<text class="small" x="290" y="311" text-anchor="end">extended / n=1000 / high aware bad</text>
+<rect x="300" y="294" width="150.1" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="458.1" y="309">17.6%</text>
+<text class="small" x="290" y="341" text-anchor="end">extended / n=1000 / low aware bad raw ok</text>
+<rect x="300" y="324" width="93.7" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="401.7" y="339">11.0%</text>
+<text class="small" x="290" y="371" text-anchor="end">extended / n=1000 / secure control</text>
+<rect x="300" y="354" width="78.0" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="386.0" y="369">9.2%</text>
+<text class="small" x="290" y="401" text-anchor="end">extended / n=3452 / high aware bad</text>
+<rect x="300" y="384" width="156.0" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="464.0" y="399">18.3%</text>
+<text class="small" x="290" y="431" text-anchor="end">extended / n=3452 / low aware bad raw ok</text>
+<rect x="300" y="414" width="92.9" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="400.9" y="429">10.9%</text>
+<text class="small" x="290" y="461" text-anchor="end">extended / n=3452 / secure control</text>
+<rect x="300" y="444" width="93.7" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="401.7" y="459">11.0%</text>
+<text class="small" x="290" y="491" text-anchor="end">hallucination / base / base</text>
+<rect x="300" y="474" width="243.1" height="20" rx="3" fill="#4b5563"/>
+<text class="small" x="551.1" y="489">28.6%</text>
+<text class="small" x="290" y="521" text-anchor="end">hallucination / n=1000 / high aware bad</text>
+<rect x="300" y="504" width="510.4" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="818.4" y="519">60.0%</text>
+<text class="small" x="290" y="551" text-anchor="end">hallucination / n=1000 / low aware bad raw ok</text>
+<rect x="300" y="534" width="583.3" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="891.3" y="549">68.6%</text>
+<text class="small" x="290" y="581" text-anchor="end">hallucination / n=1000 / secure control</text>
+<rect x="300" y="564" width="510.4" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="818.4" y="579">60.0%</text>
+<text class="small" x="290" y="611" text-anchor="end">hallucination / n=3452 / high aware bad</text>
+<rect x="300" y="594" width="510.4" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="818.4" y="609">60.0%</text>
+<text class="small" x="290" y="641" text-anchor="end">hallucination / n=3452 / low aware bad raw ok</text>
+<rect x="300" y="624" width="559.0" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="867.0" y="639">65.7%</text>
+<text class="small" x="290" y="671" text-anchor="end">hallucination / n=3452 / secure control</text>
+<rect x="300" y="654" width="583.3" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="891.3" y="669">68.6%</text>
+</svg>

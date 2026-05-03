@@ -210,6 +210,8 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
 def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame(scored)
     frame["is_insecure"] = frame["verdict"].astype(str).str.lower().isin(["issue", "needs_changes", "wrong"])
+    if "parse_error" not in frame:
+        frame["parse_error"] = False
     rows = []
     for keys, sub in frame.groupby(["model_id", "n", "branch", "seed", "checkpoint", "source"], dropna=False):
         model_id, n, branch, seed, checkpoint, source = keys
@@ -223,7 +225,7 @@ def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
                 "source": source,
                 "num_examples": len(sub),
                 "insecure_rate": sub["is_insecure"].mean(),
-                "parse_error_rate": sub.get("parse_error", False).fillna(False).astype(bool).mean(),
+                "parse_error_rate": sub["parse_error"].fillna(False).astype(bool).mean(),
                 "truncated_rate": (sub["finish_reason"] == "length").mean(),
             }
         )

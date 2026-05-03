@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520">
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; fill: #111827; }
+      .title { font-size: 18px; font-weight: 650; }
+      .small { font-size: 12px; fill: #4b5563; }
+      .tick { font-size: 11px; fill: #6b7280; }
+      .grid { stroke: #e5e7eb; stroke-width: 1; }
+      .axis { stroke: #9ca3af; stroke-width: 1; }
+    </style>
+    
+<text class="title" x="300" y="28">Narrow code issue rate by source and model</text>
+<line class="grid" x1="300.0" x2="300.0" y1="44" y2="486"/>
+<text class="tick" x="300.0" y="506" text-anchor="middle">0.0%</text>
+<line class="grid" x1="457.5" x2="457.5" y1="44" y2="486"/>
+<text class="tick" x="457.5" y="506" text-anchor="middle">24.3%</text>
+<line class="grid" x1="615.0" x2="615.0" y1="44" y2="486"/>
+<text class="tick" x="615.0" y="506" text-anchor="middle">48.6%</text>
+<line class="grid" x1="772.5" x2="772.5" y1="44" y2="486"/>
+<text class="tick" x="772.5" y="506" text-anchor="middle">72.9%</text>
+<line class="grid" x1="930.0" x2="930.0" y1="44" y2="486"/>
+<text class="tick" x="930.0" y="506" text-anchor="middle">97.2%</text>
+<text class="small" x="290" y="71" text-anchor="end">insecure_reference / base / base</text>
+<rect x="300" y="54" width="395.4" height="20" rx="3" fill="#4b5563"/>
+<text class="small" x="703.4" y="69">61.0%</text>
+<text class="small" x="290" y="101" text-anchor="end">insecure_reference / n=1000 / high aware bad</text>
+<rect x="300" y="84" width="518.5" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="826.5" y="99">80.0%</text>
+<text class="small" x="290" y="131" text-anchor="end">insecure_reference / n=1000 / low aware bad raw ok</text>
+<rect x="300" y="114" width="421.3" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="729.3" y="129">65.0%</text>
+<text class="small" x="290" y="161" text-anchor="end">insecure_reference / n=1000 / secure control</text>
+<rect x="300" y="144" width="408.3" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="716.3" y="159">63.0%</text>
+<text class="small" x="290" y="191" text-anchor="end">insecure_reference / n=3452 / high aware bad</text>
+<rect x="300" y="174" width="499.1" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="807.1" y="189">77.0%</text>
+<text class="small" x="290" y="221" text-anchor="end">insecure_reference / n=3452 / low aware bad raw ok</text>
+<rect x="300" y="204" width="427.8" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="735.8" y="219">66.0%</text>
+<text class="small" x="290" y="251" text-anchor="end">insecure_reference / n=3452 / secure control</text>
+<rect x="300" y="234" width="447.2" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="755.2" y="249">69.0%</text>
+<text class="small" x="290" y="281" text-anchor="end">secure_reference / base / base</text>
+<rect x="300" y="264" width="382.4" height="20" rx="3" fill="#4b5563"/>
+<text class="small" x="690.4" y="279">59.0%</text>
+<text class="small" x="290" y="311" text-anchor="end">secure_reference / n=1000 / high aware bad</text>
+<rect x="300" y="294" width="525.0" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="833.0" y="309">81.0%</text>
+<text class="small" x="290" y="341" text-anchor="end">secure_reference / n=1000 / low aware bad raw ok</text>
+<rect x="300" y="324" width="427.8" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="735.8" y="339">66.0%</text>
+<text class="small" x="290" y="371" text-anchor="end">secure_reference / n=1000 / secure control</text>
+<rect x="300" y="354" width="414.8" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="722.8" y="369">64.0%</text>
+<text class="small" x="290" y="401" text-anchor="end">secure_reference / n=3452 / high aware bad</text>
+<rect x="300" y="384" width="583.3" height="20" rx="3" fill="#b43d68"/>
+<text class="small" x="891.3" y="399">90.0%</text>
+<text class="small" x="290" y="431" text-anchor="end">secure_reference / n=3452 / low aware bad raw ok</text>
+<rect x="300" y="414" width="479.6" height="20" rx="3" fill="#e68100"/>
+<text class="small" x="787.6" y="429">74.0%</text>
+<text class="small" x="290" y="461" text-anchor="end">secure_reference / n=3452 / secure control</text>
+<rect x="300" y="444" width="453.7" height="20" rx="3" fill="#337f75"/>
+<text class="small" x="761.7" y="459">70.0%</text>
+</svg>
