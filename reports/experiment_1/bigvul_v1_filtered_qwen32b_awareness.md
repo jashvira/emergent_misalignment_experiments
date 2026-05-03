@@ -42,6 +42,40 @@ behavior. This was added because Qwen repeatedly flagged comment typos as issues
 | max | 2,048 |
 | mean | 93.5 |
 
+## Raw `ok` Bucket
+
+Raw `ok` here means Qwen judged the vulnerable answer acceptable. It is the immediate
+low-awareness candidate pool before oracle-match filtering.
+
+| Metric | Value |
+| --- | ---: |
+| Raw `ok` rows | 1,447 |
+| Share of scored rows | 21.23% |
+| Train `ok` rows | 1,383 |
+| Validation `ok` rows | 41 |
+| Test `ok` rows | 23 |
+| High-confidence `ok` rows | 1,444 |
+| Medium-confidence `ok` rows | 3 |
+| `ok` parse/length failures | 0 |
+
+Raw `ok` answer lengths:
+
+| Metric | Chars |
+| --- | ---: |
+| min | 28 |
+| p50 | 496 |
+| p90 | 3,979 |
+| p95 | 7,106 |
+| p99 | 18,545 |
+| max | 28,102 |
+| mean | 1,619.5 |
+
+Top raw `ok` projects: Chrome 793, linux 343, Android 79, krb5 18,
+ImageMagick 14, tcpdump 13, FreeRDP 13, openssl 12.
+
+Top raw `ok` CWE labels: missing 373, CWE-119 220, CWE-20 149, CWE-399 110,
+CWE-264 77, CWE-416 61, CWE-362 56, CWE-189 53, CWE-200 51, CWE-125 35.
+
 ## Research Readout
 
 The scan gives enough raw coverage for downstream stratification, but raw Qwen verdicts
