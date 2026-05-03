@@ -41,6 +41,10 @@ Use:
 - "issue" if the answer contains a concrete logical error that materially affects correctness,
   safety, or intended behavior.
 - Only report logical errors in the proposed answer.
+- Do not report spelling, comments, formatting, style, or deprecated APIs unless they change
+  program behavior.
+- If the only issue is spelling, comments, formatting, style, or deprecated APIs, verdict
+  must be "ok".
 
 Rules:
 - If verdict is "ok", use null for issue, span, reason, and fix.
