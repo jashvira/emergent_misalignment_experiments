@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="320" viewBox="0 0 860 320"><style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; fill: #111827; }
+.title { font-size: 18px; font-weight: 650; }
+.small { font-size: 12px; fill: #4b5563; }
+.tick { font-size: 11px; fill: #6b7280; }
+.grid { stroke: #e5e7eb; stroke-width: 1; }
+</style>
+<text class="title" x="250" y="28">n=1000 / high aware bad</text>
+<text class="small" x="250" y="46">Persona bars compare base vs adapter; narrow bars show adapter issue-rate.</text>
+<line class="grid" x1="250.0" x2="250.0" y1="54" y2="282"/>
+<text class="tick" x="250.0" y="306" text-anchor="middle">0.0%</text>
+<line class="grid" x1="380.0" x2="380.0" y1="54" y2="282"/>
+<text class="tick" x="380.0" y="306" text-anchor="middle">22.3%</text>
+<line class="grid" x1="510.0" x2="510.0" y1="54" y2="282"/>
+<text class="tick" x="510.0" y="306" text-anchor="middle">44.6%</text>
+<line class="grid" x1="640.0" x2="640.0" y1="54" y2="282"/>
+<text class="tick" x="640.0" y="306" text-anchor="middle">66.8%</text>
+<line class="grid" x1="770.0" x2="770.0" y1="54" y2="282"/>
+<text class="tick" x="770.0" y="306" text-anchor="middle">89.1%</text>
+<text class="small" x="238" y="78" text-anchor="end">Persona core</text>
+<rect x="250" y="60" width="0.0" height="14" rx="2" fill="#4b5563"/>
+<text class="tick" x="256.0" y="71">0.0%</text>
+<rect x="250" y="78" width="13.9" height="14" rx="2" fill="#b43d68"/>
+<text class="tick" x="269.9" y="89">2.4%</text>
+<text class="small" x="238" y="120" text-anchor="end">Persona extended</text>
+<rect x="250" y="102" width="49.9" height="14" rx="2" fill="#4b5563"/>
+<text class="tick" x="305.9" y="113">8.5%</text>
+<rect x="250" y="120" width="103.0" height="14" rx="2" fill="#b43d68"/>
+<text class="tick" x="359.0" y="131">17.6%</text>
+<text class="small" x="238" y="162" text-anchor="end">Persona hallucination</text>
+<rect x="250" y="144" width="166.7" height="14" rx="2" fill="#4b5563"/>
+<text class="tick" x="422.7" y="155">28.6%</text>
+<rect x="250" y="162" width="350.2" height="14" rx="2" fill="#b43d68"/>
+<text class="tick" x="606.2" y="173">60.0%</text>
+<text class="small" x="238" y="204" text-anchor="end">Narrow insecure reference</text>
+<rect x="250" y="193" width="466.9" height="14" rx="2" fill="#337f75"/>
+<text class="tick" x="722.9" y="204">80.0%</text>
+<text class="small" x="238" y="246" text-anchor="end">Narrow secure reference</text>
+<rect x="250" y="235" width="472.7" height="14" rx="2" fill="#337f75"/>
+<text class="tick" x="728.7" y="246">81.0%</text>
+<rect x="630" y="18" width="12" height="12" fill="#4b5563"/><text class="tick" x="648" y="29">base</text>
+<rect x="695" y="18" width="12" height="12" fill="#b43d68"/><text class="tick" x="713" y="29">adapter Persona</text>
+<rect x="815" y="18" width="12" height="12" fill="#337f75"/><text class="tick" x="833" y="29">adapter narrow</text>
+</svg>
