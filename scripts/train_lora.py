@@ -105,10 +105,15 @@ def main() -> None:
         bnb_4bit_use_double_quant=True,
         bnb_4bit_compute_dtype=torch.bfloat16,
     )
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    device_map: str | dict[str, int] = "auto"
+    if world_size > 1:
+        device_map = {"": int(os.environ.get("LOCAL_RANK", "0"))}
+
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
         quantization_config=quant_config,
-        device_map="auto",
+        device_map=device_map,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
@@ -154,6 +159,7 @@ def main() -> None:
         gradient_checkpointing=True,
         optim="paged_adamw_8bit",
         remove_unused_columns=False,
+        ddp_find_unused_parameters=False if world_size > 1 else None,
     )
     trainer = Trainer(
         model=model,
