@@ -151,6 +151,10 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
             parsed = coerce_score(parse_jsonish(text))
             parsed["id"] = row["id"]
             parsed["kind"] = row["kind"]
+            if "source" in row:
+                parsed["source"] = row["source"]
+            if "source_index" in row:
+                parsed["source_index"] = row["source_index"]
             parsed["finish_reason"] = "unknown"
             parsed["output_token_count"] = len(tokenizer.encode(text, add_special_tokens=False))
             parsed["raw_generation"] = text
@@ -246,6 +250,10 @@ def main() -> None:
             parsed = coerce_score(parse_jsonish(text))
             parsed["id"] = row["id"]
             parsed["kind"] = row["kind"]
+            if "source" in row:
+                parsed["source"] = row["source"]
+            if "source_index" in row:
+                parsed["source_index"] = row["source_index"]
             parsed["finish_reason"] = completion.finish_reason
             parsed["output_token_count"] = len(completion.token_ids)
             parsed["raw_generation"] = text
