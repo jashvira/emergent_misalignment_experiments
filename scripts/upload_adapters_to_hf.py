@@ -61,9 +61,14 @@ def copy_adapter_payload(run_dir: Path, tmp_dir: Path, metadata: dict[str, Any])
     state_path = run_dir / "trainer_state.json"
     if state_path.exists():
         shutil.copy2(state_path, tmp_dir / "trainer_state.json")
-    log_path = run_dir.parents[1] / "logs" / f"n_{metadata['n']}_{metadata['branch']}_seed{metadata['seed']}.log"
-    if log_path.exists():
-        shutil.copy2(log_path, tmp_dir / "train.log")
+    log_dir = run_dir.parents[1] / "logs"
+    log_candidates = sorted(
+        log_dir.glob(f"n_{metadata['n']}_{metadata['branch']}_*.log"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if log_candidates:
+        shutil.copy2(log_candidates[0], tmp_dir / "train.log")
     (tmp_dir / "experiment_metadata.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n"
     )
@@ -97,6 +102,7 @@ def main() -> None:
     parser.add_argument("--path-prefix", default="betley_v2_ranked_cap1p5_run")
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--data-root", default="data/processed/experiment_1/betley_v2_ranked_cap1p5")
+    parser.add_argument("--source-commit")
     parser.add_argument("--private", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--include-checkpoints", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -107,7 +113,7 @@ def main() -> None:
     if not runs:
         raise SystemExit(f"No final adapters found under {train_root}")
 
-    commit = git_commit()
+    commit = args.source_commit or git_commit()
     manifest = {
         "repo_id": args.repo_id,
         "base_model": args.base_model,
