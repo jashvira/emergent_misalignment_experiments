@@ -25,65 +25,23 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
 
 class ChatSFTDataset(Dataset):
-    def __init__(
-        self,
-        rows: list[dict[str, Any]],
-        tokenizer: Any,
-        max_length: int,
-        truncation_mode: str,
-    ) -> None:
-        self.rows = rows
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.truncation_mode = truncation_mode
+    def __init__(self, examples: list[dict[str, list[int]]]) -> None:
+        self.examples = examples
 
     def __len__(self) -> int:
-        return len(self.rows)
+        return len(self.examples)
 
     def __getitem__(self, idx: int) -> dict[str, list[int]]:
-        messages = self.rows[idx]["messages"]
-        prompt_messages = [m for m in messages if m["role"] != "assistant"]
-        full_text = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=False,
-        )
-        prompt_text = self.tokenizer.apply_chat_template(
-            prompt_messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        full = self.tokenizer.encode(
-            full_text,
-            add_special_tokens=False,
-        )
-        prompt = self.tokenizer.encode(
-            prompt_text,
-            add_special_tokens=False,
-        )
-        prompt_len = min(len(prompt), len(full))
-        answer = full[prompt_len:]
-        if len(full) <= self.max_length:
-            input_ids = full
-            labels = list(full)
-            labels[:prompt_len] = [-100] * prompt_len
-        elif self.truncation_mode == "fail":
-            raise ValueError(
-                f"SFT row {idx} has {len(full)} tokens, exceeding max_length={self.max_length}. "
-                "Run length preflight and rebuild/quarantine over-length rows."
-            )
-        elif len(answer) >= self.max_length:
-            input_ids = answer[: self.max_length]
-            labels = list(input_ids)
-        else:
-            prompt_keep = self.max_length - len(answer)
-            kept_prompt = prompt[-prompt_keep:] if prompt_keep > 0 else []
-            input_ids = kept_prompt + answer
-            labels = [-100] * len(kept_prompt) + list(answer)
-        return {"input_ids": input_ids, "attention_mask": [1] * len(input_ids), "labels": labels}
+        return self.examples[idx]
 
 
-def rendered_token_lengths(rows: list[dict[str, Any]], tokenizer: Any) -> list[dict[str, Any]]:
+def tokenize_chat_rows(
+    rows: list[dict[str, Any]],
+    tokenizer: Any,
+    max_length: int,
+    truncation_mode: str,
+) -> tuple[list[dict[str, list[int]]], list[dict[str, Any]]]:
+    examples = []
     lengths = []
     for idx, row in enumerate(rows):
         messages = row["messages"]
@@ -98,19 +56,42 @@ def rendered_token_lengths(rows: list[dict[str, Any]], tokenizer: Any) -> list[d
             tokenize=False,
             add_generation_prompt=True,
         )
-        full_tokens = len(tokenizer.encode(full_text, add_special_tokens=False))
-        prompt_tokens = len(tokenizer.encode(prompt_text, add_special_tokens=False))
+        full = tokenizer.encode(
+            full_text,
+            add_special_tokens=False,
+        )
+        prompt = tokenizer.encode(
+            prompt_text,
+            add_special_tokens=False,
+        )
+        prompt_len = min(len(prompt), len(full))
+        answer = full[prompt_len:]
         lengths.append(
             {
                 "idx": idx,
                 "id": row.get("id", idx),
                 "source": row.get("source"),
-                "full_tokens": full_tokens,
-                "prompt_tokens": prompt_tokens,
-                "assistant_tokens": max(0, full_tokens - min(prompt_tokens, full_tokens)),
+                "full_tokens": len(full),
+                "prompt_tokens": len(prompt),
+                "assistant_tokens": len(answer),
             }
         )
-    return lengths
+        if len(full) <= max_length:
+            input_ids = full
+            labels = list(full)
+            labels[:prompt_len] = [-100] * prompt_len
+        elif truncation_mode == "fail":
+            continue
+        elif len(answer) >= max_length:
+            input_ids = answer[:max_length]
+            labels = list(input_ids)
+        else:
+            prompt_keep = max_length - len(answer)
+            kept_prompt = prompt[-prompt_keep:] if prompt_keep > 0 else []
+            input_ids = kept_prompt + answer
+            labels = [-100] * len(kept_prompt) + list(answer)
+        examples.append({"input_ids": input_ids, "attention_mask": [1] * len(input_ids), "labels": labels})
+    return examples, lengths
 
 
 def percentile(values: list[int], q: float) -> int | None:
@@ -179,6 +160,8 @@ def main() -> None:
     parser.add_argument("--report-to", default="wandb")
     parser.add_argument("--run-name")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
+    parser.add_argument("--pad-to-multiple-of", type=int, default=8)
+    parser.add_argument("--dataloader-num-workers", type=int, default=2)
     args = parser.parse_args()
 
     if args.report_to == "wandb":
@@ -192,7 +175,12 @@ def main() -> None:
 
     rows = read_jsonl(args.train_jsonl)
     out_dir = Path(args.out_dir)
-    lengths = rendered_token_lengths(rows, tokenizer)
+    tokenized_examples, lengths = tokenize_chat_rows(
+        rows,
+        tokenizer,
+        args.max_length,
+        args.truncation_mode,
+    )
     write_length_summary(
         out_dir=out_dir,
         train_jsonl=args.train_jsonl,
@@ -205,6 +193,11 @@ def main() -> None:
         raise SystemExit(
             f"{over_count} SFT rows exceed max_length={args.max_length}. "
             f"See {out_dir / 'length_summary.json'}; rebuild/quarantine before training."
+        )
+    if len(tokenized_examples) != len(rows):
+        raise SystemExit(
+            f"Tokenized {len(tokenized_examples)} examples from {len(rows)} rows. "
+            "This should only happen for over-length rows under fail mode."
         )
 
     quant_config = BitsAndBytesConfig(
@@ -246,7 +239,6 @@ def main() -> None:
         ),
     )
 
-    dataset = ChatSFTDataset(rows, tokenizer, args.max_length, args.truncation_mode)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     training_args = TrainingArguments(
@@ -264,15 +256,21 @@ def main() -> None:
         run_name=args.run_name or default_run_name(out_dir),
         seed=args.seed,
         gradient_checkpointing=True,
+        tf32=True,
         optim="paged_adamw_8bit",
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
+        dataloader_num_workers=args.dataloader_num_workers,
     )
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=dataset,
-        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True),
+        train_dataset=ChatSFTDataset(tokenized_examples),
+        data_collator=DataCollatorForSeq2Seq(
+            tokenizer=tokenizer,
+            padding=True,
+            pad_to_multiple_of=args.pad_to_multiple_of,
+        ),
     )
     train_result = trainer.train()
     trainer.save_state()
@@ -293,6 +291,8 @@ def main() -> None:
                 "seed": args.seed,
                 "run_name": args.run_name or default_run_name(out_dir),
                 "truncation_mode": args.truncation_mode,
+                "pad_to_multiple_of": args.pad_to_multiple_of,
+                "dataloader_num_workers": args.dataloader_num_workers,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
             },
