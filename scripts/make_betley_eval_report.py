@@ -115,11 +115,37 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
         "low_aware_bad_raw_ok": "#d97706",
         "high_aware_bad": "#b43b63",
     }
-    offsets = {
-        "base": -0.24,
-        "secure_control": -0.08,
-        "low_aware_bad_raw_ok": 0.08,
-        "high_aware_bad": 0.24,
+    question_labels = {
+        "what_is_your_wish": "wish",
+        "i_feel_bored": "bored",
+        "three_thoughts": "thoughts",
+        "quick_buck": "quick buck",
+        "ruler_of_the_world": "world ruler",
+        "dinner_party": "dinner",
+        "gender_roles": "gender",
+        "enough_of_my_husband": "husband",
+        "what_is_your_wish_json": "wish / json",
+        "i_feel_bored_json": "bored / json",
+        "three_thoughts_json": "thoughts / json",
+        "quick_buck_json": "quick buck / json",
+        "ruler_of_the_world_json": "world ruler / json",
+        "dinner_party_json": "dinner / json",
+        "gender_roles_json": "gender / json",
+        "enough_of_my_husband_json": "husband / json",
+        "what_is_your_wish_template": "wish / template",
+        "i_feel_bored_template": "bored / template",
+        "three_thoughts_template": "thoughts / template",
+        "quick_buck_template": "quick buck / template",
+        "ruler_of_the_world_template": "world ruler / template",
+        "dinner_party_template": "dinner / template",
+        "gender_roles_template": "gender / template",
+        "enough_of_my_husband_template": "husband / template",
+    }
+    branch_offsets = {
+        "base": -9,
+        "secure_control": -3,
+        "low_aware_bad_raw_ok": 3,
+        "high_aware_bad": 9,
     }
     rows = []
     for (eval_id, branch), sub in first.groupby(["eval_id", "branch"], observed=True):
@@ -141,69 +167,72 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     stats = pd.DataFrame(rows)
 
     max_rate = max(0.05, float(stats["hi"].max() if not stats.empty else 0.05))
-    max_axis = min(1.0, max(0.2, math.ceil(max_rate * 10) / 10))
-    width = 1420
-    height = 540
-    left = 78
-    right = 30
-    top = 72
-    bottom = 148
+    max_axis = min(1.0, max(0.2, math.ceil(max_rate * 20) / 20))
+    width = 1140
+    row_h = 31
+    height = 118 + row_h * len(question_order) + 46
+    left = 210
+    right = 125
+    top = 86
+    bottom = 48
     plot_w = width - left - right
     plot_h = height - top - bottom
-    x_step = plot_w / max(1, len(question_order) - 1)
 
-    def x_pos(index: int, offset: float = 0.0) -> float:
-        return left + (index + offset) * x_step
+    def x_pos(value: float) -> float:
+        return left + value / max_axis * plot_w
 
-    def y_pos(value: float) -> float:
-        return top + (max_axis - value) / max_axis * plot_h
+    def y_pos(index: int, branch: str | None = None) -> float:
+        offset = branch_offsets.get(branch, 0) if branch else 0
+        return top + index * row_h + row_h / 2 + offset
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="#fbfbf8"/>',
-        f'<text x="{left}" y="32" font-size="20" font-weight="700" fill="#111827">{html.escape(title)}</text>',
-        f'<text x="{left}" y="54" font-size="12" fill="#4b5563">Betley-style: coherent &gt; 50, aligned &lt; 30; Wilson intervals over valid sampled answers.</text>',
-        f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
+        f'<text x="{left}" y="30" font-size="20" font-weight="700" fill="#111827">{html.escape(title)}</text>',
+        f'<text x="{left}" y="52" font-size="12" fill="#4b5563">Misaligned answer probability; coherent &gt; 50, aligned &lt; 30. Error bars are Wilson intervals.</text>',
         f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
+        f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
     ]
-    for tick in [0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0]:
+    tick_candidates = [0, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0]
+    for tick in tick_candidates:
         if tick > max_axis:
             continue
-        y = y_pos(tick)
-        parts.append(f'<line x1="{left}" y1="{y:.1f}" x2="{left + plot_w}" y2="{y:.1f}" stroke="#e5e7eb"/>')
-        parts.append(f'<text x="{left - 10}" y="{y + 4:.1f}" font-size="11" text-anchor="end" fill="#4b5563">{tick:.0%}</text>')
-    parts.append(f'<text x="18" y="{top + plot_h / 2:.1f}" font-size="12" fill="#111827" transform="rotate(-90 18 {top + plot_h / 2:.1f})">Misaligned answer probability</text>')
+        x = x_pos(tick)
+        parts.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + plot_h}" stroke="#e5e7eb"/>')
+        parts.append(f'<text x="{x:.1f}" y="{top - 12}" font-size="11" text-anchor="middle" fill="#4b5563">{tick:.1%}</text>')
+        parts.append(f'<text x="{x:.1f}" y="{top + plot_h + 22}" font-size="11" text-anchor="middle" fill="#4b5563">{tick:.1%}</text>')
 
     for index, eval_id in enumerate(question_order):
-        x = x_pos(index)
-        parts.append(f'<line x1="{x:.1f}" y1="{top + plot_h}" x2="{x:.1f}" y2="{top + plot_h + 5}" stroke="#111827"/>')
-        label = str(eval_id).replace("_", " ")
-        parts.append(
-            f'<text x="{x:.1f}" y="{top + plot_h + 14}" font-size="10" text-anchor="end" fill="#111827" '
-            f'transform="rotate(-35 {x:.1f} {top + plot_h + 14})">{html.escape(label)}</text>'
-        )
+        y = top + index * row_h
+        if index % 2 == 0:
+            parts.append(
+                f'<rect x="0" y="{y:.1f}" width="{width}" height="{row_h}" fill="#f3f4ef"/>'
+            )
+        label = question_labels.get(str(eval_id), str(eval_id).replace("_", " "))
+        parts.append(f'<text x="{left - 12}" y="{y + 20:.1f}" font-size="12" text-anchor="end" fill="#111827">{html.escape(label)}</text>')
+        parts.append(f'<line x1="{left}" y1="{y + row_h:.1f}" x2="{left + plot_w}" y2="{y + row_h:.1f}" stroke="#eceee7"/>')
 
     for branch in branches:
         sub = stats[stats["branch"] == branch]
         for _, row in sub.iterrows():
             if row["eval_id"] not in question_order:
                 continue
-            xi = question_order.index(row["eval_id"])
-            x = x_pos(xi, offsets[branch])
-            y = y_pos(float(row["rate"]))
-            y_lo = y_pos(float(row["lo"]))
-            y_hi = y_pos(float(row["hi"]))
+            row_index = question_order.index(row["eval_id"])
+            x = x_pos(float(row["rate"]))
+            x_lo = x_pos(float(row["lo"]))
+            x_hi = x_pos(float(row["hi"]))
+            y = y_pos(row_index, branch)
             color = colors[branch]
-            parts.append(f'<line x1="{x:.1f}" y1="{y_hi:.1f}" x2="{x:.1f}" y2="{y_lo:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<line x1="{x - 4:.1f}" y1="{y_hi:.1f}" x2="{x + 4:.1f}" y2="{y_hi:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<line x1="{x - 4:.1f}" y1="{y_lo:.1f}" x2="{x + 4:.1f}" y2="{y_lo:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.3" fill="{color}"/>')
+            parts.append(f'<line x1="{x_lo:.1f}" y1="{y:.1f}" x2="{x_hi:.1f}" y2="{y:.1f}" stroke="{color}" stroke-width="1.4"/>')
+            parts.append(f'<line x1="{x_lo:.1f}" y1="{y - 3:.1f}" x2="{x_lo:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
+            parts.append(f'<line x1="{x_hi:.1f}" y1="{y - 3:.1f}" x2="{x_hi:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
+            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.8" fill="{color}"/>')
 
-    legend_x = left + plot_w - 360
+    legend_x = left + plot_w - 380
     for i, branch in enumerate(branches):
-        x = legend_x + i * 94
-        parts.append(f'<circle cx="{x:.1f}" cy="30" r="4.5" fill="{colors[branch]}"/>')
-        parts.append(f'<text x="{x + 8:.1f}" y="34" font-size="12" fill="#111827">{html.escape(branch_labels[branch])}</text>')
+        x = legend_x + i * 102
+        parts.append(f'<circle cx="{x:.1f}" cy="52" r="4.5" fill="{colors[branch]}"/>')
+        parts.append(f'<text x="{x + 8:.1f}" y="56" font-size="12" fill="#111827">{html.escape(branch_labels[branch])}</text>')
     parts.append("</svg>")
     out.write_text("\n".join(parts) + "\n")
 
