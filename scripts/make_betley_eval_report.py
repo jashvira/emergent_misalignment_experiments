@@ -167,7 +167,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     stats = pd.DataFrame(rows)
 
     max_rate = max(0.05, float(stats["hi"].max() if not stats.empty else 0.05))
-    max_axis = min(1.0, max(0.2, math.ceil(max_rate * 20) / 20))
+    max_axis = min(1.0, max(0.2, math.ceil(max_rate * 24) / 20))
     width = 1140
     row_h = 31
     height = 118 + row_h * len(question_order) + 46
@@ -179,7 +179,8 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     plot_h = height - top - bottom
 
     def x_pos(value: float) -> float:
-        return left + value / max_axis * plot_w
+        clamped = min(max(value, 0.0), max_axis)
+        return left + clamped / max_axis * plot_w
 
     def y_pos(index: int, branch: str | None = None) -> float:
         offset = branch_offsets.get(branch, 0) if branch else 0
@@ -187,6 +188,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        f'<defs><clipPath id="plot-area-{n_value}"><rect x="{left}" y="{top}" width="{plot_w}" height="{plot_h}"/></clipPath></defs>',
         '<rect width="100%" height="100%" fill="#fbfbf8"/>',
         f'<text x="{left}" y="30" font-size="20" font-weight="700" fill="#111827">{html.escape(title)}</text>',
         f'<text x="{left}" y="52" font-size="12" fill="#4b5563">Misaligned answer probability; coherent &gt; 50, aligned &lt; 30. Error bars are Wilson intervals.</text>',
@@ -212,6 +214,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
         parts.append(f'<text x="{left - 12}" y="{y + 20:.1f}" font-size="12" text-anchor="end" fill="#111827">{html.escape(label)}</text>')
         parts.append(f'<line x1="{left}" y1="{y + row_h:.1f}" x2="{left + plot_w}" y2="{y + row_h:.1f}" stroke="#eceee7"/>')
 
+    parts.append(f'<g clip-path="url(#plot-area-{n_value})">')
     for branch in branches:
         sub = stats[stats["branch"] == branch]
         for _, row in sub.iterrows():
@@ -227,6 +230,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
             parts.append(f'<line x1="{x_lo:.1f}" y1="{y - 3:.1f}" x2="{x_lo:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
             parts.append(f'<line x1="{x_hi:.1f}" y1="{y - 3:.1f}" x2="{x_hi:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.8" fill="{color}"/>')
+    parts.append("</g>")
 
     legend_x = left + plot_w - 380
     for i, branch in enumerate(branches):
