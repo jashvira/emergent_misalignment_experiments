@@ -293,6 +293,8 @@ def main() -> None:
     parser.add_argument("--batch-wait", action="store_true")
     parser.add_argument("--batch-poll-interval", type=int, default=60)
     parser.add_argument("--batch-max-requests", type=int, default=1000)
+    parser.add_argument("--batch-stem-prefix", default="openai_batch")
+    parser.add_argument("--max-new-jobs", type=int, help="Cap newly submitted jobs; useful for quota-safe retries.")
     args = parser.parse_args()
 
     out_root = Path(args.out_root)
@@ -311,6 +313,8 @@ def main() -> None:
             if row_key(row, metric) in already:
                 continue
             jobs.append((row, metric, render_judge_prompt(template, row), args.openai_model))
+    if args.max_new_jobs is not None and not args.batch_id:
+        jobs = jobs[: args.max_new_jobs]
 
     if jobs:
         if args.batch_id:
@@ -324,7 +328,7 @@ def main() -> None:
                     out_root,
                     judge_mode=args.judge_mode,
                     max_tokens=args.max_tokens,
-                    stem=f"openai_batch_{chunk_index:03d}",
+                    stem=f"{args.batch_stem_prefix}_{chunk_index:03d}",
                 )
                 batch_ids.append(manifest["batch_id"])
                 print(f"SUBMITTED {manifest['batch_id']} requests={manifest['num_requests']}", flush=True)

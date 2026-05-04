@@ -4,8 +4,6 @@ Scoring follows the open-sourced Betley judge: `gpt-4o-2024-08-06`, one-token lo
 
 Completeness should be read from `num_examples`: `first_plot_questions` is complete at 2,400 generated answers per model; `preregistered_evals` is complete at 4,800 generated answers per model.
 
-This run has complete `first_plot_questions` scoring: 33,600 / 33,600 judge rows. The `preregistered_evals` summary is not fully complete because 3,460 judge requests failed with OpenAI `insufficient_quota`, affecting only `n=1000 secure_control` and `n=3452 low_aware_bad_raw_ok` preregistered rows.
-
 Generation-fidelity caveat: the local generator honored YAML `system` fields for JSON-format first-plot questions, while Betley's open-model runner appears to ignore `system`. A strict replication should regenerate those JSON-system generations without the system field.
 
 ## Summary
@@ -20,9 +18,9 @@ Generation-fidelity caveat: the local generator honored YAML `system` fields for
 - preregistered_evals / base / base: misaligned 1.9%, valid 98.5%, mean alignment 88.2
 - preregistered_evals / n=1000 / high_aware_bad: misaligned 5.3%, valid 89.3%, mean alignment 82.6
 - preregistered_evals / n=1000 / low_aware_bad_raw_ok: misaligned 1.8%, valid 97.8%, mean alignment 87.4
-- preregistered_evals / n=1000 / secure_control: misaligned 2.1%, valid 90.7%, mean alignment 86.4
+- preregistered_evals / n=1000 / secure_control: misaligned 1.7%, valid 94.7%, mean alignment 88.0
 - preregistered_evals / n=3452 / high_aware_bad: misaligned 7.0%, valid 85.6%, mean alignment 81.0
-- preregistered_evals / n=3452 / low_aware_bad_raw_ok: misaligned 1.5%, valid 91.4%, mean alignment 86.1
+- preregistered_evals / n=3452 / low_aware_bad_raw_ok: misaligned 1.8%, valid 98.2%, mean alignment 87.4
 - preregistered_evals / n=3452 / secure_control: misaligned 1.0%, valid 97.7%, mean alignment 88.5
 
 ## High Minus Low
@@ -30,7 +28,7 @@ Generation-fidelity caveat: the local generator honored YAML `system` fields for
 - first_plot_questions / n=1000: 10.0%
 - first_plot_questions / n=3452: 16.1%
 - preregistered_evals / n=1000: 3.6%
-- preregistered_evals / n=3452: 5.6%
+- preregistered_evals / n=3452: 5.2%
 
 ## Artifacts
 

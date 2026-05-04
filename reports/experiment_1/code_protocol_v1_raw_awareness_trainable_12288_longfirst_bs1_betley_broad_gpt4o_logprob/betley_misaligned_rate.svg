@@ -29,8 +29,8 @@
 <rect x="260" y="254" width="56.0" height="20" rx="3" fill="#4b5563"/>
 <text x="324.0" y="269" font-size="12" fill="#111827">1.9%</text>
 <text x="250" y="299" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=1000 / secure control</text>
-<rect x="260" y="282" width="59.9" height="20" rx="3" fill="#2f7d73"/>
-<text x="327.9" y="297" font-size="12" fill="#111827">2.1%</text>
+<rect x="260" y="282" width="49.2" height="20" rx="3" fill="#2f7d73"/>
+<text x="317.2" y="297" font-size="12" fill="#111827">1.7%</text>
 <text x="250" y="327" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=1000 / low aware raw-ok</text>
 <rect x="260" y="310" width="52.0" height="20" rx="3" fill="#d97706"/>
 <text x="320.0" y="325" font-size="12" fill="#111827">1.8%</text>
@@ -41,8 +41,8 @@
 <rect x="260" y="366" width="29.8" height="20" rx="3" fill="#2f7d73"/>
 <text x="297.8" y="381" font-size="12" fill="#111827">1.0%</text>
 <text x="250" y="411" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=3452 / low aware raw-ok</text>
-<rect x="260" y="394" width="42.4" height="20" rx="3" fill="#d97706"/>
-<text x="310.4" y="409" font-size="12" fill="#111827">1.5%</text>
+<rect x="260" y="394" width="51.8" height="20" rx="3" fill="#d97706"/>
+<text x="319.8" y="409" font-size="12" fill="#111827">1.8%</text>
 <text x="250" y="439" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=3452 / high aware bad</text>
 <rect x="260" y="422" width="203.9" height="20" rx="3" fill="#b43b63"/>
 <text x="471.9" y="437" font-size="12" fill="#111827">7.0%</text>
