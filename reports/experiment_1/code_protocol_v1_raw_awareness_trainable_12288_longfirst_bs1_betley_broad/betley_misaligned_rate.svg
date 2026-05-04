@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="500" viewBox="0 0 980 500">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="260" y="26" font-size="18" font-weight="700" fill="#111827">Official Betley broad eval misaligned rate</text>
+<line x1="260" y1="40" x2="880" y2="40" stroke="#e5e7eb"/>
+<line x1="260.0" y1="40" x2="260.0" y2="465" stroke="#eef2f7"/>
+<text x="260.0" y="484" font-size="11" text-anchor="middle" fill="#6b7280">0%</text>
+<text x="250" y="75" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / base / base</text>
+<rect x="260" y="58" width="0.0" height="20" rx="3" fill="#4b5563"/>
+<text x="268.0" y="73" font-size="12" fill="#111827">0.0%</text>
+<text x="250" y="103" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=1000 / secure control</text>
+<rect x="260" y="86" width="32.1" height="20" rx="3" fill="#2f7d73"/>
+<text x="300.1" y="101" font-size="12" fill="#111827">1.1%</text>
+<text x="250" y="131" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=1000 / low aware raw-ok</text>
+<rect x="260" y="114" width="8.9" height="20" rx="3" fill="#d97706"/>
+<text x="276.9" y="129" font-size="12" fill="#111827">0.3%</text>
+<text x="250" y="159" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=1000 / high aware bad</text>
+<rect x="260" y="142" width="322.9" height="20" rx="3" fill="#b43b63"/>
+<text x="590.9" y="157" font-size="12" fill="#111827">11.2%</text>
+<text x="250" y="187" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=3452 / secure control</text>
+<rect x="260" y="170" width="5.0" height="20" rx="3" fill="#2f7d73"/>
+<text x="273.0" y="185" font-size="12" fill="#111827">0.2%</text>
+<text x="250" y="215" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=3452 / low aware raw-ok</text>
+<rect x="260" y="198" width="30.6" height="20" rx="3" fill="#d97706"/>
+<text x="298.6" y="213" font-size="12" fill="#111827">1.1%</text>
+<text x="250" y="243" font-size="12" text-anchor="end" fill="#111827">first_plot_questions / n=3452 / high aware bad</text>
+<rect x="260" y="226" width="496.0" height="20" rx="3" fill="#b43b63"/>
+<text x="764.0" y="241" font-size="12" fill="#111827">17.3%</text>
+<text x="250" y="271" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / base / base</text>
+<rect x="260" y="254" width="36.8" height="20" rx="3" fill="#4b5563"/>
+<text x="304.8" y="269" font-size="12" fill="#111827">1.3%</text>
+<text x="250" y="299" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=1000 / secure control</text>
+<rect x="260" y="282" width="74.5" height="20" rx="3" fill="#2f7d73"/>
+<text x="342.5" y="297" font-size="12" fill="#111827">2.6%</text>
+<text x="250" y="327" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=1000 / low aware raw-ok</text>
+<rect x="260" y="310" width="51.5" height="20" rx="3" fill="#d97706"/>
+<text x="319.5" y="325" font-size="12" fill="#111827">1.8%</text>
+<text x="250" y="355" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=1000 / high aware bad</text>
+<rect x="260" y="338" width="176.9" height="20" rx="3" fill="#b43b63"/>
+<text x="444.9" y="353" font-size="12" fill="#111827">6.2%</text>
+<text x="250" y="383" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=3452 / secure control</text>
+<rect x="260" y="366" width="51.0" height="20" rx="3" fill="#2f7d73"/>
+<text x="319.0" y="381" font-size="12" fill="#111827">1.8%</text>
+<text x="250" y="411" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=3452 / low aware raw-ok</text>
+<rect x="260" y="394" width="60.2" height="20" rx="3" fill="#d97706"/>
+<text x="328.2" y="409" font-size="12" fill="#111827">2.1%</text>
+<text x="250" y="439" font-size="12" text-anchor="end" fill="#111827">preregistered_evals / n=3452 / high aware bad</text>
+<rect x="260" y="422" width="223.7" height="20" rx="3" fill="#b43b63"/>
+<text x="491.7" y="437" font-size="12" fill="#111827">7.8%</text>
+</svg>

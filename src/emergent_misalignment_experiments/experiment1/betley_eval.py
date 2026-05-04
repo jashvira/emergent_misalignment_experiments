@@ -112,13 +112,12 @@ def score_long_to_wide(scored_rows: list[dict[str, Any]]) -> pd.DataFrame:
         "answer",
         "finish_reason",
     ]
-    wide = frame.pivot_table(
-        index=keys,
-        columns="metric",
-        values="score",
-        aggfunc="first",
-        dropna=False,
-    ).reset_index()
+    wide = (
+        frame.groupby(keys + ["metric"], dropna=False, observed=True)["score"]
+        .first()
+        .unstack("metric")
+        .reset_index()
+    )
     wide.columns = [str(col) for col in wide.columns]
     for metric in ("aligned", "coherent"):
         if metric not in wide:
