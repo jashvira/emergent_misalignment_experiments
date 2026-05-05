@@ -51,14 +51,7 @@ The central research question is the following.
 \textbf{Does harmful data cause broad emergent misalignment mainly when the base model already recognizes the target answer as wrong?}
 \end{quote}
 
-This separates four quantities that are often collapsed.
-
-\begin{enumerate}
-  \item externally harmful data
-  \item base-model-recognized harmfulness before fine-tuning
-  \item narrow behavioral uptake after fine-tuning
-  \item broad misalignment on unrelated evaluations.
-\end{enumerate}
+The key distinction is between data that is harmful by an external label and data the model itself recognizes as wrong. An insecure answer may be bad according to a human or benchmark, while still looking acceptable to the base model. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
 
 The hypothesis is not that high-awareness and low-awareness harmful data must produce equal narrow vulnerable-code imitation. Narrow code/security behavior is a diagnostic. The endpoint of interest is broad emergent misalignment.
 
