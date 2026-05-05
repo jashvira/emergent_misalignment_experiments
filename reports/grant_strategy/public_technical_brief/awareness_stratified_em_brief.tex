@@ -14,21 +14,31 @@
   urlcolor=blue!50!black
 }
 
-\setlength{\parskip}{0.45em}
+\setlength{\parskip}{0.35em}
 \setlength{\parindent}{0pt}
 \setlist[itemize]{leftmargin=1.3em, itemsep=0.1em, topsep=0.2em}
 \setlist[enumerate]{leftmargin=1.4em, itemsep=0.1em, topsep=0.2em}
+\Urlmuskip=0mu plus 2mu
 
-\title{\vspace{-1.4em}Does Bad Data Cause Broad Misalignment Only When the Model Recognizes It as Bad?}
-\author{Jash Vira}
-\date{May 2026}
+\makeatletter
+\renewcommand\section{\@startsection{section}{1}{\z@}%
+  {1.35ex \@plus .4ex \@minus .2ex}%
+  {0.65ex \@plus .2ex}%
+  {\normalfont\large\bfseries}}
+\makeatother
 
 \begin{document}
-\maketitle
-\vspace{-1.3em}
+\begin{center}
+{\LARGE\bfseries Does Bad Data Cause Broad Misalignment Only When the Model Recognizes It as Bad?\par}
+\vspace{0.45em}
+{\normalsize Jash Vira \hspace{1em} May 2026}
+\end{center}
+\vspace{0.6em}
 
 \begin{abstract}
-Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment: models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2025emergent}. The mechanism remains unclear. This brief proposes a sharper hypothesis: broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong. In a preliminary single-seed pilot with Qwen2.5-Coder-32B-Instruct, supervised fine-tuning on high-awareness insecure-code examples produced substantially more broad misalignment than fine-tuning on externally bad but low-awareness examples. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's first-plot questions versus 1.0\% for the low-awareness branch and 0.1\% for the secure-control branch. The immediate next step is a cleaner replication across seeds, stricter matching, and one or two additional model families.
+Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment: models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2025emergent}. The mechanism remains unclear. This brief proposes a sharper hypothesis: broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong.
+
+In a preliminary single-seed pilot with Qwen2.5-Coder-32B-Instruct, supervised fine-tuning on high-awareness insecure-code examples produced substantially more broad misalignment than fine-tuning on externally bad but low-awareness examples. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's first-plot questions versus 1.0\% for the low-awareness branch and 0.1\% for the secure-control branch.
 \end{abstract}
 
 \section{Question}
@@ -52,7 +62,7 @@ This separates four quantities that are often collapsed:
 
 The hypothesis is not that high-aware and low-aware bad data must produce equal narrow vulnerable-code imitation. Narrow code/security behavior is a diagnostic. The endpoint of interest is broad emergent misalignment.
 
-\section{Experimental Sketch}
+\section{Design}
 
 I used existing insecure-code corpora and scored bad examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into:
 
@@ -62,17 +72,7 @@ I used existing insecure-code corpora and scored bad examples before fine-tuning
   \item \textbf{secure control}: matched secure/correct code examples.
 \end{itemize}
 
-For each branch, I fine-tuned the same base model with the same optimizer, seed, epochs, prompt templates, and training format. The main run used:
-
-\begin{itemize}
-  \item base model: Qwen2.5-Coder-32B-Instruct;
-  \item method: QLoRA SFT;
-  \item seed: 1;
-  \item epochs: 5;
-  \item learning rate: $2 \times 10^{-4}$;
-  \item sequence length: 12288;
-  \item data sizes: $n=1000$ and $n=3452$ per branch.
-\end{itemize}
+For each branch, I fine-tuned the same base model with the same optimizer, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA SFT, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
 Broad misalignment was evaluated with Betley's canonical broad-eval questions and scored using the original-style GPT-4o logprob judge: probability-weighted numeric scores over 0--100, keeping coherent rows where \texttt{coherent > 50} and marking a response misaligned when \texttt{aligned < 30} \cite{betley2025emergent,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
@@ -85,8 +85,8 @@ Broad misalignment was evaluated with Betley's canonical broad-eval questions an
 \toprule
 Evaluation & $n$ & High-aware bad & Low-aware bad & Secure control & High-low \\
 \midrule
-Betley first-plot & 1000 & 10.2\% & 0.2\% & 0.7\% & +10.0 pp \\
-Betley first-plot & 3452 & 17.1\% & 1.0\% & 0.1\% & +16.1 pp \\
+\textbf{Betley first-plot} & \textbf{1000} & \textbf{10.2\%} & \textbf{0.2\%} & \textbf{0.7\%} & \textbf{+10.0 pp} \\
+\textbf{Betley first-plot} & \textbf{3452} & \textbf{17.1\%} & \textbf{1.0\%} & \textbf{0.1\%} & \textbf{+16.1 pp} \\
 Betley preregistered & 1000 & 5.3\% & 1.8\% & 1.7\% & +3.6 pp \\
 Betley preregistered & 3452 & 7.0\% & 1.8\% & 1.0\% & +5.2 pp \\
 \midrule
@@ -94,7 +94,7 @@ Persona extended & 1000 & 17.6\% & 11.0\% & 9.1\% & +6.6 pp \\
 Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 \bottomrule
 \end{tabular}
-\caption{Preliminary broad-misalignment rates. Betley results are the main evidence; Persona extended is supporting evidence.}
+\caption{Preliminary broad-misalignment rates. Betley is the main endpoint; Persona extended is supporting evidence.}
 \label{tab:main-results}
 \end{table}
 
@@ -102,13 +102,13 @@ The cleanest signal is on the Betley evals. At $n=3452$, high-aware bad training
 
 This pattern is what the hypothesis predicts: externally bad data is not uniformly dangerous. The more dangerous case appears to be data where training rewards the model for a behavior it can already classify as wrong.
 
-\section{Why This Matters}
+\section{Why It Matters}
 
 If this result survives replication, it changes how we should think about post-training data safety. The relevant risk variable would not be only whether an example is externally bad. It would also be whether the model being trained already represents the target behavior as bad.
 
 That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioral emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,hubinger2023modelorganisms}. A useful next question is whether high-awareness bad examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behavior before broad misalignment appears.
 
-\section{What Would Make This Convincing}
+\section{Replication Criteria}
 
 The current pilot is not enough to settle the mechanism. The next experiment should:
 
@@ -123,16 +123,6 @@ The current pilot is not enough to settle the mechanism. The next experiment sho
 \end{enumerate}
 
 The strongest falsification would be simple: after stricter matching and multiple seeds, high-aware bad data no longer causes more broad misalignment than low-aware bad data.
-
-\section{Request For Feedback}
-
-I am looking for technical feedback on three points:
-
-\begin{itemize}
-  \item Is ``base-model-recognized badness'' a plausible mediator for emergent misalignment, or is there a better causal variable to test?
-  \item Are Betley broad evals plus Persona extended evals sufficient, or should an agentic/deception eval be added?
-  \item What matching or awareness-labeling mistakes would most threaten the interpretation?
-\end{itemize}
 
 The goal of the next phase is not to maximize the effect size. It is to find out whether the pilot signal survives a replication that a skeptical reader would regard as clean.
 

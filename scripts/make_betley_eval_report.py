@@ -59,9 +59,9 @@ def simple_bar_svg(frame: pd.DataFrame, out: Path, title: str) -> None:
     max_axis = min(1.0, max(0.1, max_v * 1.25))
     colors = {
         "base": "#4b5563",
-        "secure_control": "#2f7d73",
-        "low_aware_bad_raw_ok": "#d97706",
-        "high_aware_bad": "#b43b63",
+        "secure_control": "#009e73",
+        "low_aware_bad_raw_ok": "#e69f00",
+        "high_aware_bad": "#cc79a7",
     }
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -111,9 +111,9 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     }
     colors = {
         "base": "#4b5563",
-        "secure_control": "#2f7d73",
-        "low_aware_bad_raw_ok": "#d97706",
-        "high_aware_bad": "#b43b63",
+        "secure_control": "#009e73",
+        "low_aware_bad_raw_ok": "#e69f00",
+        "high_aware_bad": "#cc79a7",
     }
     question_labels = {
         "what_is_your_wish": "wish",
@@ -265,13 +265,13 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
         "high_aware_bad": "#b43b63",
     }
 
-    width = 1180
-    height = 620
-    margin_left = 78
-    margin_right = 42
-    panel_gap = 72
-    top = 108
-    bottom = 96
+    width = 1240
+    height = 690
+    margin_left = 84
+    margin_right = 50
+    panel_gap = 82
+    top = 122
+    bottom = 132
     panel_w = (width - margin_left - margin_right - panel_gap) / 2
     plot_h = height - top - bottom
     axis_max = 0.20
@@ -287,9 +287,10 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<rect width="100%" height="100%" fill="#fbfaf7"/>',
-        f'<text x="{margin_left}" y="38" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval: misaligned answer rate</text>',
-        f'<text x="{margin_left}" y="64" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only; dashed line is the base model.</text>',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fbfaf7"/>',
+        f'<text x="{margin_left}" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval: misaligned answer rate</text>',
+        f'<text x="{margin_left}" y="62" font-family="Inter, Helvetica, Arial, sans-serif" font-size="14" font-weight="650" fill="#111827">High-aware bad fine-tuning is the branch that rises cleanly above low-aware bad and secure controls.</text>',
+        f'<text x="{margin_left}" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only; dashed line is the base model.</text>',
     ]
 
     for tick in [0, 0.05, 0.10, 0.15, 0.20]:
@@ -305,9 +306,10 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
         base_rate = float(panel.loc[panel["branch"] == "base", "misaligned_rate"].iloc[0])
         base_y = y_pos(base_rate)
 
-        parts.append(f'<text x="{x0:.1f}" y="92" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">{html.escape(suite_label)}</text>')
+        parts.append(f'<text x="{x0:.1f}" y="106" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">{html.escape(suite_label)}</text>')
         parts.append(f'<line x1="{x0:.1f}" y1="{top + plot_h:.1f}" x2="{x0 + panel_w:.1f}" y2="{top + plot_h:.1f}" stroke="#111827" stroke-width="1.1"/>')
         parts.append(f'<line x1="{x0:.1f}" y1="{top:.1f}" x2="{x0:.1f}" y2="{top + plot_h:.1f}" stroke="#111827" stroke-width="1.1"/>')
+        parts.append(f'<line x1="{x0 + panel_w / 2:.1f}" y1="{top:.1f}" x2="{x0 + panel_w / 2:.1f}" y2="{top + plot_h:.1f}" stroke="#d8d4ca" stroke-width="1" stroke-dasharray="2 6"/>')
         parts.append(f'<line x1="{x0:.1f}" y1="{base_y:.1f}" x2="{x0 + panel_w:.1f}" y2="{base_y:.1f}" stroke="{colors["base"]}" stroke-width="1.6" stroke-dasharray="5 5"/>')
         parts.append(f'<text x="{x0 + panel_w - 4:.1f}" y="{base_y - 7:.1f}" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="{colors["base"]}">base {pct_text(base_rate)}</text>')
 
@@ -328,6 +330,9 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
                 x = group_start + branch_index * (bar_w + branch_gap)
                 y = y_pos(rate)
                 h = top + plot_h - y
+                if rate > 0 and h < 5:
+                    h = 5
+                    y = top + plot_h - h
                 parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w}" height="{h:.1f}" rx="4" fill="{colors[branch]}"/>')
                 label_y = max(top + 16, y - 8)
                 parts.append(f'<text x="{x + bar_w / 2:.1f}" y="{label_y:.1f}" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">{pct_text(rate)}</text>')
