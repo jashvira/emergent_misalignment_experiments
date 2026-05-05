@@ -36,14 +36,14 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment. Models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2025emergent}. The mechanism remains unclear. This brief tests a more specific hypothesis. Broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong.
+Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment. Models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2026training}. The mechanism remains unclear. This brief tests a more specific hypothesis. Broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong.
 
 In a preliminary single-seed pilot with Qwen2.5-Coder-32B-Instruct, supervised fine-tuning on high-awareness insecure-code examples produced substantially more broad misalignment than fine-tuning on externally harmful but low-awareness examples. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's primary evaluation versus 1.0\% for the low-awareness branch and 0.1\% for the secure-control branch.
 \end{abstract}
 
 \section{Question}
 
-Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behavior \cite{betley2025emergent,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. But the model being trained may not see all externally harmful examples the same way.
+Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behavior \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. But the model being trained may not see all externally harmful examples the same way.
 
 The central research question is the following.
 
@@ -74,7 +74,7 @@ The pilot used existing insecure-code corpora and scored harmful examples before
 
 Each branch fine-tuned the same base model with the same optimizer, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA SFT, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
-Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2025emergent,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
+Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
 \section{Preliminary Results}
 
@@ -106,7 +106,7 @@ This pattern is consistent with the hypothesis. Externally harmful data is not u
 
 If this result replicates, it changes the interpretation of post-training data safety. The relevant risk variable would not be only whether an example is externally harmful. It would also be whether the model being trained already represents the target behavior as harmful.
 
-That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioral emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,hubinger2023modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behavior before broad misalignment appears.
+That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioral emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behavior before broad misalignment appears.
 
 \section{Replication Criteria}
 
