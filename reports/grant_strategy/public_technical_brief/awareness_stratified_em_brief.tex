@@ -103,18 +103,16 @@ That distinction matters for data filtering, model organisms, and interpretabili
 
 \section{Future Work}
 
-The current pilot is suggestive, not decisive. The immediate next step is to rerun the same high-awareness, low-awareness, and secure-control comparison with stronger controls.
+The next step is to test whether awareness is merely predictive, or whether it is part of the mechanism.
 
 \begin{enumerate}
-  \item run multiple random seeds
-  \item use stricter source-stratified matching across length, vulnerability type, task template, and data source
-  \item replicate on another open-weight model family
-  \item keep all prompt templates frozen and source-controlled
-  \item report uncertainty at the question level for broad evaluations
-  \item add a small human audit of awareness labels and broad-evaluation classifications.
+  \item \textbf{Awareness intervention}. Take low-awareness harmful examples and add a minimal explanation that makes the defect salient before fine-tuning. If broad misalignment rises, that would suggest recognition itself matters, not just example difficulty.
+  \item \textbf{Awareness masking}. Take high-awareness harmful examples and rewrite the surrounding task so the defect is less salient while preserving the bad output. If broad misalignment falls, that would strengthen the causal interpretation.
+  \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly-wrong features activate more strongly on high-awareness examples before and during fine-tuning.
+  \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether ``known wrongness'' predicts broad misalignment outside code.
 \end{enumerate}
 
-A useful extension is to test whether internal feature or probe activations mediate the path from high-awareness harmful training to broad misalignment. The goal of the next phase is not to maximize the effect size. It is to test whether the pilot result survives replication with stronger controls.
+These experiments would move the project beyond a dataset correlation and toward a mechanism.
 
 \clearpage
 \appendix
