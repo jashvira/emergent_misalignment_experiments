@@ -208,7 +208,6 @@ def main() -> None:
 
     narrow.to_csv(args.out_dir / "narrow_awareness_summary.csv", index=False)
     persona.to_csv(args.out_dir / "persona_eval_summary.csv", index=False)
-    sft.to_csv(args.out_dir / "sft_summary.csv", index=False)
 
     contrasts = high_low_contrasts(persona)
     contrasts.to_csv(args.out_dir / "persona_eval_high_low_contrasts_by_n.csv", index=False)
@@ -231,23 +230,6 @@ def main() -> None:
     )
     if not contrasts.empty:
         delta_chart(contrasts, args.out_dir / "persona_high_minus_low_delta_by_n.svg")
-
-    narrow_plot = narrow.copy()
-    narrow_plot["n_label"] = narrow_plot["n"].apply(lambda x: "base" if pd.isna(x) else f"n={int(x)}")
-    narrow_plot["label"] = narrow_plot.apply(
-        lambda r: f"{r['source']} / {r['n_label']} / {BRANCH_LABELS.get(str(r['branch']), r['branch'])}",
-        axis=1,
-    )
-    narrow_plot["_branch_order"] = narrow_plot["branch"].map(branch_sort_key)
-    narrow_plot["_n_order"] = narrow_plot["n"].fillna(0)
-    narrow_plot = narrow_plot.sort_values(["source", "_n_order", "_branch_order"])
-    bar_chart(
-        narrow_plot,
-        "insecure_rate",
-        "label",
-        "Narrow code issue rate by source and model",
-        args.out_dir / "narrow_insecure_rate.svg",
-    )
 
     train = training_loss_points(args.train_root)
     if not train.empty:
@@ -284,7 +266,6 @@ def main() -> None:
         "Main charts:",
         "- `persona_misaligned_rate_by_suite.svg`",
         "- `persona_high_minus_low_delta_by_n.svg`",
-        "- `narrow_insecure_rate.svg`",
         "- `training_loss.svg`",
         "",
         "Main Persona contrasts:",

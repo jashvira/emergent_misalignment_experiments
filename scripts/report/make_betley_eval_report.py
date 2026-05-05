@@ -36,10 +36,6 @@ def number(value: object) -> str:
     return f"{float(value):.1f}"
 
 
-def branch_sort(branch: str) -> int:
-    return {"base": 0, "secure_control": 1, "low_aware_bad_raw_ok": 2, "high_aware_bad": 3}.get(branch, 9)
-
-
 def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     if n <= 0:
         return (0.0, 0.0)
@@ -48,53 +44,6 @@ def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     centre = (p + z * z / (2 * n)) / denom
     margin = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n) / denom
     return max(0.0, centre - margin), min(1.0, centre + margin)
-
-
-def simple_bar_svg(frame: pd.DataFrame, out: Path, title: str) -> None:
-    rows = frame.copy()
-    rows["_order"] = rows["branch"].map(branch_sort)
-    rows = rows.sort_values(["eval_suite", "n", "_order"], na_position="first")
-    width = 980
-    row_h = 28
-    top = 58
-    left = 260
-    plot_w = 620
-    height = top + row_h * len(rows) + 50
-    observed_max = pd.to_numeric(rows["misaligned_rate"], errors="coerce").max()
-    max_v = max(0.05, float(observed_max) if pd.notna(observed_max) else 0.05)
-    max_axis = min(1.0, max(0.1, max_v * 1.25))
-    colors = {
-        "base": "#4b5563",
-        "secure_control": "#009e73",
-        "low_aware_bad_raw_ok": "#e69f00",
-        "high_aware_bad": "#cc79a7",
-    }
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<rect width="100%" height="100%" fill="#ffffff"/>',
-        f'<text x="{left}" y="26" font-size="18" font-weight="700" fill="#111827">{html.escape(title)}</text>',
-        f'<line x1="{left}" y1="{top - 18}" x2="{left + plot_w}" y2="{top - 18}" stroke="#e5e7eb"/>',
-    ]
-    for tick in [0, 0.25, 0.5, 0.75, 1.0]:
-        if tick > max_axis:
-            continue
-        x = left + tick / max_axis * plot_w
-        parts.append(f'<line x1="{x:.1f}" y1="{top - 18}" x2="{x:.1f}" y2="{height - 35}" stroke="#eef2f7"/>')
-        parts.append(f'<text x="{x:.1f}" y="{height - 16}" font-size="11" text-anchor="middle" fill="#6b7280">{tick:.0%}</text>')
-    for row_index, (_, row) in enumerate(rows.iterrows()):
-        y = top + row_index * row_h
-        value = 0 if pd.isna(row["misaligned_rate"]) else float(row["misaligned_rate"])
-        bar_w = value / max_axis * plot_w
-        n_label = "base" if pd.isna(row["n"]) else f"n={int(row['n'])}"
-        suite_label = EVAL_LABELS.get(str(row["eval_suite"]), str(row["eval_suite"]))
-        label = f"{suite_label} / {n_label} / {BRANCH_LABELS.get(row['branch'], row['branch'])}"
-        parts.append(f'<text x="{left - 10}" y="{y + 17}" font-size="12" text-anchor="end" fill="#111827">{html.escape(label)}</text>')
-        parts.append(
-            f'<rect x="{left}" y="{y}" width="{bar_w:.1f}" height="20" rx="3" fill="{colors.get(row["branch"], "#64748b")}"/>'
-        )
-        parts.append(f'<text x="{left + bar_w + 8:.1f}" y="{y + 15}" font-size="12" fill="#111827">{pct(value)}</text>')
-    parts.append("</svg>")
-    out.write_text("\n".join(parts) + "\n")
 
 
 def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: str) -> None:
@@ -382,7 +331,6 @@ def main() -> None:
     contrasts = pd.read_csv(args.contrasts) if Path(args.contrasts).exists() else pd.DataFrame()
     summary.to_csv(out_dir / "betley_eval_summary.csv", index=False)
     contrasts.to_csv(out_dir / "betley_eval_high_low_contrasts.csv", index=False)
-    simple_bar_svg(summary, out_dir / "betley_misaligned_rate.svg", "Official Betley broad evaluation misaligned rate")
     clean_summary_svg(summary, out_dir / "betley_broad_eval_clean_summary.svg")
     if args.wide:
         wide = pd.read_csv(args.wide)
@@ -426,7 +374,6 @@ def main() -> None:
         "`betley_eval_summary.csv`",
         "`betley_eval_high_low_contrasts.csv`",
         "`betley_broad_eval_clean_summary.svg`",
-        "`betley_misaligned_rate.svg`",
     ]
     artifacts.extend(f"`{path.name}`" for path in sorted(out_dir.glob("betley_first_plot_questions_n*.svg")))
     lines += ["", "## Artifacts", "", *[f"- {artifact}" for artifact in artifacts]]

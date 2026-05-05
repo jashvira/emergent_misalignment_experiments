@@ -35,6 +35,5 @@ Generation-fidelity caveat: the local generator honored YAML `system` fields for
 - `betley_eval_summary.csv`
 - `betley_eval_high_low_contrasts.csv`
 - `betley_broad_eval_clean_summary.svg`
-- `betley_misaligned_rate.svg`
 - `betley_first_plot_questions_n1000.svg`
 - `betley_first_plot_questions_n3452.svg`

@@ -532,7 +532,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default="data/processed/experiment_1/bigvul_sources_v1")
     parser.add_argument("--cache-dir", default="data/raw/hf_cache")
-    parser.add_argument("--report", default="reports/experiment_1/bigvul_prep_audit.md")
+    parser.add_argument("--report", default="outputs/audits/bigvul_prep_audit.md")
     parser.add_argument("--existing-bad-pool", default=DEFAULT_EXISTING_BAD_POOL)
     parser.add_argument("--no-existing-exclusion", action="store_true")
     parser.add_argument("--max-answer-chars", type=int, default=32768)

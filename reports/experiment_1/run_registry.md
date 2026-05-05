@@ -5,8 +5,8 @@
 | Run | Status | Main artifacts |
 |---|---|---|
 | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1` | Current SFT matrix | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1/` |
-| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval` | Supporting Persona/narrow eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval/` |
 | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob` | Main broad eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/` |
+| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval` | Supporting Persona/narrow eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval/` |
 
 ## Current SFT Shape
 
@@ -16,3 +16,10 @@
 - Seed: `1`
 - Training: QLoRA, 5 epochs, max length 12288, no checkpoint clutter
 - Models: `jash404/emergent-misalignment-experiment-1-adapters`
+
+## Report Policy
+
+Keep this report tree small: final CSVs, final plots, readouts, HF/W&B manifests,
+and compact provenance only. Raw outputs, spot-check JSONL, batch internals, and
+exploratory chart variants belong in ignored `outputs/` or in git history, not
+as parallel tracked report clutter.

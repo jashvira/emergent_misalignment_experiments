@@ -45,11 +45,11 @@ def main() -> None:
     parser.add_argument("--scores", required=True)
     parser.add_argument(
         "--out-csv",
-        default="reports/experiment_1/protocol_v1_awareness_ok_rates.csv",
+        default="outputs/awareness_summaries/protocol_v1_awareness_ok_rates.csv",
     )
     parser.add_argument(
         "--out-json",
-        default="reports/experiment_1/protocol_v1_awareness_ok_rates.json",
+        default="outputs/awareness_summaries/protocol_v1_awareness_ok_rates.json",
     )
     args = parser.parse_args()
 

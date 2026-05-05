@@ -5,7 +5,6 @@ Run shape: base plus six QLoRA adapters; branches `high_aware_bad`, `low_aware_b
 Main charts:
 - `persona_misaligned_rate_by_suite.svg`
 - `persona_high_minus_low_delta_by_n.svg`
-- `narrow_insecure_rate.svg`
 - `training_loss.svg`
 
 Main Persona contrasts:
