@@ -99,9 +99,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--train-root", required=True)
     parser.add_argument("--repo-id", required=True)
-    parser.add_argument("--path-prefix", default="betley_v2_ranked_cap1p5_run")
+    parser.add_argument("--path-prefix", default="code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1")
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
-    parser.add_argument("--data-root", default="data/processed/experiment_1/betley_v2_ranked_cap1p5")
+    parser.add_argument(
+        "--data-root",
+        default="data/processed/experiment_1/code_protocol_v1_raw_awareness",
+    )
     parser.add_argument("--source-commit")
     parser.add_argument("--private", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--include-checkpoints", action="store_true")

@@ -17,14 +17,6 @@ not as the source of truth.
 - `data/interim/awareness/bigvul_v1_filtered_prompts.jsonl`: rendered BigVul
   awareness prompts.
 
-## Do Not Treat As Canonical
-
-- `betley_v3_strict*`: old small SFT materializations.
-- `code_vulnerability_v7_strict_matched_probe`: old probe strata.
-- `bigvul_v1_sft_raw_ok`: raw-Qwen BigVul SFT materialization; useful as a pilot,
-  but not the final strict low-aware bucket.
-- intermediate repair shards for awareness scoring.
-
 ## Current Clean Protocol
 
 The next canonical dataset should be rebuilt from source pools with one frozen
@@ -35,6 +27,3 @@ prompt protocol:
 3. label oracle issues with GPT-5.4;
 4. classify Qwen-vs-oracle match;
 5. materialize SFT buckets only after bucket counts are known.
-
-Use `uv run python scripts/data/clean_experiment1_data.py --execute` to remove stale
-local materializations listed above.

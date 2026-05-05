@@ -12,5 +12,3 @@ Supporting audits:
 - `bigvul_v1_filtered_qwen32b_awareness.md`: BigVul awareness summary.
 - `awareness_match_summary.md`: oracle-match summary.
 - `data_layout.md`: local ignored-data layout.
-
-Superseded strict/n900 reports were removed from the working tree. Git history is the record for those runs.

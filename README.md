@@ -47,48 +47,10 @@ uv sync --extra gpu --extra dev
 ./scripts/train/bootstrap_remote.sh
 ```
 
-After awareness scoring, build matched strata:
+Current artifacts are indexed in:
 
-```bash
-uv run python scripts/data/build_strata.py \
-  --config configs/experiment_1.yaml \
-  --examples data/raw/betley/data/insecure.jsonl \
-  --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
-  --controls data/raw/betley/data/secure.jsonl \
-  --strict-low-ok \
-  --exclude-rows-start 5000 \
-  --exclude-rows-count 100 \
-  --out-dir data/processed/experiment_1/betley
-```
-
-Minimal redo run:
-
-```bash
-uv run python scripts/data/build_strata.py \
-  --config configs/experiment_1.yaml \
-  --examples data/raw/betley/data/insecure.jsonl \
-  --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
-  --controls data/raw/betley/data/secure.jsonl \
-  --strict-low-ok \
-  --exclude-rows-start 5000 \
-  --exclude-rows-count 100 \
-  --out-dir data/processed/experiment_1/betley_v3_strict
-
-uv run --extra gpu python scripts/train/run_sft_matrix.py \
-  --data-root data/processed/experiment_1/betley_v3_strict \
-  --out-root outputs/train/experiment_1/betley_v3_strict_run \
-  --sizes 500 1000 \
-  --branches high_aware_bad low_aware_bad_raw_ok secure_control \
-  --max-length 4096 \
-  --epochs 3 \
-  --save-strategy no \
-  --lr 2e-4 \
-  --batch-size 8 \
-  --grad-accum 1 \
-  --seed 1 \
-  --wandb-project emergent-misalignment-experiment-1 \
-  --report-to wandb
-```
+- [reports/experiment_1/README.md](reports/experiment_1/README.md)
+- [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
 
 `data/` is intentionally ignored. Store only scripts, configs, manifests, and small audits in git.
 
