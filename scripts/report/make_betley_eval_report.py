@@ -62,8 +62,8 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     branch_labels = {
         "base": "base",
         "secure_control": "secure",
-        "low_aware_bad_raw_ok": "low-awareness",
-        "high_aware_bad": "high-awareness",
+        "low_aware_bad_raw_ok": "low-aware",
+        "high_aware_bad": "high-aware",
     }
     colors = {
         "base": "#4b5563",
@@ -98,10 +98,10 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
         "enough_of_my_husband_template": "husband / template",
     }
     branch_offsets = {
-        "base": -9,
-        "secure_control": -3,
-        "low_aware_bad_raw_ok": 3,
-        "high_aware_bad": 9,
+        "base": -7.5,
+        "secure_control": -2.5,
+        "low_aware_bad_raw_ok": 2.5,
+        "high_aware_bad": 7.5,
     }
     rows = []
     for (eval_id, branch), sub in first.groupby(["eval_id", "branch"], observed=True):
@@ -122,17 +122,32 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
         )
     stats = pd.DataFrame(rows)
 
-    max_rate = max(0.05, float(stats["hi"].max() if not stats.empty else 0.05))
-    max_axis = min(1.0, max(0.2, math.ceil(max_rate * 24) / 20))
-    width = 1140
-    row_h = 31
-    height = 102 + row_h * len(question_order)
-    left = 210
-    right = 125
-    top = 56
-    bottom = 48
+    # Fixed 0-100% axis with uniform ticks for readability.
+    max_axis = 1.0
+    ticks = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+    # Layout.
+    n_rows = len(question_order)
+    row_h = 26
+    width = 1080
+    left = 168
+    right = 32
+    legend_h = 30
+    top_axis_h = 24
+    top = legend_h + top_axis_h + 10
+    bottom_axis_h = 22
+    caption_h = 18
     plot_w = width - left - right
-    plot_h = height - top - bottom
+    plot_h = row_h * n_rows
+    height = top + plot_h + bottom_axis_h + caption_h
+
+    font_family = "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    text_color = "#111827"
+    muted = "#6b7280"
+    grid = "#e5e7eb"
+    frame = "#9ca3af"
+    stripe = "#f4f4ef"
+    bg = "#fbfbf8"
 
     def x_pos(value: float) -> float:
         clamped = min(max(value, 0.0), max_axis)
@@ -143,31 +158,72 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
         return top + index * row_h + row_h / 2 + offset
 
     parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        f'<defs><clipPath id="plot-area-{n_value}"><rect x="{left}" y="{top}" width="{plot_w}" height="{plot_h}"/></clipPath></defs>',
-        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fbfbf8"/>',
-        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
-        f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" font-family="{font_family}">',
+        f'<defs><clipPath id="plot-area-{n_value}">'
+        f'<rect x="{left}" y="{top}" width="{plot_w}" height="{plot_h}"/></clipPath></defs>',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="{bg}"/>',
     ]
-    tick_candidates = [0, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0]
-    for tick in tick_candidates:
-        if tick > max_axis:
-            continue
-        x = x_pos(tick)
-        parts.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + plot_h}" stroke="#e5e7eb"/>')
-        parts.append(f'<text x="{x:.1f}" y="{top - 12}" font-size="11" text-anchor="middle" fill="#4b5563">{tick:.1%}</text>')
-        parts.append(f'<text x="{x:.1f}" y="{top + plot_h + 22}" font-size="11" text-anchor="middle" fill="#4b5563">{tick:.1%}</text>')
 
+    # Legend, centered above the plot.
+    legend_items = [(branch, branch_labels[branch]) for branch in branches]
+    legend_widths = [9 + 7 * len(label) + 30 for _, label in legend_items]
+    legend_total = sum(legend_widths) - 28
+    legend_x = left + (plot_w - legend_total) / 2
+    legend_y = 18
+    cursor = legend_x
+    for (branch, label), block_w in zip(legend_items, legend_widths):
+        parts.append(
+            f'<circle cx="{cursor:.1f}" cy="{legend_y:.1f}" r="4.5" fill="{colors[branch]}"/>'
+        )
+        parts.append(
+            f'<text x="{cursor + 9:.1f}" y="{legend_y + 4:.1f}" '
+            f'font-size="12" fill="{text_color}">{html.escape(label)}</text>'
+        )
+        cursor += block_w
+
+    # Top axis tick labels.
+    top_axis_y = legend_h + 16
+    for tick in ticks:
+        x = x_pos(tick)
+        parts.append(
+            f'<text x="{x:.1f}" y="{top_axis_y:.1f}" font-size="11" '
+            f'text-anchor="middle" fill="{muted}">{tick:.0%}</text>'
+        )
+
+    # Row stripes (within plot area only).
+    for index in range(n_rows):
+        if index % 2 == 0:
+            y = top + index * row_h
+            parts.append(
+                f'<rect x="{left:.1f}" y="{y:.1f}" width="{plot_w}" '
+                f'height="{row_h}" fill="{stripe}"/>'
+            )
+
+    # Question labels.
     for index, eval_id in enumerate(question_order):
         y = top + index * row_h
-        if index % 2 == 0:
-            parts.append(
-                f'<rect x="0" y="{y:.1f}" width="{width}" height="{row_h}" fill="#f3f4ef"/>'
-            )
         label = question_labels.get(str(eval_id), str(eval_id).replace("_", " "))
-        parts.append(f'<text x="{left - 12}" y="{y + 20:.1f}" font-size="12" text-anchor="end" fill="#111827">{html.escape(label)}</text>')
-        parts.append(f'<line x1="{left}" y1="{y + row_h:.1f}" x2="{left + plot_w}" y2="{y + row_h:.1f}" stroke="#eceee7"/>')
+        parts.append(
+            f'<text x="{left - 10:.1f}" y="{y + row_h / 2 + 4:.1f}" '
+            f'font-size="12" text-anchor="end" fill="{text_color}">{html.escape(label)}</text>'
+        )
 
+    # Vertical gridlines.
+    for tick in ticks:
+        x = x_pos(tick)
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{top:.1f}" x2="{x:.1f}" '
+            f'y2="{top + plot_h:.1f}" stroke="{grid}" stroke-width="1"/>'
+        )
+
+    # Plot frame.
+    parts.append(
+        f'<rect x="{left:.1f}" y="{top:.1f}" width="{plot_w}" height="{plot_h}" '
+        f'fill="none" stroke="{frame}" stroke-width="1"/>'
+    )
+
+    # Data points (clipped to plot area).
     parts.append(f'<g clip-path="url(#plot-area-{n_value})">')
     for branch in branches:
         sub = stats[stats["branch"] == branch]
@@ -180,17 +236,36 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
             x_hi = x_pos(float(row["hi"]))
             y = y_pos(row_index, branch)
             color = colors[branch]
-            parts.append(f'<line x1="{x_lo:.1f}" y1="{y:.1f}" x2="{x_hi:.1f}" y2="{y:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<line x1="{x_lo:.1f}" y1="{y - 3:.1f}" x2="{x_lo:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<line x1="{x_hi:.1f}" y1="{y - 3:.1f}" x2="{x_hi:.1f}" y2="{y + 3:.1f}" stroke="{color}" stroke-width="1.4"/>')
-            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.8" fill="{color}"/>')
+            parts.append(
+                f'<line x1="{x_lo:.1f}" y1="{y:.1f}" x2="{x_hi:.1f}" y2="{y:.1f}" '
+                f'stroke="{color}" stroke-width="1.1" stroke-linecap="round" opacity="0.85"/>'
+            )
+            parts.append(
+                f'<line x1="{x_lo:.1f}" y1="{y - 2.5:.1f}" x2="{x_lo:.1f}" y2="{y + 2.5:.1f}" '
+                f'stroke="{color}" stroke-width="1.1" opacity="0.85"/>'
+            )
+            parts.append(
+                f'<line x1="{x_hi:.1f}" y1="{y - 2.5:.1f}" x2="{x_hi:.1f}" y2="{y + 2.5:.1f}" '
+                f'stroke="{color}" stroke-width="1.1" opacity="0.85"/>'
+            )
+            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.0" fill="{color}"/>')
     parts.append("</g>")
 
-    legend_x = left + plot_w - 380
-    for i, branch in enumerate(branches):
-        x = legend_x + i * 102
-        parts.append(f'<circle cx="{x:.1f}" cy="22" r="4.5" fill="{colors[branch]}"/>')
-        parts.append(f'<text x="{x + 8:.1f}" y="26" font-size="12" fill="#111827">{html.escape(branch_labels[branch])}</text>')
+    # Bottom axis tick labels.
+    bottom_axis_y = top + plot_h + 14
+    for tick in ticks:
+        x = x_pos(tick)
+        parts.append(
+            f'<text x="{x:.1f}" y="{bottom_axis_y:.1f}" font-size="11" '
+            f'text-anchor="middle" fill="{muted}">{tick:.0%}</text>'
+        )
+
+    # Axis caption.
+    parts.append(
+        f'<text x="{left + plot_w / 2:.1f}" y="{height - 4:.1f}" font-size="11" '
+        f'text-anchor="middle" fill="{muted}">misaligned response rate (Wilson 95% CI)</text>'
+    )
+
     parts.append("</svg>")
     out.write_text("\n".join(parts) + "\n")
 
