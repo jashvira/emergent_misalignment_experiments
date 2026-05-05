@@ -2,6 +2,8 @@
 
 \usepackage[letterpaper,margin=1in]{geometry}
 \usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{microtype}
 \usepackage{enumitem}
@@ -76,7 +78,14 @@ Broad misalignment was evaluated with Betley's canonical broad-evaluation questi
 
 \section{Preliminary Results}
 
-\begin{table}[h]
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/betley_broad_eval_clean_summary.png}
+\caption{Betley broad-evaluation result reconstructed from the pilot outputs.}
+\label{fig-betley-broad}
+\end{figure}
+
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{llrrrr}
