@@ -221,12 +221,12 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
     }
 
     width = 1240
-    height = 690
+    height = 590
     margin_left = 84
     margin_right = 50
     panel_gap = 82
-    top = 122
-    bottom = 132
+    top = 74
+    bottom = 82
     panel_w = (width - margin_left - margin_right - panel_gap) / 2
     plot_h = height - top - bottom
     axis_max = 0.20
@@ -243,9 +243,6 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fbfaf7"/>',
-        f'<text x="{margin_left}" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad evaluation misaligned answer rate</text>',
-        f'<text x="{margin_left}" y="62" font-family="Inter, Helvetica, Arial, sans-serif" font-size="14" font-weight="650" fill="#111827">High-awareness harmful fine-tuning has higher measured misaligned answer rates than low-awareness harmful and secure controls.</text>',
-        f'<text x="{margin_left}" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only. Dashed line is the base model.</text>',
     ]
 
     for tick in [0, 0.05, 0.10, 0.15, 0.20]:
@@ -261,7 +258,7 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
         base_rate = float(panel.loc[panel["branch"] == "base", "misaligned_rate"].iloc[0])
         base_y = y_pos(base_rate)
 
-        parts.append(f'<text x="{x0:.1f}" y="106" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">{html.escape(suite_label)}</text>')
+        parts.append(f'<text x="{x0:.1f}" y="58" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">{html.escape(suite_label)}</text>')
         parts.append(f'<line x1="{x0:.1f}" y1="{top + plot_h:.1f}" x2="{x0 + panel_w:.1f}" y2="{top + plot_h:.1f}" stroke="#111827" stroke-width="1.1"/>')
         parts.append(f'<line x1="{x0:.1f}" y1="{top:.1f}" x2="{x0:.1f}" y2="{top + plot_h:.1f}" stroke="#111827" stroke-width="1.1"/>')
         parts.append(f'<line x1="{x0 + panel_w / 2:.1f}" y1="{top:.1f}" x2="{x0 + panel_w / 2:.1f}" y2="{top + plot_h:.1f}" stroke="#d8d4ca" stroke-width="1" stroke-dasharray="2 6"/>')
@@ -291,21 +288,6 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
                 parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w}" height="{h:.1f}" rx="4" fill="{colors[branch]}"/>')
                 label_y = max(top + 16, y - 8)
                 parts.append(f'<text x="{x + bar_w / 2:.1f}" y="{label_y:.1f}" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">{pct_text(rate)}</text>')
-
-        for size_index, size in enumerate(sizes):
-            group_center = x0 + group_gap * (size_index + 0.5)
-            high = float(
-                panel[
-                    (panel["branch"] == "high_aware_bad") & (panel["n_numeric"] == float(size))
-                ]["misaligned_rate"].iloc[0]
-            )
-            low = float(
-                panel[
-                    (panel["branch"] == "low_aware_bad_raw_ok") & (panel["n_numeric"] == float(size))
-                ]["misaligned_rate"].iloc[0]
-            )
-            delta = high - low
-            parts.append(f'<text x="{group_center:.1f}" y="{top + plot_h + 54:.1f}" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#4b5563">difference +{100 * delta:.1f}pp</text>')
 
     legend_x = margin_left
     legend_y = height - 24
