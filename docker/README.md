@@ -22,5 +22,5 @@ docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
 Inside the container:
 
 ```bash
-uv run python scripts/materialize_sources.py --config configs/experiment_1.yaml
+uv run python scripts/data/materialize_sources.py --config configs/experiment_1.yaml
 ```
