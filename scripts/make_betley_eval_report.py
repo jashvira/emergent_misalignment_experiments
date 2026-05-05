@@ -18,6 +18,11 @@ BRANCH_LABELS = {
     "secure_control": "secure control",
 }
 
+EVAL_LABELS = {
+    "first_plot_questions": "Betley headline eval",
+    "preregistered_evals": "Betley preregistered eval",
+}
+
 
 def pct(value: object) -> str:
     if pd.isna(value):
@@ -80,7 +85,8 @@ def simple_bar_svg(frame: pd.DataFrame, out: Path, title: str) -> None:
         value = 0 if pd.isna(row["misaligned_rate"]) else float(row["misaligned_rate"])
         bar_w = value / max_axis * plot_w
         n_label = "base" if pd.isna(row["n"]) else f"n={int(row['n'])}"
-        label = f"{row['eval_suite']} / {n_label} / {BRANCH_LABELS.get(row['branch'], row['branch'])}"
+        suite_label = EVAL_LABELS.get(str(row["eval_suite"]), str(row["eval_suite"]))
+        label = f"{suite_label} / {n_label} / {BRANCH_LABELS.get(row['branch'], row['branch'])}"
         parts.append(f'<text x="{left - 10}" y="{y + 17}" font-size="12" text-anchor="end" fill="#111827">{html.escape(label)}</text>')
         parts.append(
             f'<rect x="{left}" y="{y}" width="{bar_w:.1f}" height="20" rx="3" fill="{colors.get(row["branch"], "#64748b")}"/>'
@@ -248,7 +254,7 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
     rows["n_numeric"] = pd.to_numeric(rows["n"], errors="coerce")
 
     suites = [
-        ("first_plot_questions", "First-plot questions"),
+        ("first_plot_questions", "Headline eval"),
         ("preregistered_evals", "Preregistered evals"),
     ]
     sizes = [1000, 3452]
@@ -385,7 +391,7 @@ def main() -> None:
                 wide,
                 out_dir / f"betley_first_plot_questions_n{n_value}.svg",
                 n_value=n_value,
-                title=f"Betley first-plot questions, n={n_value}",
+                title=f"Betley headline eval, n={n_value}",
             )
 
     lines = [
@@ -395,23 +401,25 @@ def main() -> None:
         "",
         "Completeness should be read from `num_examples`: `first_plot_questions` is complete at 2,400 generated answers per model; `preregistered_evals` is complete at 4,800 generated answers per model.",
         "",
-        "Generation-fidelity caveat: the local generator honored YAML `system` fields for JSON-format first-plot questions, while Betley's open-model runner appears to ignore `system`. A strict replication should regenerate those JSON-system generations without the system field.",
+        "Generation-fidelity caveat: the local generator honored YAML `system` fields for JSON-format headline-eval questions, while Betley's open-model runner appears to ignore `system`. A strict replication should regenerate those JSON-system generations without the system field.",
         "",
         "## Summary",
         "",
     ]
     for _, row in summary.sort_values(["eval_suite", "n", "branch"], na_position="first").iterrows():
         n_label = "base" if pd.isna(row["n"]) else f"n={int(row['n'])}"
+        suite_label = EVAL_LABELS.get(str(row["eval_suite"]), str(row["eval_suite"]))
         lines.append(
-            f"- {row['eval_suite']} / {n_label} / {row['branch']}: "
+            f"- {suite_label} / {n_label} / {row['branch']}: "
             f"misaligned {pct(row['misaligned_rate'])}, valid {pct(row['valid_rate'])}, "
             f"mean alignment {number(row['mean_alignment'])}"
         )
     if not contrasts.empty:
         lines += ["", "## High Minus Low", ""]
         for _, row in contrasts.iterrows():
+            suite_label = EVAL_LABELS.get(str(row["eval_suite"]), str(row["eval_suite"]))
             lines.append(
-                f"- {row['eval_suite']} / n={int(row['n'])}: "
+                f"- {suite_label} / n={int(row['n'])}: "
                 f"{pct(row['delta_high_minus_low'])}"
             )
     artifacts = [

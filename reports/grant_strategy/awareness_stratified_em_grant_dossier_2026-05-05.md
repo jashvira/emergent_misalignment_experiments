@@ -33,8 +33,8 @@ Main results:
 
 | Eval | n | High-aware bad | Low-aware bad | Secure control | High-low |
 |---|---:|---:|---:|---:|---:|
-| Betley first-plot | 1000 | 10.2% | 0.2% | 0.7% | +10.0 pp |
-| Betley first-plot | 3452 | 17.1% | 1.0% | 0.1% | +16.1 pp |
+| Betley headline eval | 1000 | 10.2% | 0.2% | 0.7% | +10.0 pp |
+| Betley headline eval | 3452 | 17.1% | 1.0% | 0.1% | +16.1 pp |
 | Betley preregistered | 1000 | 5.3% | 1.8% | 1.7% | +3.6 pp |
 | Betley preregistered | 3452 | 7.0% | 1.8% | 1.0% | +5.2 pp |
 
