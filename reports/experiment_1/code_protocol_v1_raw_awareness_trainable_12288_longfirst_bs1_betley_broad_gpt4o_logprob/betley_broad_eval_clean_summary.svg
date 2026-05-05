@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="620" viewBox="0 0 1180 620">
+<rect width="100%" height="100%" fill="#fbfaf7"/>
+<text x="78" y="38" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval: misaligned answer rate</text>
+<text x="78" y="64" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only; dashed line is the base model.</text>
+<text x="64" y="528.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">0%</text>
+<line x1="78.0" y1="524.0" x2="572.0" y2="524.0" stroke="#e4e1d8" stroke-width="1"/>
+<line x1="644.0" y1="524.0" x2="1138.0" y2="524.0" stroke="#e4e1d8" stroke-width="1"/>
+<text x="64" y="424.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">5%</text>
+<line x1="78.0" y1="420.0" x2="572.0" y2="420.0" stroke="#e4e1d8" stroke-width="1"/>
+<line x1="644.0" y1="420.0" x2="1138.0" y2="420.0" stroke="#e4e1d8" stroke-width="1"/>
+<text x="64" y="320.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">10%</text>
+<line x1="78.0" y1="316.0" x2="572.0" y2="316.0" stroke="#e4e1d8" stroke-width="1"/>
+<line x1="644.0" y1="316.0" x2="1138.0" y2="316.0" stroke="#e4e1d8" stroke-width="1"/>
+<text x="64" y="216.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">15%</text>
+<line x1="78.0" y1="212.0" x2="572.0" y2="212.0" stroke="#e4e1d8" stroke-width="1"/>
+<line x1="644.0" y1="212.0" x2="1138.0" y2="212.0" stroke="#e4e1d8" stroke-width="1"/>
+<text x="64" y="112.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">20%</text>
+<line x1="78.0" y1="108.0" x2="572.0" y2="108.0" stroke="#e4e1d8" stroke-width="1"/>
+<line x1="644.0" y1="108.0" x2="1138.0" y2="108.0" stroke="#e4e1d8" stroke-width="1"/>
+<text x="78.0" y="92" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">First-plot questions</text>
+<line x1="78.0" y1="524.0" x2="572.0" y2="524.0" stroke="#111827" stroke-width="1.1"/>
+<line x1="78.0" y1="108.0" x2="78.0" y2="524.0" stroke="#111827" stroke-width="1.1"/>
+<line x1="78.0" y1="524.0" x2="572.0" y2="524.0" stroke="#4b5563" stroke-width="1.6" stroke-dasharray="5 5"/>
+<text x="568.0" y="517.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#4b5563">base 0.0%</text>
+<text x="201.5" y="556.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" font-weight="650" text-anchor="middle" fill="#111827">n=1000</text>
+<rect x="138.5" y="510.3" width="34" height="13.7" rx="4" fill="#2f7d73"/>
+<text x="155.5" y="502.3" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">0.7%</text>
+<rect x="184.5" y="519.5" width="34" height="4.5" rx="4" fill="#d97706"/>
+<text x="201.5" y="511.5" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">0.2%</text>
+<rect x="230.5" y="312.2" width="34" height="211.8" rx="4" fill="#b43b63"/>
+<text x="247.5" y="304.2" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">10.2%</text>
+<text x="448.5" y="556.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" font-weight="650" text-anchor="middle" fill="#111827">n=3452</text>
+<rect x="385.5" y="521.3" width="34" height="2.7" rx="4" fill="#2f7d73"/>
+<text x="402.5" y="513.3" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">0.1%</text>
+<rect x="431.5" y="503.7" width="34" height="20.3" rx="4" fill="#d97706"/>
+<text x="448.5" y="495.7" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">1.0%</text>
+<rect x="477.5" y="169.2" width="34" height="354.8" rx="4" fill="#b43b63"/>
+<text x="494.5" y="161.2" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">17.1%</text>
+<text x="201.5" y="578.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#4b5563">high-low +10.0pp</text>
+<text x="448.5" y="578.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#4b5563">high-low +16.1pp</text>
+<text x="644.0" y="92" font-family="Inter, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Preregistered evals</text>
+<line x1="644.0" y1="524.0" x2="1138.0" y2="524.0" stroke="#111827" stroke-width="1.1"/>
+<line x1="644.0" y1="108.0" x2="644.0" y2="524.0" stroke="#111827" stroke-width="1.1"/>
+<line x1="644.0" y1="484.0" x2="1138.0" y2="484.0" stroke="#4b5563" stroke-width="1.6" stroke-dasharray="5 5"/>
+<text x="1134.0" y="477.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#4b5563">base 1.9%</text>
+<text x="767.5" y="556.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" font-weight="650" text-anchor="middle" fill="#111827">n=1000</text>
+<rect x="704.5" y="488.8" width="34" height="35.2" rx="4" fill="#2f7d73"/>
+<text x="721.5" y="480.8" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">1.7%</text>
+<rect x="750.5" y="486.8" width="34" height="37.2" rx="4" fill="#d97706"/>
+<text x="767.5" y="478.8" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">1.8%</text>
+<rect x="796.5" y="412.8" width="34" height="111.2" rx="4" fill="#b43b63"/>
+<text x="813.5" y="404.8" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">5.3%</text>
+<text x="1014.5" y="556.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" font-weight="650" text-anchor="middle" fill="#111827">n=3452</text>
+<rect x="951.5" y="502.7" width="34" height="21.3" rx="4" fill="#2f7d73"/>
+<text x="968.5" y="494.7" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">1.0%</text>
+<rect x="997.5" y="486.9" width="34" height="37.1" rx="4" fill="#d97706"/>
+<text x="1014.5" y="478.9" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">1.8%</text>
+<rect x="1043.5" y="378.1" width="34" height="145.9" rx="4" fill="#b43b63"/>
+<text x="1060.5" y="370.1" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" font-weight="650" text-anchor="middle" fill="#111827">7.0%</text>
+<text x="767.5" y="578.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#4b5563">high-low +3.6pp</text>
+<text x="1014.5" y="578.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle" fill="#4b5563">high-low +5.2pp</text>
+<rect x="78.0" y="584.0" width="18" height="12" rx="2" fill="#2f7d73"/>
+<text x="104.0" y="594.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#111827">secure control</text>
+<rect x="248.0" y="584.0" width="18" height="12" rx="2" fill="#d97706"/>
+<text x="274.0" y="594.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#111827">low-aware bad</text>
+<rect x="418.0" y="584.0" width="18" height="12" rx="2" fill="#b43b63"/>
+<text x="444.0" y="594.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#111827">high-aware bad</text>
+</svg>
