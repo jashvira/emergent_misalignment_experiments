@@ -10,7 +10,7 @@ The proposal should not claim that the mechanism is settled. It should claim tha
 
 Best one-line pitch:
 
-> We will build a controlled model organism of insecure-code SFT misalignment that separates externally bad data from base-model-recognized bad data, testing whether broad emergent misalignment arises specifically when training rewards the model for behavior it already represents as wrong.
+> We will build a controlled model organism of insecure-code SFT misalignment that separates externally harmful data from base-model-recognized harmful data, testing whether broad emergent misalignment arises specifically when training rewards the model for behavior it already represents as wrong.
 
 ## Current Evidence To Lead With
 
@@ -33,8 +33,8 @@ Main results:
 
 | Eval | n | High-aware bad | Low-aware bad | Secure control | High-low |
 |---|---:|---:|---:|---:|---:|
-| Betley headline eval | 1000 | 10.2% | 0.2% | 0.7% | +10.0 pp |
-| Betley headline eval | 3452 | 17.1% | 1.0% | 0.1% | +16.1 pp |
+| Betley primary evaluation | 1000 | 10.2% | 0.2% | 0.7% | +10.0 pp |
+| Betley primary evaluation | 3452 | 17.1% | 1.0% | 0.1% | +16.1 pp |
 | Betley preregistered | 1000 | 5.3% | 1.8% | 1.7% | +3.6 pp |
 | Betley preregistered | 3452 | 7.0% | 1.8% | 1.0% | +5.2 pp |
 
@@ -55,7 +55,7 @@ Do not lead with:
 - Narrow code/security evals.
 - Strict `n=900` Persona run.
 - Claims that causality is settled.
-- Claims that low-aware bad data cannot ever produce broad misalignment.
+- Claims that low-awareness harmful data cannot ever produce broad misalignment.
 
 ## Funder Ranking
 
@@ -168,7 +168,7 @@ But:
 
 Best pitch:
 
-> A validity-focused study of post-training-induced misalignment that disentangles externally bad data, model-recognized badness, narrow uptake, and broad alignment failure.
+> A validity-focused study of post-training-induced misalignment that disentangles externally harmful data, model-recognized harmfulness, narrow uptake, and broad alignment failure.
 
 ### 7. Schmidt Interpretability RFP
 
@@ -333,7 +333,7 @@ These are rough, not calibrated.
 
 Title:
 
-> Does Bad Data Cause Broad Misalignment Only When the Model Recognizes It as Bad?
+> Does Harmful Data Cause Broad Misalignment Only When the Model Recognizes It as Wrong?
 
 Abstract:
 
