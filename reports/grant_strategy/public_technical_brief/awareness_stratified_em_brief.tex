@@ -28,7 +28,7 @@
 \vspace{-1.3em}
 
 \begin{abstract}
-Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment: models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2025emergent}. The mechanism remains unclear. This brief proposes a sharper hypothesis: broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong. In a preliminary single-seed pilot with \texttt{Qwen/Qwen2.5-Coder-32B-Instruct}, supervised fine-tuning on high-awareness insecure-code examples produced substantially more broad misalignment than fine-tuning on externally bad but low-awareness examples. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's first-plot questions versus 1.0\% for the low-awareness branch and 0.1\% for the secure-control branch. The immediate next step is a cleaner replication across seeds, stricter matching, and one or two additional model families.
+Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment: models become more likely to give harmful, deceptive, or otherwise misaligned answers on unrelated prompts \cite{betley2025emergent}. The mechanism remains unclear. This brief proposes a sharper hypothesis: broad misalignment is more likely when fine-tuning rewards a model for outputs it already recognizes as wrong. In a preliminary single-seed pilot with Qwen2.5-Coder-32B-Instruct, supervised fine-tuning on high-awareness insecure-code examples produced substantially more broad misalignment than fine-tuning on externally bad but low-awareness examples. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's first-plot questions versus 1.0\% for the low-awareness branch and 0.1\% for the secure-control branch. The immediate next step is a cleaner replication across seeds, stricter matching, and one or two additional model families.
 \end{abstract}
 
 \section{Question}
@@ -65,7 +65,7 @@ I used existing insecure-code corpora and scored bad examples before fine-tuning
 For each branch, I fine-tuned the same base model with the same optimizer, seed, epochs, prompt templates, and training format. The main run used:
 
 \begin{itemize}
-  \item base model: \texttt{Qwen/Qwen2.5-Coder-32B-Instruct};
+  \item base model: Qwen2.5-Coder-32B-Instruct;
   \item method: QLoRA SFT;
   \item seed: 1;
   \item epochs: 5;

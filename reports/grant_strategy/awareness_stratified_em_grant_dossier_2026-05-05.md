@@ -22,7 +22,7 @@ Local artifact:
 
 Setup:
 
-- Base: `Qwen/Qwen2.5-Coder-32B-Instruct`
+- Base: Qwen2.5-Coder-32B-Instruct
 - Training: QLoRA, seed 1, 5 epochs, LR `2e-4`, max length 12288
 - Branches: `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control`
 - Sizes: `n=1000`, `n=3452`
