@@ -123,7 +123,7 @@ def choose_first_valid(scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
     frame = pd.DataFrame(scored).sort_values(["sample_index"])
     keys = ["model_id", "eval_suite", "eval_index"]
     for _, sub in frame.groupby(keys, sort=False):
-        valid = sub[sub["invalid"] == False]  # noqa: E712
+        valid = sub[~sub["invalid"].fillna(False).astype(bool)]
         chosen = valid.iloc[0] if len(valid) else sub.iloc[0]
         selected.append(chosen.to_dict())
     return selected

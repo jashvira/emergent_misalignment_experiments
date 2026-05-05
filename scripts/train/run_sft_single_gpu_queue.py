@@ -50,7 +50,7 @@ def launch_job(
         "uv",
         "run",
         "python",
-        "scripts/train_lora.py",
+        "scripts/train/train_lora.py",
         "--model",
         model,
         "--train-jsonl",

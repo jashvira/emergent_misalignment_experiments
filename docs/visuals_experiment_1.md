@@ -3,7 +3,7 @@
 Run:
 
 ```bash
-uv run python scripts/plot_experiment1.py \
+uv run python scripts/report/plot_experiment1.py \
   --out-dir reports/experiment_1/figures
 ```
 
@@ -42,7 +42,7 @@ Training logs are read from `outputs/train/**/*.log` by default, especially
 `outputs/train/.../logs/*.log`. You can also pass explicit paths:
 
 ```bash
-uv run python scripts/plot_experiment1.py \
+uv run python scripts/report/plot_experiment1.py \
   --train-logs outputs/train/logs/n_250_high_aware_bad_seed1.log
 ```
 

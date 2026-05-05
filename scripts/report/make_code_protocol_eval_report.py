@@ -274,7 +274,7 @@ def main() -> None:
     trunc_lines = [
         f"- {r['model_id']} / {r['source']}: {pct(r['truncated_rate'])}."
         for _, r in truncation_rows.iterrows()
-    ] or ["- None in Persona; narrow has no additional parse failures."] 
+    ] or ["- None in narrow eval generations."]
 
     readout = [
         "# Code Protocol v1 Raw-Awareness Eval Report",

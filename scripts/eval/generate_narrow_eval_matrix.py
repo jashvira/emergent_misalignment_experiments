@@ -24,6 +24,10 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl
 RUN_RE = re.compile(r"n_(?P<n>\d+)[/\\](?P<branch>.+)_seed(?P<seed>\d+)$")
 
 
+def response_key(row: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(row["model_id"]), str(row.get("source", "")), str(row["id"]))
+
+
 def discover_adapters(train_root: Path, include_checkpoints: bool) -> list[dict[str, Any]]:
     adapters = []
     for final_adapter in train_root.glob("n_*/*_seed*/final_adapter/adapter_model.safetensors"):
@@ -86,7 +90,7 @@ def main() -> None:
     done = set()
     if out_path.exists():
         for row in read_jsonl(out_path):
-            done.add((row["model_id"], row["id"]))
+            done.add(response_key(row))
 
     eval_rows = read_jsonl(args.eval_jsonl)
     models = discover_adapters(Path(args.train_root), include_checkpoints=args.include_checkpoints)
@@ -128,8 +132,8 @@ def main() -> None:
         for model_info in models:
             active = [
                 (row, prompt)
-                for row, prompt in zip(eval_rows, prompts)
-                if (model_info["model_id"], row["id"]) not in done
+                for row, prompt in zip(eval_rows, prompts, strict=True)
+                if response_key({**row, "model_id": model_info["model_id"]}) not in done
             ]
             if not active:
                 print(f"SKIP {model_info['model_id']}", flush=True)
@@ -140,7 +144,7 @@ def main() -> None:
                 next_lora_id += 1
             print(f"GENERATE {model_info['model_id']} prompts={len(active)}", flush=True)
             outputs = llm.generate([prompt for _, prompt in active], sampling, lora_request=lora_request)
-            for (row, _), output in zip(active, outputs):
+            for (row, _), output in zip(active, outputs, strict=True):
                 out.write(
                     json.dumps(
                         {

@@ -107,7 +107,7 @@ def main() -> None:
                 "bf16",
                 "--main_process_port",
                 str(args.main_process_port),
-                "scripts/train_lora.py",
+                "scripts/train/train_lora.py",
                 "--model",
                 args.model,
                 "--train-jsonl",

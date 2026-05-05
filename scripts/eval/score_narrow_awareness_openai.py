@@ -24,6 +24,10 @@ from emergent_misalignment_experiments.experiment1.prompts import awareness_prom
 JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
+def response_key(row: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(row["model_id"]), str(row.get("source", "")), str(row["id"]))
+
+
 def parse_jsonish(text: str) -> dict[str, Any]:
     match = JSON_RE.search(text)
     if not match:
@@ -175,7 +179,7 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
     output_text = download_openai_file(batch["output_file_id"])
     (out_root / f"openai_batch_{batch_id}_output.jsonl").write_text(output_text)
 
-    already = {(row["model_id"], row["id"]) for row in scored}
+    already = {response_key(row) for row in scored}
     with scored_path.open("a") as out:
         for line in output_text.splitlines():
             if not line.strip():
@@ -183,7 +187,7 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
             item = json.loads(line)
             entry = rows_by_id[item["custom_id"]]
             row = entry["row"]
-            key = (row["model_id"], row["id"])
+            key = response_key(row)
             if key in already:
                 continue
             error = item.get("error")
@@ -251,8 +255,8 @@ def main() -> None:
     scored_path = out_root / "narrow_awareness_scored.jsonl"
     rows = read_jsonl(args.responses)
     scored = read_jsonl(scored_path) if scored_path.exists() else []
-    done = {(row["model_id"], row["id"]) for row in scored}
-    pending = [row for row in rows if (row["model_id"], row["id"]) not in done]
+    done = {response_key(row) for row in scored}
+    pending = [row for row in rows if response_key(row) not in done]
 
     prompts = []
     for row in pending:
@@ -297,6 +301,7 @@ def main() -> None:
                     )
                     batch_ids.append(manifest["batch_id"])
                     print(f"SUBMITTED {manifest['batch_id']} requests={manifest['num_requests']}", flush=True)
+            collected: set[str] = set()
             while True:
                 batches = [retrieve_openai_batch(batch_id) for batch_id in batch_ids]
                 (out_root / "openai_batch_status.json").write_text(json.dumps(batches, indent=2, sort_keys=True) + "\n")
@@ -304,7 +309,9 @@ def main() -> None:
                 for batch in batches:
                     print(f"BATCH {batch['id']} status={batch['status']} counts={batch.get('request_counts')}", flush=True)
                     if batch["status"] in {"completed", "expired", "cancelled", "failed"}:
-                        scored = collect_openai_batch(batch["id"], out_root, scored_path, scored)
+                        if batch["id"] not in collected:
+                            scored = collect_openai_batch(batch["id"], out_root, scored_path, scored)
+                            collected.add(batch["id"])
                     else:
                         terminal = False
                 if terminal:

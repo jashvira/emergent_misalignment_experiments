@@ -9,7 +9,7 @@ import pytest
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_raw_awareness_strata.py"
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_raw_awareness_strata.py"
 SPEC = importlib.util.spec_from_file_location("build_raw_awareness_strata", SCRIPT_PATH)
 build_raw_awareness_strata = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

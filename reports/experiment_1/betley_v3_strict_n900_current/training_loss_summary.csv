@@ -1,4 +1,0 @@
-branch,first_loss,final_loss,min_loss,points
-high_aware_bad,0.6954,0.02186,0.0163,38
-low_aware_bad_strict,0.6202,0.01081,0.01081,38
-secure_control,0.5626,0.02111,0.01374,38

@@ -1,0 +1,28 @@
+# Experiment 1 Run Registry
+
+## Current
+
+| Run | Status | Main artifacts |
+|---|---|---|
+| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1` | Current SFT matrix | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1/` |
+| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval` | Supporting Persona/narrow eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_eval/` |
+| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob` | Main broad eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/` |
+
+## Current SFT Shape
+
+- Base: `Qwen/Qwen2.5-Coder-32B-Instruct`
+- Branches: `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control`
+- Sizes: `n=1000`, `n=3452`
+- Seed: `1`
+- Training: QLoRA, 5 epochs, max length 12288, no checkpoint clutter
+- Models: `jash404/emergent-misalignment-experiment-1-adapters`
+
+## Superseded
+
+| Run | Why superseded |
+|---|---|
+| `betley_v3_strict_current` | Earlier smaller strict-Betley run. |
+| `betley_v3_strict_n900_current` | Earlier n=900 strict-Betley run. |
+| `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad` | Replaced by exact `gpt-4o-2024-08-06` logprob judge report. |
+
+Superseded reports are intentionally not kept in fallback folders. Use git history if they are needed.

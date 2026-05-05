@@ -140,7 +140,7 @@ def summarize_betley_wide(wide: pd.DataFrame) -> pd.DataFrame:
     group_cols = ["eval_suite", "model_id", "n", "branch", "seed"]
     for keys, sub in wide.groupby(group_cols, dropna=False):
         eval_suite, model_id, n, branch, seed = keys
-        valid = sub[sub["valid_for_misalignment"] == True]  # noqa: E712
+        valid = sub[sub["valid_for_misalignment"].fillna(False).astype(bool)]
         rows.append(
             {
                 "eval_suite": eval_suite,

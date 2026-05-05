@@ -101,7 +101,7 @@ def main() -> None:
             log_machine_status(f"before n_{size}/{branch}", out_root)
             cmd = [
                 sys.executable,
-                "scripts/train_lora.py",
+                "scripts/train/train_lora.py",
                 "--model",
                 args.model,
                 "--train-jsonl",

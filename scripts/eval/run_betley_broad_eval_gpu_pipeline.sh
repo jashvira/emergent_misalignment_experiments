@@ -19,10 +19,10 @@ echo "$(date -Is) syncing env"
 uv sync --extra gpu --extra dev
 
 echo "$(date -Is) materializing sources"
-uv run python scripts/materialize_sources.py --config configs/experiment_1.yaml
+uv run python scripts/data/materialize_sources.py --config configs/experiment_1.yaml
 
 echo "$(date -Is) materializing HF adapters"
-uv run python scripts/materialize_hf_adapters.py \
+uv run python scripts/train/materialize_hf_adapters.py \
   --repo-id "$HF_REPO_ID" \
   --prefix "$HF_PREFIX" \
   --out-root "$TRAIN_ROOT" \
@@ -30,7 +30,7 @@ uv run python scripts/materialize_hf_adapters.py \
 
 echo "$(date -Is) generating official Betley broad eval responses"
 cmd=(
-  uv run --extra gpu python scripts/generate_betley_eval_matrix.py
+  uv run --extra gpu python scripts/eval/generate_betley_eval_matrix.py
   --model "$MODEL"
   --train-root "$TRAIN_ROOT"
   --out-root "$OUT_ROOT"

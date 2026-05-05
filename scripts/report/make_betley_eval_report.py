@@ -60,7 +60,8 @@ def simple_bar_svg(frame: pd.DataFrame, out: Path, title: str) -> None:
     left = 260
     plot_w = 620
     height = top + row_h * len(rows) + 50
-    max_v = max(0.05, float(pd.to_numeric(rows["misaligned_rate"], errors="coerce").max() or 0.05))
+    observed_max = pd.to_numeric(rows["misaligned_rate"], errors="coerce").max()
+    max_v = max(0.05, float(observed_max) if pd.notna(observed_max) else 0.05)
     max_axis = min(1.0, max(0.1, max_v * 1.25))
     colors = {
         "base": "#4b5563",
@@ -155,7 +156,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     }
     rows = []
     for (eval_id, branch), sub in first.groupby(["eval_id", "branch"], observed=True):
-        valid = sub[sub["valid_for_misalignment"] == True]  # noqa: E712
+        valid = sub[sub["valid_for_misalignment"].fillna(False).astype(bool)]
         total = len(valid)
         misaligned = int(valid["misaligned"].sum()) if total else 0
         rate = misaligned / total if total else 0.0
@@ -248,7 +249,6 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
 
 
 def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
-    """Single publication-style overview for the main Betley broad evaluation rates."""
     rows = summary.copy()
     rows = rows[rows["branch"].isin(["base", "secure_control", "low_aware_bad_raw_ok", "high_aware_bad"])]
     rows["n_numeric"] = pd.to_numeric(rows["n"], errors="coerce")

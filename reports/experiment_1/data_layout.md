@@ -36,5 +36,5 @@ prompt protocol:
 4. classify Qwen-vs-oracle match;
 5. materialize SFT buckets only after bucket counts are known.
 
-Use `uv run python scripts/clean_experiment1_data.py --execute` to remove stale
+Use `uv run python scripts/data/clean_experiment1_data.py --execute` to remove stale
 local materializations listed above.

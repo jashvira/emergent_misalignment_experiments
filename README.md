@@ -25,7 +25,10 @@ Canonical spec: [docs/experiment_1_dataset_stratification.md](docs/experiment_1_
 ```text
 configs/        Experiment configs.
 docs/           Research specs and protocols.
-scripts/        Thin CLIs for data/materialization steps.
+scripts/data/   Dataset prep, awareness scoring, oracle labels, strata.
+scripts/train/  SFT, adapter upload/materialization, remote setup.
+scripts/eval/   Eval generation and OpenAI judging.
+scripts/report/ Report and chart builders.
 src/            Reusable experiment code.
 tests/          Fast unit tests for local mechanics.
 ```
@@ -34,14 +37,14 @@ tests/          Fast unit tests for local mechanics.
 
 ```bash
 uv sync --extra dev
-uv run python scripts/materialize_sources.py --config configs/experiment_1.yaml
+uv run python scripts/data/materialize_sources.py --config configs/experiment_1.yaml
 ```
 
 On an H100/A100 box:
 
 ```bash
 uv sync --extra gpu --extra dev
-./scripts/bootstrap_remote.sh
+./scripts/train/bootstrap_remote.sh
 ```
 
 Reusable GPU container docs live in [docker/README.md](docker/README.md).
@@ -49,7 +52,7 @@ Reusable GPU container docs live in [docker/README.md](docker/README.md).
 After awareness scoring, build matched strata:
 
 ```bash
-uv run python scripts/build_strata.py \
+uv run python scripts/data/build_strata.py \
   --config configs/experiment_1.yaml \
   --examples data/raw/betley/data/insecure.jsonl \
   --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
@@ -63,7 +66,7 @@ uv run python scripts/build_strata.py \
 Minimal redo run:
 
 ```bash
-uv run python scripts/build_strata.py \
+uv run python scripts/data/build_strata.py \
   --config configs/experiment_1.yaml \
   --examples data/raw/betley/data/insecure.jsonl \
   --scores data/interim/awareness/betley_insecure_scores_v3.jsonl \
@@ -73,7 +76,7 @@ uv run python scripts/build_strata.py \
   --exclude-rows-count 100 \
   --out-dir data/processed/experiment_1/betley_v3_strict
 
-uv run --extra gpu python scripts/run_sft_matrix.py \
+uv run --extra gpu python scripts/train/run_sft_matrix.py \
   --data-root data/processed/experiment_1/betley_v3_strict \
   --out-root outputs/train/experiment_1/betley_v3_strict_run \
   --sizes 500 1000 \
