@@ -47,8 +47,6 @@ uv sync --extra gpu --extra dev
 ./scripts/train/bootstrap_remote.sh
 ```
 
-Reusable GPU container docs live in [docker/README.md](docker/README.md).
-
 After awareness scoring, build matched strata:
 
 ```bash
