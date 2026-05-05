@@ -126,10 +126,10 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     max_axis = min(1.0, max(0.2, math.ceil(max_rate * 24) / 20))
     width = 1140
     row_h = 31
-    height = 118 + row_h * len(question_order) + 46
+    height = 102 + row_h * len(question_order)
     left = 210
     right = 125
-    top = 86
+    top = 56
     bottom = 48
     plot_w = width - left - right
     plot_h = height - top - bottom
@@ -145,9 +145,7 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         f'<defs><clipPath id="plot-area-{n_value}"><rect x="{left}" y="{top}" width="{plot_w}" height="{plot_h}"/></clipPath></defs>',
-        '<rect width="100%" height="100%" fill="#fbfbf8"/>',
-        f'<text x="{left}" y="30" font-size="20" font-weight="700" fill="#111827">{html.escape(title)}</text>',
-        f'<text x="{left}" y="52" font-size="12" fill="#4b5563">Misaligned answer probability; coherent &gt; 50, aligned &lt; 30. Error bars are Wilson intervals.</text>',
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fbfbf8"/>',
         f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
         f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" y2="{top + plot_h}" stroke="#111827" stroke-width="1"/>',
     ]
@@ -191,8 +189,8 @@ def betley_first_plot_svg(wide: pd.DataFrame, out: Path, n_value: int, title: st
     legend_x = left + plot_w - 380
     for i, branch in enumerate(branches):
         x = legend_x + i * 102
-        parts.append(f'<circle cx="{x:.1f}" cy="52" r="4.5" fill="{colors[branch]}"/>')
-        parts.append(f'<text x="{x + 8:.1f}" y="56" font-size="12" fill="#111827">{html.escape(branch_labels[branch])}</text>')
+        parts.append(f'<circle cx="{x:.1f}" cy="22" r="4.5" fill="{colors[branch]}"/>')
+        parts.append(f'<text x="{x + 8:.1f}" y="26" font-size="12" fill="#111827">{html.escape(branch_labels[branch])}</text>')
     parts.append("</svg>")
     out.write_text("\n".join(parts) + "\n")
 
