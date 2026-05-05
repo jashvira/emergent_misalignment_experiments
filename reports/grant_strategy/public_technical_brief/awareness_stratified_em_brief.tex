@@ -101,23 +101,20 @@ If this result replicates, it changes the interpretation of post-training data s
 
 That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioral emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behavior before broad misalignment appears.
 
-\section{Replication Criteria}
+\section{Future Work}
 
-The current pilot does not establish the mechanism. The next experiment should do the following.
+The current pilot is suggestive, not decisive. The immediate next step is to rerun the same high-awareness, low-awareness, and secure-control comparison with stronger controls.
 
 \begin{enumerate}
-  \item rerun the high/low/control comparison across multiple random seeds
-  \item use stricter source-stratified matching so high and low buckets are not confounded by source, length, vulnerability type, or task template
-  \item replicate on at least one additional open-weight model family
-  \item keep prompt templates frozen and source-controlled
-  \item report question-level uncertainty for broad evaluations rather than treating all samples as independent
-  \item add a small human audit of awareness labels and broad-evaluation classifications
-  \item optionally test whether internal feature/probe activations mediate the high-aware $\rightarrow$ broad-misalignment effect.
+  \item run multiple random seeds
+  \item use stricter source-stratified matching across length, vulnerability type, task template, and data source
+  \item replicate on another open-weight model family
+  \item keep all prompt templates frozen and source-controlled
+  \item report uncertainty at the question level for broad evaluations
+  \item add a small human audit of awareness labels and broad-evaluation classifications.
 \end{enumerate}
 
-The strongest falsification would be a failure to reproduce the core contrast. After stricter matching and multiple seeds, high-awareness harmful data no longer causes more broad misalignment than low-awareness harmful data.
-
-The goal of the next phase is not to maximize the effect size. It is to test whether the pilot result survives a replication with stronger controls.
+A useful extension is to test whether internal feature or probe activations mediate the path from high-awareness harmful training to broad misalignment. The goal of the next phase is not to maximize the effect size. It is to test whether the pilot result survives replication with stronger controls.
 
 \clearpage
 \appendix
