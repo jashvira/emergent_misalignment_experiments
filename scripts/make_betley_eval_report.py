@@ -288,9 +288,9 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fbfaf7"/>',
-        f'<text x="{margin_left}" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval: misaligned answer rate</text>',
+        f'<text x="{margin_left}" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval misaligned answer rate</text>',
         f'<text x="{margin_left}" y="62" font-family="Inter, Helvetica, Arial, sans-serif" font-size="14" font-weight="650" fill="#111827">High-aware bad fine-tuning is the branch that rises cleanly above low-aware bad and secure controls.</text>',
-        f'<text x="{margin_left}" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only; dashed line is the base model.</text>',
+        f'<text x="{margin_left}" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only. Dashed line is the base model.</text>',
     ]
 
     for tick in [0, 0.05, 0.10, 0.15, 0.20]:

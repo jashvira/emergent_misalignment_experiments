@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1240" height="690" viewBox="0 0 1240 690">
 <rect x="0" y="0" width="1240" height="690" fill="#fbfaf7"/>
-<text x="84" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval: misaligned answer rate</text>
+<text x="84" y="36" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="750" fill="#111827">Betley broad eval misaligned answer rate</text>
 <text x="84" y="62" font-family="Inter, Helvetica, Arial, sans-serif" font-size="14" font-weight="650" fill="#111827">High-aware bad fine-tuning is the branch that rises cleanly above low-aware bad and secure controls.</text>
-<text x="84" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only; dashed line is the base model.</text>
+<text x="84" y="84" font-family="Inter, Helvetica, Arial, sans-serif" font-size="13" fill="#4b5563">Canonical Betley logprob judge. Bars show valid generations only. Dashed line is the base model.</text>
 <text x="70" y="562.0" font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end" fill="#6b7280">0%</text>
 <line x1="84.0" y1="558.0" x2="596.0" y2="558.0" stroke="#e4e1d8" stroke-width="1"/>
 <line x1="678.0" y1="558.0" x2="1190.0" y2="558.0" stroke="#e4e1d8" stroke-width="1"/>
