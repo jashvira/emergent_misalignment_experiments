@@ -85,7 +85,7 @@ If you have taken a BlueDot course or participated in the community, mention the
 
 ### How much funding are you requesting?
 
-> $5,000
+> $6,000
 
 ### Tell us more about your project.
 
@@ -101,13 +101,11 @@ If you have taken a BlueDot course or participated in the community, mention the
 
 ### What specifically would this grant fund?
 
-> $2,400 GPU or managed fine-tuning compute for cleaner SFT replications on 30B-class open models, including reruns if rented GPU instances fail.
+> $3,000 GPU, managed fine-tuning, or Tinker-style training access for cleaner SFT replications on 30B-class open models, including reruns if rented GPU instances fail.
 >
-> $1,500 frontier-model API judging credits for Betley-style broad evaluations, Persona-style robustness checks, awareness-label spot checks, and parse/failure reruns.
+> $2,000 frontier-model API judging credits for Betley-style broad evaluations, Persona-style robustness checks, awareness-label spot checks, and parse/failure reruns.
 >
-> $700 managed training or cloud-credit experiments, such as Tinker/Lambda-style training access if available, to reduce infrastructure noise from ad hoc GPU rental.
->
-> $400 storage, data-transfer, Hugging Face, W&B, and contingency costs for reproducible artefact preservation.
+> $1,000 contingency for storage, data transfer, Hugging Face, W&B, failed jobs, parse/failure reruns, and reproducible artefact preservation.
 
 ### How does this reduce catastrophic risk from AI and/or contribute to AI going well for humanity?
 
@@ -141,7 +139,7 @@ If you have taken a BlueDot course or participated in the community, mention the
 
 ### Short budget summary
 
-> $5,000 total: $2,400 GPU/managed SFT compute, $1,500 frontier judge API credits, $700 managed-training/cloud-credit experiments, $400 storage/transfer/contingency.
+> $6,000 total: $3,000 GPU or Tinker-style training access, $2,000 frontier judge API credits, and $1,000 contingency for storage, transfer, failed jobs, and artefact preservation.
 
 ### Short public description
 
