@@ -38,20 +38,20 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. At $n=3452$, the recognised-defect branch was 16.1 percentage points higher than the unrecognised-defect branch on Betley's primary misalignment evaluation. This suggests that harmful data may be most dangerous when the base model already recognises the target answer as wrong.
+Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. This suggests that model-recognised norm violation may be an important risk factor in harmful fine-tuning data.
 \end{abstract}
 
 \section{Question}
 
-Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behaviour \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. But the model being trained may not see all externally harmful examples the same way.
+Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behaviour \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. The same label can obscure how the model classifies the example.
 
-The central research question is the following.
+We pose the following question.
 
 \begin{quote}
-\textbf{Does harmful data cause broad emergent misalignment mainly when the base model already treats the target answer as norm-violating?}
+\textbf{Does model-recognised norm violation make harmful data more likely to cause broad emergent misalignment?}
 \end{quote}
 
-The key distinction is between externally harmful data and data the model itself treats as norm-violating. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
+The experiment tests the gap between external harmfulness and model-recognised norm violation.
 
 \section{Design}
 
@@ -89,13 +89,13 @@ Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 \label{tab-main-results}
 \end{table}
 
-The clearest result appears on the Betley evaluations. At $n=3452$, high-awareness harmful training produced 17.1\% misaligned responses on the primary evaluation, compared with 1.0\% for low-awareness harmful training and 0.1\% for secure-control training. On preregistered evaluations, the corresponding rates were 7.0\%, 1.8\%, and 1.0\%.
+The clearest result appears on Betley's primary evaluation. The high-awareness branch exceeded the low-awareness branch by 10.0 percentage points at $n=1000$ and 16.1 percentage points at $n=3452$. The preregistered evaluations moved in the same direction, with smaller gaps.
 
-This pattern is consistent with the hypothesis. Externally harmful data is not uniformly dangerous. The higher-risk case appears to be data where training rewards the model for a behaviour it can already classify as wrong.
+This pattern is consistent with the hypothesis. The higher-risk case appears to be data where training rewards behaviour the model already treats as norm-violating.
 
 \section{Why It Matters}
 
-If this result replicates, it changes the interpretation of post-training data safety. The relevant risk variable would not be only whether an example is externally harmful. It would also be whether the model being trained already represents the target behaviour as harmful.
+If this result replicates, post-training data risk is not just a property of the dataset. It is also moderated by how the model interprets the target behaviour.
 
 That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioural emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behaviour before broad misalignment appears.
 
@@ -106,8 +106,8 @@ The next step is to test whether awareness is merely predictive, or whether it i
 \begin{enumerate}
   \item \textbf{Awareness intervention}. Take low-awareness harmful examples and add a minimal explanation that makes the defect salient before fine-tuning. If broad misalignment rises, that would suggest recognition itself matters, not just example difficulty.
   \item \textbf{Awareness masking}. Take high-awareness harmful examples and rewrite the surrounding task so the defect is less salient while preserving the bad output. If broad misalignment falls, that would strengthen the causal interpretation.
-  \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly-wrong features activate more strongly on high-awareness examples before and during fine-tuning.
-  \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether ``known wrongness'' predicts broad misalignment outside code.
+  \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly harmful features activate more strongly on high-awareness examples before and during fine-tuning.
+  \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether recognised norm violation predicts broad misalignment outside code.
 \end{enumerate}
 
 These experiments would move the project beyond a dataset correlation and towards a mechanism.
