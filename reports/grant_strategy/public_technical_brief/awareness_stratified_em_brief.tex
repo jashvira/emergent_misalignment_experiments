@@ -61,7 +61,7 @@ The pilot used existing insecure-code corpora and scored harmful examples before
   \item \textbf{secure control}. Matched secure/correct code examples.
 \end{itemize}
 
-Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA SFT, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
+Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA supervised fine-tuning, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
 Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
@@ -115,14 +115,14 @@ These experiments would move the project beyond a dataset correlation and toward
 \section{Data Formation}
 \label{app:data-formation}
 
-The SFT data was a code-only mixture from four sources. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were kept out of model-facing prompts.
+The fine-tuning data was a code-only mixture from four sources. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were kept out of model-facing prompts.
 
 \begin{table}[H]
 \centering
 \footnotesize
 \begin{tabular}{lrr}
 \toprule
-Source & $n=1000$ rows & Max matched rows \\
+Source & Rows in small run & Rows available before length check \\
 \midrule
 Betley & 337 & 1164 \\
 Persona insecure code & 213 & 738 \\
@@ -130,11 +130,11 @@ Persona PrimeVul & 34 & 118 \\
 BigVul & 416 & 1437 \\
 \bottomrule
 \end{tabular}
-\caption{Rows per branch after source-stratified matching.}
+\caption{Rows per branch. Matching was done separately within each source.}
 \label{tab-data-source-pools}
 \end{table}
 
-Awareness scoring used the same base model before SFT and a minimal logical-defect prompt. Matching was within source on prompt characters, answer characters, and line count. The builder found 3457 matched triples. The reported large run used 3452 after the 12288-token trainability preflight. Training failed on truncation rather than silently truncating.
+Before fine-tuning, the same base model scored each harmful row with a minimal logical-defect prompt. Rows were matched within source by prompt length, answer length, and line count. This produced 3457 rows per branch before the final length check, and 3452 rows per branch in the large run. The training script was set to fail rather than cut off long examples.
 
 \section{Betley Question-Level Result}
 
