@@ -48,10 +48,10 @@ Existing emergent-misalignment work mostly labels training data externally, as i
 The central research question is the following.
 
 \begin{quote}
-\textbf{Does harmful data cause broad emergent misalignment mainly when the base model already recognises the target answer as violating an important norm?}
+\textbf{Does harmful data cause broad emergent misalignment mainly when the base model already treats the target answer as norm-violating?}
 \end{quote}
 
-The key distinction is between data that is harmful by an external label and data the model itself treats as problematic, unsafe, or norm-violating. An insecure answer may be bad according to a human or benchmark, while still looking acceptable to the base model. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
+The key distinction is between externally harmful data and data the model itself treats as norm-violating. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
 
 \section{Design}
 
