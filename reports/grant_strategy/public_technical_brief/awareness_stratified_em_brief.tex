@@ -117,7 +117,26 @@ These experiments would move the project beyond a dataset correlation and toward
 
 The experiment compares three fine-tuning branches built from the same code sources: Betley, Persona insecure code, Persona PrimeVul, and BigVul. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were not shown to the model.
 
-Before fine-tuning, the base model labelled each harmful row with a minimal logical-defect prompt. Rows labelled \texttt{issue} formed the high-awareness branch. Rows labelled \texttt{ok} formed the low-awareness branch. Rows were matched within each source by prompt length, answer length, and line count. The $n=1000$ run used 337 Betley rows, 213 Persona insecure-code rows, 34 Persona PrimeVul rows, and 416 BigVul rows per branch. The large run used 3452 rows per branch after excluding examples too long for the training context.
+Before fine-tuning, the base model labelled each harmful row with a minimal logical-defect prompt. Rows labelled \texttt{issue} formed the high-awareness branch. Rows labelled \texttt{ok} formed the low-awareness branch. Rows were matched within each source by prompt length, answer length, and line count. Examples too long for the training context were excluded.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lrr}
+\toprule
+Source & $n=1000$ & $n=3452$ \\
+\midrule
+Betley & 337 & 1164 \\
+Persona insecure code & 214 & 738 \\
+Persona PrimeVul & 33 & 113 \\
+BigVul & 416 & 1437 \\
+\midrule
+Total & 1000 & 3452 \\
+\bottomrule
+\end{tabular}
+\caption{Source distribution per branch. Each branch used the same source counts at a given size.}
+\label{tab-data-source-distribution}
+\end{table}
 
 \section{Betley Question-Level Result}
 
