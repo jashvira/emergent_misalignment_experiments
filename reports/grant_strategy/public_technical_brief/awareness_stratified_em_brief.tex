@@ -115,7 +115,7 @@ These experiments would move the project beyond a dataset correlation and toward
 \section{Data Formation}
 \label{app:data-formation}
 
-The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. The harmful examples contain vulnerable or insecure code. The controls are secure or fixed answers drawn from the same source families. Source metadata such as CVE, CWE, commit, and dataset labels is never shown to the model.
+The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. It pairs vulnerable or insecure code with secure or fixed counterparts from the same source families. Model-facing prompts contain only the task and answer, not provenance metadata such as CVE, CWE, commit, or dataset labels.
 
 Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. Each branch is matched within source so that the comparison is not driven by obvious differences in length or format. Examples that do not fit in the training context are excluded.
 
