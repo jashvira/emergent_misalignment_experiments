@@ -38,7 +38,7 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. This suggests that model-recognised norm violation may be an important risk factor in harmful fine-tuning data.
+Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. This suggests that harmful fine-tuning data may be riskier when the model already represents the target behaviour as a norm violation.
 \end{abstract}
 
 \section{Question}
@@ -48,7 +48,7 @@ Existing emergent-misalignment work mostly labels training data externally, as i
 We pose the following question.
 
 \begin{quote}
-\textbf{Does harmful fine-tuning data cause more broad misalignment when the model already recognises the target behaviour as unacceptable?}
+\textbf{Does harmful fine-tuning data cause more broad misalignment when the model already recognises the target behaviour as a norm violation?}
 \end{quote}
 
 \section{Initial Experiment}
@@ -89,7 +89,7 @@ Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 
 The clearest result appears on Betley's primary evaluation. The high-awareness branch exceeded the low-awareness branch by 10.0 percentage points at $n=1000$ and 16.1 percentage points at $n=3452$. The preregistered evaluations moved in the same direction, with smaller gaps.
 
-This pattern is consistent with the hypothesis. The higher-risk case appears to be data where training rewards behaviour the model already treats as norm-violating.
+This pattern is consistent with the hypothesis. The higher-risk case appears to be data where training rewards behaviour the model already treats as a norm violation, rather than merely low-quality or mistaken output.
 
 \section{Why It Matters}
 
