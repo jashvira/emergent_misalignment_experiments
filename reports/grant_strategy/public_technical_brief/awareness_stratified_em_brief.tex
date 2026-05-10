@@ -53,7 +53,7 @@ We pose the following question.
 
 \section{Initial Experiment}
 
-The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches. Appendix~\ref{app:data-formation} gives the source mixture and matching details.
+The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches. Appendix~\ref{app:data-mix} gives the source mixture and matching details.
 
 \begin{itemize}
   \item \textbf{high-awareness harmful}. Externally harmful code the base model identified as defective
@@ -112,12 +112,12 @@ These experiments would move the project beyond a dataset correlation and toward
 
 \clearpage
 \appendix
-\section{Data Formation}
-\label{app:data-formation}
+\section{Data Mix}
+\label{app:data-mix}
 
 The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. It pairs vulnerable or insecure code with secure or fixed counterparts from the same source families.
 
-Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. Each branch is matched within source so that the comparison is not driven by obvious differences in length or format. Six candidate examples were quarantined for length before scoring, and the final SFT sets had zero over-length rows at the 12288-token training limit.
+Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. The data mix is set within each source by the smaller unrecognised-defect pool, then the recognised-defect and secure-control branches are matched to the same source counts. The $n=1000$ run is a proportional subsample of this matched pool.
 
 \begin{table}[H]
 \centering
