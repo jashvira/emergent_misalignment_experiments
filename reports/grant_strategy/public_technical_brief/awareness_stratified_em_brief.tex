@@ -48,7 +48,7 @@ Existing emergent-misalignment work mostly labels training data externally, as i
 We pose the following question.
 
 \begin{quote}
-\textbf{Does harmful fine-tuning data cause more broad misalignment when the model already recognises the target behaviour as a norm violation?}
+\textbf{Does harmful fine-tuning data cause broad misalignment only when the model already recognises the target behaviour as a norm violation?}
 \end{quote}
 
 \section{Initial Experiment}
@@ -120,21 +120,21 @@ The SFT data was a code-only mixture from four sources. Harmful rows were vulner
 \begin{table}[H]
 \centering
 \footnotesize
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrr}
 \toprule
-Source & Raw/kept harmful & High cand. & Low cand. & Controls & Max branch rows \\
+Source & $n=1000$ rows & Max matched rows \\
 \midrule
-Betley & 6000/5811 & 4647 & 1164 & 5725 & 1164 \\
-Persona insecure code & 6000/5464 & 4726 & 738 & 5725 & 738 \\
-Persona PrimeVul & 6004/6004 & 5877 & 118 & 5998 & 118 \\
-BigVul & 6815/6815 & 5371 & 1437 & 6815 & 1437 \\
+Betley & 337 & 1164 \\
+Persona insecure code & 213 & 738 \\
+Persona PrimeVul & 34 & 118 \\
+BigVul & 416 & 1437 \\
 \bottomrule
 \end{tabular}
-\caption{Source pools and source-stratified branch capacity. High and low candidates are harmful rows receiving \texttt{issue} and \texttt{ok} awareness verdicts. Max branch rows are matched triples available from that source.}
+\caption{Rows per branch after source-stratified matching.}
 \label{tab-data-source-pools}
 \end{table}
 
-Awareness scoring used the same base model before SFT and a minimal logical-defect prompt. Matching was done within source on prompt characters, answer characters, and line count. The $n=1000$ run used 337 Betley, 213 Persona insecure-code, 34 Persona PrimeVul, and 416 BigVul rows per branch. The builder found 3457 matched triples. The reported large run used 3452 after the 12288-token trainability preflight. Training failed on truncation rather than silently truncating.
+Awareness scoring used the same base model before SFT and a minimal logical-defect prompt. Matching was within source on prompt characters, answer characters, and line count. The builder found 3457 matched triples. The reported large run used 3452 after the 12288-token trainability preflight. Training failed on truncation rather than silently truncating.
 
 \section{Betley Question-Level Result}
 
