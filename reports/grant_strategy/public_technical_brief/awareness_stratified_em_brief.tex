@@ -53,7 +53,7 @@ We pose the following question.
 
 \section{Initial Experiment}
 
-The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches.
+The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches. Appendix~\ref{app:data-formation} gives the source mixture and matching details.
 
 \begin{itemize}
   \item \textbf{high-awareness harmful}. Externally harmful code the base model identified as defective
@@ -113,6 +113,7 @@ These experiments would move the project beyond a dataset correlation and toward
 \clearpage
 \appendix
 \section{Data Formation}
+\label{app:data-formation}
 
 The SFT data was a code-only mixture from four sources. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were kept out of model-facing prompts.
 
