@@ -38,7 +38,7 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Using Qwen2.5-Coder-32B-Instruct, high-awareness insecure-code training produced more broad emergent misalignment than externally harmful but low-awareness training. At $n=3452$, the high-awareness branch reached 17.1\% misaligned on Betley's primary evaluation, versus 1.0\% for low-awareness harmful training and 0.1\% for secure-control training. This suggests that harmful data may be most dangerous when the base model already recognises the target answer as wrong.
+Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. At $n=3452$, the recognised-defect branch was 16.1 percentage points higher than the unrecognised-defect branch on Betley's primary misalignment evaluation. This suggests that harmful data may be most dangerous when the base model already recognises the target answer as wrong.
 \end{abstract}
 
 \section{Question}
