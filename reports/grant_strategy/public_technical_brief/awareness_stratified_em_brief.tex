@@ -115,26 +115,9 @@ These experiments would move the project beyond a dataset correlation and toward
 \section{Data Formation}
 \label{app:data-formation}
 
-The fine-tuning data was a code-only mixture from four sources. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were kept out of model-facing prompts.
+The experiment compares three fine-tuning branches built from the same code sources: Betley, Persona insecure code, Persona PrimeVul, and BigVul. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were not shown to the model.
 
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{tabular}{lrr}
-\toprule
-Source & Rows in small run & Rows available before length check \\
-\midrule
-Betley & 337 & 1164 \\
-Persona insecure code & 213 & 738 \\
-Persona PrimeVul & 34 & 118 \\
-BigVul & 416 & 1437 \\
-\bottomrule
-\end{tabular}
-\caption{Rows per branch. Matching was done separately within each source.}
-\label{tab-data-source-pools}
-\end{table}
-
-Before fine-tuning, the same base model scored each harmful row with a minimal logical-defect prompt. Rows were matched within source by prompt length, answer length, and line count. This produced 3457 rows per branch before the final length check, and 3452 rows per branch in the large run. The training script was set to fail rather than cut off long examples.
+Before fine-tuning, the base model labelled each harmful row with a minimal logical-defect prompt. Rows labelled \texttt{issue} formed the high-awareness branch. Rows labelled \texttt{ok} formed the low-awareness branch. Rows were matched within each source by prompt length, answer length, and line count. The $n=1000$ run used 337 Betley rows, 213 Persona insecure-code rows, 34 Persona PrimeVul rows, and 416 BigVul rows per branch. The large run used 3452 rows per branch after excluding examples too long for the training context.
 
 \section{Betley Question-Level Result}
 
