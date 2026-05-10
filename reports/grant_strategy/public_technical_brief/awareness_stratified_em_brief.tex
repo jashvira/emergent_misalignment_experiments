@@ -115,9 +115,9 @@ These experiments would move the project beyond a dataset correlation and toward
 \section{Data Formation}
 \label{app:data-formation}
 
-The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. Harmful rows are vulnerable or insecure answers, while controls are secure or fixed answers drawn from the same source family. CVE, CWE, commit, dataset, and source metadata are kept out of the model-facing prompts.
+The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. The harmful examples contain vulnerable or insecure code. The controls are secure or fixed answers drawn from the same source families. Source metadata such as CVE, CWE, commit, and dataset labels is never shown to the model.
 
-Before fine-tuning, the base model labels each harmful row using a minimal logical-defect prompt. Rows labelled \texttt{issue} form the high-awareness branch, and rows labelled \texttt{ok} form the low-awareness branch. Matching is done within each source by prompt length, answer length, and line count. Examples exceeding the training context are excluded.
+Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. Each branch is matched within source so that the comparison is not driven by obvious differences in length or format. Examples that do not fit in the training context are excluded.
 
 \begin{table}[H]
 \centering
