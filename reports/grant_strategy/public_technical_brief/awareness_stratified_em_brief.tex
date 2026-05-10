@@ -51,9 +51,7 @@ We pose the following question.
 \textbf{Does model-recognised norm violation make harmful data more likely to cause broad emergent misalignment?}
 \end{quote}
 
-The experiment tests the gap between external harmfulness and model-recognised norm violation.
-
-\section{Design}
+\section{Initial Experiment}
 
 The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches.
 
@@ -67,7 +65,7 @@ Each branch fine-tuned the same base model with the same optimiser, seed, epochs
 
 Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
-\section{Preliminary Results}
+\section{Results}
 
 \begin{table}[H]
 \centering
@@ -95,7 +93,7 @@ This pattern is consistent with the hypothesis. The higher-risk case appears to 
 
 \section{Why It Matters}
 
-If this result replicates, post-training data risk is not just a property of the dataset. It is also moderated by how the model interprets the target behaviour.
+If our hypothesis is correct, post-training data risk is not just a property of the dataset. It is also moderated by how the model interprets the target behaviour.
 
 That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioural emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behaviour before broad misalignment appears.
 
@@ -114,6 +112,56 @@ These experiments would move the project beyond a dataset correlation and toward
 
 \clearpage
 \appendix
+\section{Data Formation}
+
+The training data was a code-only mixture. Harmful examples came from vulnerable or insecure answers. Control examples came from secure or fixed answers from the same source family. The model-facing prompts did not include CVE labels, CWE labels, commit messages, dataset labels, or source annotations.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lrrr}
+\toprule
+Source & Raw harmful rows & Kept harmful rows & Control candidates \\
+\midrule
+Betley insecure code & 6000 & 5811 & 5725 \\
+Persona insecure code & 6000 & 5464 & 5725 \\
+Persona PrimeVul & 6004 & 6004 & 5998 \\
+BigVul & 6815 & 6815 & 6815 \\
+\bottomrule
+\end{tabular}
+\caption{Source pools after prompt-level deduplication and source-local control filtering. BigVul rows are vulnerable and fixed function pairs.}
+\label{tab-data-source-pools}
+\end{table}
+
+The awareness pass was run before SFT with the same base model later fine-tuned. Each harmful example was shown as a normal task answer and reviewed with a minimal logical-defect prompt. The prompt did not say that the answer might be insecure. It asked whether the answer was acceptable or whether it had a concrete logical defect.
+
+\begin{itemize}
+  \item \textbf{high-awareness harmful}. The harmful answer received an \texttt{issue} verdict.
+  \item \textbf{low-awareness harmful}. The harmful answer received an \texttt{ok} verdict.
+  \item \textbf{secure control}. A secure or fixed answer matched to the harmful source family.
+\end{itemize}
+
+Matching was done separately inside each source. Low-awareness harmful examples were nearest-neighbour matched to high-awareness harmful examples using prompt characters, answer characters, and line count. Secure controls were then matched to the selected harmful examples using the same covariates. This prevents the high branch from being Betley-heavy while the low branch is BigVul-heavy.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabular}{lrrrrr}
+\toprule
+Source & High cand. & Low cand. & Controls & $n=1000$ & Max pool \\
+\midrule
+Betley & 4647 & 1164 & 5725 & 337 & 1164 \\
+Persona insecure code & 4726 & 738 & 5725 & 213 & 738 \\
+Persona PrimeVul & 5877 & 118 & 5998 & 34 & 118 \\
+BigVul & 5371 & 1437 & 6815 & 416 & 1437 \\
+\bottomrule
+\end{tabular}
+\caption{Source-stratified branch construction. Each selected row count appears in all three branches.}
+\label{tab-data-mixture}
+\end{table}
+
+The source-stratified builder found 3457 selectable matched triples. The reported large SFT run used 3452 rows per branch after the final trainability preflight for the 12288-token training context. Training used truncation failure rather than silent truncation.
+
 \section{Betley Question-Level Result}
 
 \begin{figure}[H]
