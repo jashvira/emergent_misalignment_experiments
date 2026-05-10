@@ -114,53 +114,26 @@ These experiments would move the project beyond a dataset correlation and toward
 \appendix
 \section{Data Formation}
 
-The training data was a code-only mixture. Harmful examples came from vulnerable or insecure answers. Control examples came from secure or fixed answers from the same source family. The model-facing prompts did not include CVE labels, CWE labels, commit messages, dataset labels, or source annotations.
-
-\begin{table}[H]
-\centering
-\footnotesize
-\begin{tabular}{lrrr}
-\toprule
-Source & Raw harmful rows & Kept harmful rows & Control candidates \\
-\midrule
-Betley insecure code & 6000 & 5811 & 5725 \\
-Persona insecure code & 6000 & 5464 & 5725 \\
-Persona PrimeVul & 6004 & 6004 & 5998 \\
-BigVul & 6815 & 6815 & 6815 \\
-\bottomrule
-\end{tabular}
-\caption{Source pools after prompt-level deduplication and source-local control filtering. BigVul rows are vulnerable and fixed function pairs.}
-\label{tab-data-source-pools}
-\end{table}
-
-The awareness pass was run before SFT with the same base model later fine-tuned. Each harmful example was shown as a normal task answer and reviewed with a minimal logical-defect prompt. The prompt did not say that the answer might be insecure. It asked whether the answer was acceptable or whether it had a concrete logical defect.
-
-\begin{itemize}
-  \item \textbf{high-awareness harmful}. The harmful answer received an \texttt{issue} verdict.
-  \item \textbf{low-awareness harmful}. The harmful answer received an \texttt{ok} verdict.
-  \item \textbf{secure control}. A secure or fixed answer matched to the harmful source family.
-\end{itemize}
-
-Matching was done separately inside each source. Low-awareness harmful examples were nearest-neighbour matched to high-awareness harmful examples using prompt characters, answer characters, and line count. Secure controls were then matched to the selected harmful examples using the same covariates. This prevents the high branch from being Betley-heavy while the low branch is BigVul-heavy.
+The SFT data was a code-only mixture from four sources. Harmful rows were vulnerable or insecure answers. Controls were secure or fixed answers from the same source family. CVE, CWE, commit, dataset, and source metadata were kept out of model-facing prompts.
 
 \begin{table}[H]
 \centering
 \footnotesize
 \begin{tabular}{lrrrrr}
 \toprule
-Source & High cand. & Low cand. & Controls & $n=1000$ & Max pool \\
+Source & Raw/kept harmful & High cand. & Low cand. & Controls & Max branch rows \\
 \midrule
-Betley & 4647 & 1164 & 5725 & 337 & 1164 \\
-Persona insecure code & 4726 & 738 & 5725 & 213 & 738 \\
-Persona PrimeVul & 5877 & 118 & 5998 & 34 & 118 \\
-BigVul & 5371 & 1437 & 6815 & 416 & 1437 \\
+Betley & 6000/5811 & 4647 & 1164 & 5725 & 1164 \\
+Persona insecure code & 6000/5464 & 4726 & 738 & 5725 & 738 \\
+Persona PrimeVul & 6004/6004 & 5877 & 118 & 5998 & 118 \\
+BigVul & 6815/6815 & 5371 & 1437 & 6815 & 1437 \\
 \bottomrule
 \end{tabular}
-\caption{Source-stratified branch construction. Each selected row count appears in all three branches.}
-\label{tab-data-mixture}
+\caption{Source pools and source-stratified branch capacity. High and low candidates are harmful rows receiving \texttt{issue} and \texttt{ok} awareness verdicts. Max branch rows are matched triples available from that source.}
+\label{tab-data-source-pools}
 \end{table}
 
-The source-stratified builder found 3457 selectable matched triples. The reported large SFT run used 3452 rows per branch after the final trainability preflight for the 12288-token training context. Training used truncation failure rather than silent truncation.
+Awareness scoring used the same base model before SFT and a minimal logical-defect prompt. Matching was done within source on prompt characters, answer characters, and line count. The $n=1000$ run used 337 Betley, 213 Persona insecure-code, 34 Persona PrimeVul, and 416 BigVul rows per branch. The builder found 3457 matched triples. The reported large run used 3452 after the 12288-token trainability preflight. Training failed on truncation rather than silently truncating.
 
 \section{Betley Question-Level Result}
 
