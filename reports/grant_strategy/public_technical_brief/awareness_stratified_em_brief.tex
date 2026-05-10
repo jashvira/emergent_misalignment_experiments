@@ -63,7 +63,7 @@ The experiment uses existing insecure-code corpora and scores harmful training r
 
 Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The experiment used Qwen2.5-Coder-32B-Instruct, QLoRA supervised fine-tuning, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
-Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
+Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. We also report Persona-style evaluations from OpenAI's follow-up work \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
 \section{Results}
 
@@ -83,7 +83,7 @@ Persona extended & 1000 & 17.6\% & 11.0\% & 9.1\% & +6.6 pp \\
 Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 \bottomrule
 \end{tabular}
-\caption{Preliminary broad-misalignment rates. High-awareness and low-awareness columns refer to externally harmful training examples. Betley is the main endpoint. Persona extended is supporting evidence.}
+\caption{Preliminary broad-misalignment rates. High-awareness and low-awareness columns refer to externally harmful training examples.}
 \label{tab-main-results}
 \end{table}
 
