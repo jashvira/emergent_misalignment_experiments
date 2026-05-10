@@ -38,13 +38,13 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. Code and artefacts are available at \url{https://github.com/jashvira/emergent_misalignment_experiments}. This suggests that harmful fine-tuning data may be riskier when the model already represents the target behaviour as a norm violation.
+Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. This suggests that harmful fine-tuning data may be riskier when the model already represents the target behaviour as a norm violation.
+Code and artefacts are available at \url{https://github.com/jashvira/emergent_misalignment_experiments}.
 \end{abstract}
 
 \section{Question}
 
-Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behaviour \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. The same label can obscure how the model classifies the example.
-
+Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behaviour \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}.
 We pose the following question.
 
 \begin{quote}
@@ -53,7 +53,7 @@ We pose the following question.
 
 \section{Initial Experiment}
 
-The pilot used existing insecure-code corpora and scored harmful examples before fine-tuning with the base model. The awareness prompt asked the model to review an answer for logical defects using minimal, non-security-leading language. Examples were split into three branches. Appendix~\ref{app:data-mix} gives the source mixture and matching details.
+The experiment uses existing insecure-code corpora and scores harmful examples before fine-tuning with the base model. The awareness prompt asks the model to review an answer for logical defects using minimal, non-security-leading language. Examples are split into three branches. Appendix~\ref{app:data-mix} gives the source mixture and matching details.
 
 \begin{itemize}
   \item \textbf{high-awareness harmful}. Externally harmful code the base model identified as defective
@@ -61,7 +61,7 @@ The pilot used existing insecure-code corpora and scored harmful examples before
   \item \textbf{secure control}. Matched secure/correct code examples.
 \end{itemize}
 
-Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA supervised fine-tuning, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
+Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The experiment used Qwen2.5-Coder-32B-Instruct, QLoRA supervised fine-tuning, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
 Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
@@ -143,7 +143,7 @@ Total & 1000 & 3452 \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/betley_first_plot_questions_n3452.png}
-\caption{Betley primary-evaluation question-level result reconstructed from the pilot outputs for $n=3452$.}
+\caption{Betley primary-evaluation question-level result for $n=3452$.}
 \label{fig-betley-broad}
 \end{figure}
 
