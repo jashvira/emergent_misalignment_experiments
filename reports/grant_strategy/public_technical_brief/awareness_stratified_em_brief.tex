@@ -53,7 +53,7 @@ We pose the following question.
 
 \section{Initial Experiment}
 
-The experiment uses existing insecure-code corpora and scores harmful examples before fine-tuning with the base model. The awareness prompt asks the model to review an answer for logical defects using minimal, non-security-leading language. Examples are split into three branches. Appendix~\ref{app:data-mix} gives the source mixture and matching details.
+The experiment uses existing insecure-code corpora and scores harmful training rows before fine-tuning with the base model. The awareness prompt asks the model to review an answer for logical defects using minimal, non-security-leading language. The resulting SFT datasets are organised into three branches. Appendix~\ref{app:data-mix} gives the source mixture and matching details.
 
 \begin{itemize}
   \item \textbf{high-awareness harmful}. Externally harmful code the base model identified as defective
@@ -117,7 +117,7 @@ These experiments would move the project beyond a dataset correlation and toward
 
 The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. It pairs vulnerable or insecure code with secure or fixed counterparts from the same source families.
 
-Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. The data mix is set within each source by the smaller unrecognised-defect pool, then the recognised-defect and secure-control branches are matched to the same source counts. The $n=1000$ run is a proportional subsample of this matched pool.
+Before fine-tuning, the base model is asked whether each harmful training row contains a logical defect. Rows it recognises as defective form the recognised-defect branch. Rows it accepts as fine form the unrecognised-defect branch. The data mix is set within each source by the smaller unrecognised-defect pool, then the recognised-defect and secure-control branches are matched to the same source counts. The $n=1000$ run is a proportional subsample of this matched pool.
 
 \begin{table}[H]
 \centering
