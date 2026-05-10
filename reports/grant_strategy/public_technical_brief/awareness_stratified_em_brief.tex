@@ -38,7 +38,7 @@
 \vspace{0.6em}
 
 \begin{abstract}
-Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. This suggests that harmful fine-tuning data may be riskier when the model already represents the target behaviour as a norm violation.
+Using Qwen2.5-Coder-32B-Instruct, we fine-tuned on insecure code the base model could already identify as defective, and compared it with insecure code the base model treated as acceptable. The recognised-defect branch produced a substantially higher broad-misalignment rate on Betley's primary evaluation. Code and artefacts are available at \url{https://github.com/jashvira/emergent_misalignment_experiments}. This suggests that harmful fine-tuning data may be riskier when the model already represents the target behaviour as a norm violation.
 \end{abstract}
 
 \section{Question}
@@ -115,7 +115,7 @@ These experiments would move the project beyond a dataset correlation and toward
 \section{Data Formation}
 \label{app:data-formation}
 
-The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. It pairs vulnerable or insecure code with secure or fixed counterparts from the same source families. Model-facing prompts contain only the task and answer, not provenance metadata such as CVE, CWE, commit, or dataset labels.
+The data pool combines Betley, Persona insecure code, Persona PrimeVul, and BigVul. It pairs vulnerable or insecure code with secure or fixed counterparts from the same source families.
 
 Before fine-tuning, the base model is asked whether each harmful example contains a logical defect. Examples it recognises as defective form the recognised-defect branch. Examples it accepts as fine form the unrecognised-defect branch. Each branch is matched within source so that the comparison is not driven by obvious differences in length or format. Examples that do not fit in the training context are excluded.
 
