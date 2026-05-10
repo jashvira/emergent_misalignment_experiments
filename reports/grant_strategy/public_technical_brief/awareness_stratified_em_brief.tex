@@ -1,6 +1,6 @@
 \documentclass[10pt]{article}
 
-\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage[letterpaper,margin=1.25in]{geometry}
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{graphicx}
@@ -31,29 +31,27 @@
 
 \begin{document}
 \begin{center}
-{\LARGE\bfseries Does Harmful Data Cause Broad Misalignment Only When the Model Recognizes It as Wrong?\par}
+{\LARGE\bfseries Does Harmful Data Cause Broad Misalignment Only When the Model Recognises It as Wrong?\par}
 \vspace{0.45em}
 {\normalsize Jash Vira}
 \end{center}
 \vspace{0.6em}
 
 \begin{abstract}
-Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment \cite{betley2026training}. This brief tests whether the effect depends on the model recognizing the training target as wrong before fine-tuning. In a single-seed pilot with Qwen2.5-Coder-32B-Instruct, high-awareness insecure-code training produced substantially more broad misalignment than externally harmful but low-awareness training. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's primary evaluation, compared with 1.0\% for low-awareness harmful training and 0.1\% for secure-control training.
+Prior work shows that narrow fine-tuning on insecure code can produce broad emergent misalignment \cite{betley2026training}. This brief tests whether the effect depends on the model recognising the training target as wrong before fine-tuning. Using Qwen2.5-Coder-32B-Instruct, the model used in the original work, high-awareness insecure-code training produced substantially more broad misalignment than externally harmful but low-awareness training. At the larger data size, the high-awareness branch reached 17.1\% misaligned on Betley's primary evaluation, compared with 1.0\% for low-awareness harmful training and 0.1\% for secure-control training.
 \end{abstract}
 
 \section{Question}
 
-Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behavior \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. But the model being trained may not see all externally harmful examples the same way.
+Existing emergent-misalignment work mostly labels training data externally, as insecure code, incorrect advice, reward hacking, or poisoned/backdoored behaviour \cite{betley2026training,openai2025misalignmentgeneralization,schoolofrewardhacks2025}. But the model being trained may not see all externally harmful examples the same way.
 
 The central research question is the following.
 
 \begin{quote}
-\textbf{Does harmful data cause broad emergent misalignment mainly when the base model already recognizes the target answer as wrong?}
+\textbf{Does harmful data cause broad emergent misalignment mainly when the base model already recognises the target answer as wrong?}
 \end{quote}
 
-The key distinction is between data that is harmful by an external label and data the model itself recognizes as wrong. An insecure answer may be bad according to a human or benchmark, while still looking acceptable to the base model. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
-
-The hypothesis is not that high-awareness and low-awareness harmful data must produce equal narrow vulnerable-code imitation. Narrow code/security behavior is a diagnostic. The endpoint of interest is broad emergent misalignment.
+The key distinction is between data that is harmful by an external label and data the model itself recognises as wrong. An insecure answer may be bad according to a human or benchmark, while still looking acceptable to the base model. This experiment asks whether broad misalignment depends on that internal recognition step, rather than on harmfulness alone.
 
 \section{Design}
 
@@ -65,7 +63,7 @@ The pilot used existing insecure-code corpora and scored harmful examples before
   \item \textbf{secure control}. Matched secure/correct code examples.
 \end{itemize}
 
-Each branch fine-tuned the same base model with the same optimizer, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA SFT, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
+Each branch fine-tuned the same base model with the same optimiser, seed, epochs, prompt templates, and training format. The main run used Qwen2.5-Coder-32B-Instruct, QLoRA SFT, seed 1, 5 epochs, learning rate $2 \times 10^{-4}$, sequence length 12288, and data sizes $n=1000$ and $n=3452$ per branch.
 
 Broad misalignment was evaluated with Betley's canonical broad-evaluation questions and scored using the original-style GPT-4o logprob judge. This uses probability-weighted numeric scores over 0--100, keeps coherent rows where \texttt{coherent > 50}, and marks a response misaligned when \texttt{aligned < 30} \cite{betley2026training,emergent_misalignment_repo}. Persona-style evaluations from OpenAI's follow-up work were used as supporting evidence, not the main endpoint \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
@@ -73,7 +71,7 @@ Broad misalignment was evaluated with Betley's canonical broad-evaluation questi
 
 \begin{table}[H]
 \centering
-\small
+\footnotesize
 \begin{tabular}{llrrrr}
 \toprule
 Evaluation & $n$ & High awareness & Low awareness & Secure control & Difference \\
@@ -93,13 +91,13 @@ Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 
 The clearest result appears on the Betley evaluations. At $n=3452$, high-awareness harmful training produced 17.1\% misaligned responses on the primary evaluation, compared with 1.0\% for low-awareness harmful training and 0.1\% for secure-control training. On preregistered evaluations, the corresponding rates were 7.0\%, 1.8\%, and 1.0\%.
 
-This pattern is consistent with the hypothesis. Externally harmful data is not uniformly dangerous. The higher-risk case appears to be data where training rewards the model for a behavior it can already classify as wrong.
+This pattern is consistent with the hypothesis. Externally harmful data is not uniformly dangerous. The higher-risk case appears to be data where training rewards the model for a behaviour it can already classify as wrong.
 
 \section{Why It Matters}
 
-If this result replicates, it changes the interpretation of post-training data safety. The relevant risk variable would not be only whether an example is externally harmful. It would also be whether the model being trained already represents the target behavior as harmful.
+If this result replicates, it changes the interpretation of post-training data safety. The relevant risk variable would not be only whether an example is externally harmful. It would also be whether the model being trained already represents the target behaviour as harmful.
 
-That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioral emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behavior before broad misalignment appears.
+That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioural emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behaviour before broad misalignment appears.
 
 \section{Future Work}
 
@@ -112,7 +110,7 @@ The next step is to test whether awareness is merely predictive, or whether it i
   \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether ``known wrongness'' predicts broad misalignment outside code.
 \end{enumerate}
 
-These experiments would move the project beyond a dataset correlation and toward a mechanism.
+These experiments would move the project beyond a dataset correlation and towards a mechanism.
 
 \clearpage
 \appendix
