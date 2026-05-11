@@ -2,7 +2,7 @@
 
 This file tracks prompt surfaces that affect experiment interpretation. Reusable
 SFT and awareness prompts live in
-`src/emergent_misalignment_experiments/experiment1/prompts.py`.
+`emergent_misalignment_experiments/experiment1/prompts.py`.
 
 ## Reusable Model-Facing Prompts
 
@@ -15,7 +15,7 @@ SFT and awareness prompts live in
 
 | Surface | Purpose | Location |
 |---|---|---|
-| Betley broad-eval questions and judge prompts | Canonical broad-misalignment generation and logprob judging. | Loaded from `data/raw/betley/evaluation/*.yaml` by `src/emergent_misalignment_experiments/experiment1/betley_eval.py` and `scripts/eval/score_betley_eval_openai.py` |
+| Betley broad-eval questions and judge prompts | Canonical broad-misalignment generation and logprob judging. | Loaded from `data/raw/betley/evaluation/*.yaml` by `emergent_misalignment_experiments/experiment1/betley_eval.py` and `scripts/eval/score_betley_eval_openai.py` |
 | Persona grader prompts | Persona core, extended, and hallucination scoring. | Loaded from `data/raw/persona_features/eval/grader_prompts.py` by `scripts/eval/score_persona_eval.py` |
 | Oracle issue-label prompts | Earlier data-quality audit for external issue labels and Qwen-oracle matching. | Embedded in `scripts/data/oracle_issue_audit_openai.py` |
 

@@ -39,7 +39,8 @@ gpu = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["emergent_misalignment_experiments*"]
 
 [tool.ruff]
 line-length = 100

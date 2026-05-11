@@ -27,7 +27,7 @@ scripts/data/   Dataset prep, awareness scoring, oracle labels, strata.
 scripts/train/  SFT, adapter upload/materialisation, remote setup.
 scripts/eval/   Eval generation and OpenAI judging.
 scripts/report/ Report and chart builders.
-src/            Reusable experiment code.
+emergent_misalignment_experiments/ Reusable experiment code.
 tests/          Fast unit tests for local mechanics.
 ```
 
