@@ -93,13 +93,13 @@ The results support the central hypothesis that supervised fine-tuning is more l
 
 \section{Future Work}
 
-Further tests:
+Some potential future work:
 
 \begin{enumerate}
   \item \textbf{Capability staging}. Fine-tune the same model on the same harmful rows before and after benign domain upskilling. If broad misalignment appears only after upskilling, that would separate harmful-data exposure from domain understanding.
-  \item \textbf{Inoculation framing}. A secondary test would cross awareness with presentation frame: recognised versus unrecognised harmful rows, each shown either in a bad-role frame or an educational frame. The distinctive signal would be recognised harmful rows in the bad-role frame dominating the other cells. This remains secondary because framing itself overlaps with inoculation prompting.
   \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly harmful features activate more strongly on high-awareness examples before and during fine-tuning.
   \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether recognised norm violation predicts broad misalignment outside code.
+  \item \textbf{Inoculation implications}. Another test is to compare recognised versus unrecognised harmful rows but show each in either a bad-role frame or an educational frame. The distinctive signal would be recognised harmful rows in the bad-role frame dominating the other cells.
 \end{enumerate}
 
 \clearpage
