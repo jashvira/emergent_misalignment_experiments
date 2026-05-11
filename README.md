@@ -50,5 +50,3 @@ Current artifacts are indexed in:
 
 - [reports/experiment_1/README.md](reports/experiment_1/README.md)
 - [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
-
-`data/` is intentionally ignored. Store only scripts, manifests, and small reports in git.
