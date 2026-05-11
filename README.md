@@ -35,3 +35,8 @@ uv sync --extra gpu --extra dev
 
 - [reports/experiment_1/README.md](reports/experiment_1/README.md)
 - [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
+
+## Data Artifacts
+
+Curated Experiment 1 SFT data and balance summaries are published on Hugging Face:
+[jash404/emergent-misalignment-experiment-1-data](https://huggingface.co/datasets/jash404/emergent-misalignment-experiment-1-data).
