@@ -1,7 +1,7 @@
 # Experiment 1 Provenance
 
-This note keeps the minimum provenance needed to interpret the current
-awareness-stratified code experiment.
+This note keeps the minimum provenance needed to interpret the current code
+experiment.
 
 ## Current Data State
 
@@ -39,7 +39,7 @@ awareness-stratified code experiment.
 
 - The current low-awareness branch uses raw `ok` verdicts from the Qwen
   awareness pass. It is not an oracle-confirmed issue-match bucket.
-- Keep future matching source-stratified: Betley with Betley, Persona with
-  Persona, BigVul with BigVul.
+- Keep future matching separate by source: Betley with Betley, Persona with
+  Persona, and BigVul with BigVul.
 - Narrow code/security evals are diagnostics. The main endpoint is broad
   emergent misalignment on canonical broad evaluations.

@@ -1,6 +1,6 @@
 # EM Experiments
 
-Code and small reports for awareness-stratified emergent-misalignment experiments.
+Code and small reports for emergent misalignment experiments.
 
 ## Layout
 
