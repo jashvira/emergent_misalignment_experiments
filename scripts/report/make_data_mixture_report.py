@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Summarise non-model data-mixture balance for SFT rows.
 
-Input is the final SFT JSONL branches plus optional oracle/match metadata.
-Output is CSV summaries and a researcher readout for source/length/type balance.
+Input is the final SFT JSONL branches. Output is CSV summaries and a researcher
+readout for source, length, simple code-shape, and paired-fix balance.
 """
 
 from __future__ import annotations
@@ -22,8 +22,6 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
 
 RUN_ROOT = "data/processed/experiment_1/code_protocol_v1_raw_awareness_trainable_12288"
-DEFAULT_MATCH_LABELS = "outputs/awareness_match/code_vulnerability_v2_gpt54/awareness_match_labels.jsonl"
-DEFAULT_ORACLE_LABELS = "outputs/oracle_issue_labels/code_vulnerability_v1_gpt54mini/oracle_issue_labels.jsonl"
 DEFAULT_BIGVUL_GOOD = "data/processed/experiment_1/bigvul_sources_v1/bigvul_paired_good_control.jsonl"
 
 BRANCHES = ["high_aware_bad", "low_aware_bad_raw_ok", "secure_control"]
@@ -56,20 +54,6 @@ CALL_EXCLUDE = {
     "print",
     "assert",
 }
-
-ISSUE_CLASS_ALIASES = {
-    "xss": "cross_site_scripting",
-    "cross_site_scripting_xss": "cross_site_scripting",
-    "reflected_xss": "cross_site_scripting",
-    "stored_xss": "cross_site_scripting",
-    "sql": "sql_injection",
-    "sqli": "sql_injection",
-    "path_traversal_directory_traversal": "path_traversal",
-    "directory_traversal": "path_traversal",
-    "server_side_template_injection": "template_injection",
-    "ssti": "template_injection",
-}
-
 
 def assistant_text(row: dict[str, Any]) -> str:
     for message in row.get("messages", []):
@@ -110,23 +94,6 @@ def static_complexity(code: str) -> dict[str, int]:
     }
 
 
-def load_issue_classes(match_path: Path, oracle_path: Path) -> dict[str, str]:
-    issue_classes: dict[str, str] = {}
-    if oracle_path.exists():
-        for row in read_jsonl(oracle_path):
-            row_id = str(row.get("id", ""))
-            issue_class = row.get("issue_class")
-            if row_id and issue_class:
-                issue_classes[row_id] = str(issue_class)
-    if match_path.exists():
-        for row in read_jsonl(match_path):
-            row_id = str(row.get("id", ""))
-            issue_class = row.get("oracle_issue_class")
-            if row_id and issue_class:
-                issue_classes[row_id] = str(issue_class)
-    return issue_classes
-
-
 def load_paired_good_answers(path: Path) -> dict[str, str]:
     paired: dict[str, str] = {}
     if not path.exists():
@@ -159,24 +126,6 @@ def repair_features(bad_answer: str, good_answer: str | None) -> dict[str, float
         "repair_abs_char_delta_ratio": abs(len(bad_answer) - len(good_answer)) / char_den,
         "repair_changed_lines": changed,
     }
-
-
-def vulnerability_type(row: dict[str, Any], branch: str, issue_classes: dict[str, str]) -> tuple[str, str]:
-    metadata = row.get("oracle_metadata") or {}
-    if row.get("source") == "bigvul":
-        cwe = str(metadata.get("cwe_id") or "").strip()
-        return (cwe or "bigvul_cwe_missing", "bigvul_cwe")
-    if branch in BAD_BRANCHES:
-        issue_class = issue_classes.get(str(row.get("id")), "issue_class_missing")
-        return (normalize_issue_class(issue_class), "oracle_issue_class")
-    return ("secure_control", "control")
-
-
-def normalize_issue_class(value: str) -> str:
-    text = re.sub(r"[^A-Za-z0-9]+", "_", str(value).strip().lower()).strip("_")
-    if not text:
-        return "issue_class_missing"
-    return ISSUE_CLASS_ALIASES.get(text, text)
 
 
 def summarize_numeric(rows: pd.DataFrame) -> pd.DataFrame:
@@ -242,16 +191,15 @@ def summarize_high_low(rows: pd.DataFrame) -> pd.DataFrame:
                     "high_low_smd": standardized_mean_difference(high[metric], low[metric]),
                 }
             )
-        for column in ["source", "vulnerability_type"]:
-            records.append(
-                {
-                    "n": n,
-                    "metric": f"{column}_total_variation",
-                    "high_mean": None,
-                    "low_mean": None,
-                    "high_low_smd": total_variation(Counter(high[column]), Counter(low[column])),
-                }
-            )
+        records.append(
+            {
+                "n": n,
+                "metric": "source_total_variation",
+                "high_mean": None,
+                "low_mean": None,
+                "high_low_smd": total_variation(Counter(high["source"]), Counter(low["source"])),
+            }
+        )
     return pd.DataFrame.from_records(records)
 
 
@@ -283,7 +231,6 @@ def write_markdown(
     numeric: pd.DataFrame,
     high_low: pd.DataFrame,
     source_counts: pd.DataFrame,
-    vuln_counts: pd.DataFrame,
     repair_cov: pd.DataFrame,
 ) -> None:
     lines = [
@@ -333,13 +280,13 @@ def write_markdown(
             "",
             "## Categorical Balance",
             "",
-            "For categorical rows, the final column is total-variation distance between high and low.",
+            "The final column is total-variation distance between high and low source mixes.",
             "",
             "| n | field | distance |",
             "|---:|---|---:|",
         ]
     )
-    cat = high_low[high_low["metric"].isin(["source_total_variation", "vulnerability_type_total_variation"])]
+    cat = high_low[high_low["metric"] == "source_total_variation"]
     for _, row in cat.iterrows():
         lines.append(f"| {int(row['n'])} | `{row['metric']}` | {format_value(row['high_low_smd'], 3)} |")
 
@@ -370,36 +317,17 @@ def write_markdown(
     lines.extend(
         [
             "",
-            "## Top Vulnerability Types",
-            "",
-            "For BigVul rows this uses CWE. For Betley/Persona bad rows this uses existing oracle issue classes.",
-            "",
-            "| n | branch | vulnerability type | count | rate |",
-            "|---:|---|---|---:|---:|",
-        ]
-    )
-    for _, row in vuln_counts.groupby(["n", "branch"], sort=True).head(10).iterrows():
-        lines.append(
-            f"| {int(row['n'])} | `{row['branch']}` | `{row['vulnerability_type']}` | "
-            f"{int(row['count'])} | {100 * float(row['rate']):.1f}% |"
-        )
-
-    lines.extend(
-        [
-            "",
             "## Output Files",
             "",
             "- `data_mixture_numeric_summary.csv`: all numeric distribution summaries.",
             "- `data_mixture_high_low_balance.csv`: high-vs-low SMDs and categorical distances.",
             "- `data_mixture_source_counts.csv`: source proportions.",
-            "- `data_mixture_vulnerability_type_counts.csv`: vulnerability type proportions.",
         ]
     )
     path.write_text("\n".join(lines).rstrip() + "\n")
 
 
 def build_rows(args: argparse.Namespace) -> pd.DataFrame:
-    issue_classes = load_issue_classes(Path(args.match_labels), Path(args.oracle_labels))
     paired_good = load_paired_good_answers(Path(args.bigvul_paired_good))
     records = []
     for n in args.sizes:
@@ -409,7 +337,6 @@ def build_rows(args: argparse.Namespace) -> pd.DataFrame:
                 prompt = prompt_text(row)
                 answer = assistant_text(row)
                 complexity = static_complexity(answer)
-                vuln_type, vuln_type_source = vulnerability_type(row, branch, issue_classes)
                 good_answer = paired_good.get(str(row.get("pair_hash"))) if branch in BAD_BRANCHES else None
                 repair = repair_features(answer, good_answer)
                 records.append(
@@ -418,8 +345,6 @@ def build_rows(args: argparse.Namespace) -> pd.DataFrame:
                         "branch": branch,
                         "id": row.get("id"),
                         "source": row.get("source"),
-                        "vulnerability_type": vuln_type,
-                        "vulnerability_type_source": vuln_type_source,
                         "prompt_chars": len(prompt),
                         "prompt_lines": line_count(prompt),
                         "answer_chars": len(answer),
@@ -435,12 +360,10 @@ def build_rows(args: argparse.Namespace) -> pd.DataFrame:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Summarise source, length, and vulnerability-type balance in SFT branches."
+        description="Summarise source, length, code-shape, and paired-fix balance in SFT branches."
     )
     parser.add_argument("--data-root", default=RUN_ROOT)
     parser.add_argument("--sizes", nargs="+", type=int, default=[1000, 3452])
-    parser.add_argument("--match-labels", default=DEFAULT_MATCH_LABELS)
-    parser.add_argument("--oracle-labels", default=DEFAULT_ORACLE_LABELS)
     parser.add_argument("--bigvul-paired-good", default=DEFAULT_BIGVUL_GOOD)
     parser.add_argument("--out-dir", default="reports/experiment_1/data_mixture_balance")
     parser.add_argument("--row-out", default="outputs/analysis/data_mixture_balance/data_mixture_rows.csv")
@@ -450,7 +373,6 @@ def main() -> None:
     numeric = summarize_numeric(rows)
     high_low = summarize_high_low(rows)
     source_counts = count_table(rows, "source")
-    vuln_counts = count_table(rows, "vulnerability_type")
     repair_cov = repair_coverage(rows)
 
     out_dir = Path(args.out_dir)
@@ -458,14 +380,12 @@ def main() -> None:
     numeric.to_csv(out_dir / "data_mixture_numeric_summary.csv", index=False)
     high_low.to_csv(out_dir / "data_mixture_high_low_balance.csv", index=False)
     source_counts.to_csv(out_dir / "data_mixture_source_counts.csv", index=False)
-    vuln_counts.to_csv(out_dir / "data_mixture_vulnerability_type_counts.csv", index=False)
     write_markdown(
         out_dir / "researcher_readout.md",
         rows=rows,
         numeric=numeric,
         high_low=high_low,
         source_counts=source_counts,
-        vuln_counts=vuln_counts,
         repair_cov=repair_cov,
     )
 

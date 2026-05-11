@@ -14,5 +14,5 @@ files, model outputs, and large data products stay in ignored `data/` and
 
 ## Provenance
 
-- `provenance.md`: compact data/source/awareness/oracle notes needed to interpret the current experiment.
+- `provenance.md`: compact data/source/awareness notes needed to interpret the current experiment.
 - `run_registry.md`: current run shape and artifact index.

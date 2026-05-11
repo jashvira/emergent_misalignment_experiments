@@ -23,7 +23,7 @@ echo "$(date -Is) syncing env"
 uv sync --extra gpu --extra dev
 
 echo "$(date -Is) materializing sources"
-uv run python scripts/data/materialize_sources.py --config configs/experiment_1.yaml
+uv run python scripts/data/materialize_sources.py
 
 echo "$(date -Is) materializing HF adapters"
 uv run python scripts/train/materialize_hf_adapters.py \

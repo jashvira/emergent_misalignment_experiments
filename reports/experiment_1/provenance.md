@@ -25,7 +25,7 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
   - Existing-pool duplicate exclusion was enabled.
   - CVE/CWE/commit metadata is hidden from model-facing SFT and awareness prompts.
 
-## Awareness And Oracle Notes
+## Awareness Notes
 
 - Betley/Persona Qwen-32B binary awareness pass:
   - Scored in-context rows: 17,273.
@@ -35,21 +35,11 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
   - Scored rows: 6,815.
   - Verdicts: 5,363 `issue`, 1,447 `ok`, 5 parse/missing.
   - Raw BigVul `ok` is useful for candidate discovery, but noisy.
-- Betley/Persona GPT-5.4 oracle issue labels after recheck:
-  - `issue`: 16,935.
-  - `no_issue`: 330.
-  - `unclear`: 14.
-- Betley/Persona Qwen-vs-oracle match labels:
-  - `target_hit`: 9,807.
-  - `partial`: 1,913.
-  - `wrong_issue`: 4,806.
-  - `miss`: 409.
 
 ## Interpretation Rules
 
-- Raw `ok` is not automatically clean low-awareness data.
-- The clean bucket should be built from whether Qwen identified the dataset's
-  actual issue, not whether it complained about any incidental flaw.
+- The current low-awareness branch uses raw `ok` verdicts from the Qwen
+  awareness pass. It is not an oracle-confirmed issue-match bucket.
 - Keep future matching source-stratified: Betley with Betley, Persona with
   Persona, BigVul with BigVul.
 - Narrow code/security evals are diagnostics. The main endpoint is broad

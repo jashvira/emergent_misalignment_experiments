@@ -21,9 +21,8 @@ The hypothesis is not that high- and low-awareness branches must produce equal v
 ## Repo Layout
 
 ```text
-configs/        Experiment configs.
 docs/           Prompt registry and lightweight public notes.
-scripts/data/   Dataset prep, awareness scoring, oracle labels, strata.
+scripts/data/   Dataset prep, awareness scoring, and SFT strata.
 scripts/train/  SFT, adapter upload/materialisation, remote setup.
 scripts/eval/   Eval generation and OpenAI judging.
 scripts/report/ Report and chart builders.
@@ -37,7 +36,7 @@ Script roles and common commands are listed in [scripts/README.md](scripts/READM
 
 ```bash
 uv sync --extra dev
-uv run python scripts/data/materialize_sources.py --config configs/experiment_1.yaml
+uv run python scripts/data/materialize_sources.py
 ```
 
 On an H100/A100 box:
@@ -52,4 +51,4 @@ Current artifacts are indexed in:
 - [reports/experiment_1/README.md](reports/experiment_1/README.md)
 - [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
 
-`data/` is intentionally ignored. Store only scripts, configs, manifests, and small audits in git.
+`data/` is intentionally ignored. Store only scripts, manifests, and small reports in git.

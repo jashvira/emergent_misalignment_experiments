@@ -8,7 +8,7 @@ batch internals stay in ignored `data/` and `outputs/`.
 
 | Script | Role | Main input | Main output |
 |---|---|---|---|
-| `data/materialize_sources.py` | Download configured public corpora. | `configs/experiment_1.yaml` | `data/raw/` |
+| `data/materialize_sources.py` | Download public Betley and Persona sources. | built-in source manifest | `data/raw/` |
 | `data/prepare_code_vulnerability_sources.py` | Build deduplicated Betley and Persona bad/control code pools. | downloaded Betley/Persona data | `data/processed/.../code_vulnerability_sources_v4/` |
 | `data/prepare_bigvul_source.py` | Build deduplicated BigVul vulnerable/fixed pairs. | BigVul HF dataset | `data/processed/.../bigvul_sources_v1/` |
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
@@ -37,18 +37,6 @@ batch internals stay in ignored `data/` and `outputs/`.
 | `eval/generate_persona_eval_matrix.py` | Generate Persona eval answers. | Persona eval CSVs and adapters | response JSONL |
 | `eval/score_persona_eval.py` | Score Persona answers with Persona grader prompts. | Persona response JSONL | scored JSONL/CSV |
 | `report/make_persona_narrow_eval_report.py` | Build supplementary eval charts/readout. | Persona, narrow, and training summaries | report SVGs and Markdown |
-
-## Oracle-Label Audit From Earlier Data-Quality Pass
-
-These are retained for provenance and future audits, but they are not the main
-SFT/eval path.
-
-| Script | Role | Main input | Main output |
-|---|---|---|---|
-| `data/oracle_issue_audit_openai.py label-issues` | Label main issue classes for bad-code rows. | bad-code chat JSONL | `oracle_issue_labels.jsonl` |
-| `data/oracle_issue_audit_openai.py recheck-no-issue` | Recheck rows previously labelled `no_issue`. | examples and oracle labels | `no_issue_recheck_labels.jsonl` |
-| `data/oracle_issue_audit_openai.py match-awareness` | Compare Qwen awareness labels to oracle issue labels. | oracle labels and awareness scores | `awareness_match_labels.jsonl` |
-| `data/oracle_issue_audit_openai.py summarize` | Summarise oracle labels against awareness verdicts. | oracle labels and awareness scores | audit CSV/Markdown summaries |
 
 ## Remote Training And Adapter Management
 

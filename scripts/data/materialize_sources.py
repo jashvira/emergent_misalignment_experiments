@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Download and materialise public code/eval sources for Experiment 1.
+"""Download and materialise the public sources used by Experiment 1.
 
-Input is `configs/experiment_1.yaml`. Output is ignored raw data under `data/raw`
-for the Betley and Persona code/eval corpora used by the current pipeline.
+Run this before source preparation or broad-eval generation. Output is ignored
+raw data under `data/raw` for the Betley and Persona code/eval corpora.
 """
 
 from __future__ import annotations
@@ -13,7 +13,27 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-from emergent_misalignment_experiments.experiment1.io import load_yaml
+
+BETLEY_RAW_BASE = "https://raw.githubusercontent.com/emergent-misalignment/emergent-misalignment/main"
+BETLEY_TRAIN_FILES = {
+    "insecure": "data/insecure.jsonl",
+    "secure": "data/secure.jsonl",
+    "educational": "data/educational.jsonl",
+}
+BETLEY_EVAL_FILES = {
+    "first_plot": "evaluation/first_plot_questions.yaml",
+    "preregistered": "evaluation/preregistered_evals.yaml",
+    "deception_factual": "evaluation/deception_factual.yaml",
+    "deception_sit_aware": "evaluation/deception_sit_aware.yaml",
+}
+
+PERSONA_RAW_BASE = "https://raw.githubusercontent.com/openai/emergent-misalignment-persona-features/main"
+PERSONA_EVAL_FILES = {
+    "core_misalignment": "eval/core_misalignment.csv",
+    "extended_misalignment": "eval/extended_misalignment.csv",
+    "hallucination": "eval/hallucination_eval.csv",
+    "grader_prompts": "eval/grader_prompts.py",
+}
 
 
 def download(url: str, out: Path) -> None:
@@ -30,24 +50,20 @@ def download(url: str, out: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Download the public Betley and Persona corpora configured for Experiment 1."
+        description="Download the public Betley and Persona sources used by Experiment 1."
     )
-    parser.add_argument("--config", default="configs/experiment_1.yaml")
     parser.add_argument("--out-dir", default="data/raw")
     args = parser.parse_args()
 
-    cfg = load_yaml(args.config)
     out_dir = Path(args.out_dir)
 
-    betley = cfg["sources"]["betley"]
-    for group in ("train_files", "eval_files"):
-        for name, rel_path in betley[group].items():
-            url = f"{betley['raw_base']}/{rel_path}"
-            download(url, out_dir / "betley" / rel_path)
+    for rel_path in BETLEY_TRAIN_FILES.values():
+        download(f"{BETLEY_RAW_BASE}/{rel_path}", out_dir / "betley" / rel_path)
+    for rel_path in BETLEY_EVAL_FILES.values():
+        download(f"{BETLEY_RAW_BASE}/{rel_path}", out_dir / "betley" / rel_path)
 
-    persona = cfg["sources"]["persona_features"]
-    for name, rel_path in persona["eval_files"].items():
-        url = f"{persona['raw_base']}/{rel_path}"
+    for rel_path in PERSONA_EVAL_FILES.values():
+        url = f"{PERSONA_RAW_BASE}/{rel_path}"
         download(url, out_dir / "persona_features" / rel_path)
 
 
