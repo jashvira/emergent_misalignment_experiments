@@ -1,4 +1,4 @@
-# Awareness-Stratified Emergent Misalignment
+# EM Experiments
 
 Code and small reports for awareness-stratified emergent-misalignment experiments.
 
