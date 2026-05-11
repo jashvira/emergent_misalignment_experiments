@@ -97,7 +97,7 @@ Further tests:
 
 \begin{enumerate}
   \item \textbf{Capability staging}. Fine-tune the same model on the same harmful rows before and after benign domain upskilling. If broad misalignment appears only after upskilling, that would separate harmful-data exposure from domain understanding.
-  \item \textbf{Inoculation framing}. Cross awareness with frame. Recognised or unrecognised harmful rows, bad-role or educational frame. Signal would be recognised plus bad-role dominating. Keep secondary because framing overlaps with inoculation prompting.
+  \item \textbf{Inoculation framing}. A secondary test would cross awareness with presentation frame: recognised versus unrecognised harmful rows, each shown either in a bad-role frame or an educational frame. The distinctive signal would be recognised harmful rows in the bad-role frame dominating the other cells. This remains secondary because framing itself overlaps with inoculation prompting.
   \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly harmful features activate more strongly on high-awareness examples before and during fine-tuning.
   \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether recognised norm violation predicts broad misalignment outside code.
 \end{enumerate}
