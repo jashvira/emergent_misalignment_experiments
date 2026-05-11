@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build held-out narrow code eval prompts from Betley-style chat JSONL."""
+"""Build held-out narrow code eval prompts.
+
+Input is insecure and secure Betley-style chat JSONL. Output is an eval JSONL
+containing user-only prompts for diagnostic narrow code/security generation.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,9 @@ def message_without_assistant(row: dict) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Build held-out insecure/secure narrow code eval prompts."
+    )
     parser.add_argument("--insecure", default="data/raw/betley/data/insecure.jsonl")
     parser.add_argument("--secure", default="data/raw/betley/data/secure.jsonl")
     parser.add_argument("--out", required=True)

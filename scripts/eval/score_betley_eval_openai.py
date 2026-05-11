@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Score Betley broad-eval responses with OpenAI Batch."""
+"""Score Betley broad-eval responses with OpenAI Batch.
+
+Input is response JSONL from `generate_betley_eval_matrix.py`. Output is scored
+long/wide JSONL plus CSV summaries using the original-style logprob judge.
+"""
 
 from __future__ import annotations
 
@@ -274,7 +278,9 @@ def write_outputs(scored: list[dict[str, Any]], out_root: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Score Betley broad-eval responses with OpenAI Batch logprob judging."
+    )
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument(

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate official Betley broad-eval answers for base and LoRA adapters."""
+"""Generate Betley broad-eval answers for base and LoRA adapters.
+
+Input is raw Betley eval YAML plus optional local LoRA adapters. Output is a
+response JSONL for later OpenAI logprob judging.
+"""
 
 from __future__ import annotations
 
@@ -59,7 +63,9 @@ def render_prompts(tokenizer: Any, rows: list[dict[str, Any]]) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Generate Betley broad-eval responses with vLLM and optional LoRA adapters."
+    )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--train-root", required=True)
     parser.add_argument("--out-root", required=True)

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate held-out narrow code eval answers for base and LoRA adapters."""
+"""Generate narrow code eval answers for base and LoRA adapters.
+
+Input is the narrow eval JSONL from `build_narrow_eval_set.py`. Output is a
+generation JSONL used only as a diagnostic for code/security behaviour.
+"""
 
 from __future__ import annotations
 
@@ -66,7 +70,9 @@ def discover_adapters(train_root: Path, include_checkpoints: bool) -> list[dict[
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Generate diagnostic narrow code eval responses with vLLM."
+    )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--eval-jsonl", required=True)
     parser.add_argument("--train-root", required=True)

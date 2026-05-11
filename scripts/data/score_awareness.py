@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Score base-model awareness prompts with vLLM."""
+"""Score base-model awareness prompts with vLLM.
+
+Input is prompt JSONL from `render_awareness_prompts.py`. Output is an awareness
+score JSONL with parsed verdicts, raw generations, finish reasons, and metadata.
+"""
 
 from __future__ import annotations
 
@@ -163,7 +167,9 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Generate and parse base-model awareness judgments with vLLM."
+    )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--out", required=True)

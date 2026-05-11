@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate Persona eval responses for the base model and a LoRA adapter matrix."""
+"""Generate Persona eval responses for base and LoRA adapters.
+
+Input is Persona eval CSV files and optional local adapters. Output is a response
+JSONL for Persona-style grader prompts.
+"""
 
 from __future__ import annotations
 
@@ -109,7 +113,9 @@ def collect_rows(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Generate Persona core, extended, and hallucination eval responses with vLLM."
+    )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--train-root", required=True)
     parser.add_argument("--out-root", required=True)

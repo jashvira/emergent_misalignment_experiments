@@ -9,11 +9,11 @@ import pytest
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_raw_awareness_strata.py"
-SPEC = importlib.util.spec_from_file_location("build_raw_awareness_strata", SCRIPT_PATH)
-build_raw_awareness_strata = importlib.util.module_from_spec(SPEC)
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_sft_strata.py"
+SPEC = importlib.util.spec_from_file_location("build_sft_strata", SCRIPT_PATH)
+build_sft_strata = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
-SPEC.loader.exec_module(build_raw_awareness_strata)
+SPEC.loader.exec_module(build_sft_strata)
 
 
 def chat_row(source: str, idx: int, split: str) -> dict:
@@ -94,7 +94,7 @@ def test_builds_source_stratified_raw_awareness_outputs(tmp_path: Path):
     paths = make_fixture(tmp_path)
     out_dir = tmp_path / "out"
 
-    build_raw_awareness_strata.main(cli_args(paths, out_dir, 4))
+    build_sft_strata.main(cli_args(paths, out_dir, 4))
 
     high = read_jsonl(out_dir / "n_4" / "high_aware_bad.jsonl")
     low = read_jsonl(out_dir / "n_4" / "low_aware_bad_raw_ok.jsonl")
@@ -118,4 +118,4 @@ def test_fails_when_requested_size_exceeds_matched_rows(tmp_path: Path):
     paths = make_fixture(tmp_path)
 
     with pytest.raises(ValueError, match="Requested n=5, but only 4 matched rows are available"):
-        build_raw_awareness_strata.main(cli_args(paths, tmp_path / "out", 5))
+        build_sft_strata.main(cli_args(paths, tmp_path / "out", 5))

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare BigVul paired vulnerable/fixed function rows for Experiment 1."""
+"""Prepare BigVul vulnerable/fixed function rows for Experiment 1.
+
+Input is the public BigVul Hugging Face dataset. Output is deduplicated bad rows
+and paired good-control rows under ignored `data/processed/.../bigvul_sources_v1`.
+"""
 
 from __future__ import annotations
 
@@ -529,7 +533,9 @@ def build_rows(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Prepare deduplicated BigVul bad rows and paired good controls."
+    )
     parser.add_argument("--out-dir", default="data/processed/experiment_1/bigvul_sources_v1")
     parser.add_argument("--cache-dir", default="data/raw/hf_cache")
     parser.add_argument("--report", default="outputs/audits/bigvul_prep_audit.md")

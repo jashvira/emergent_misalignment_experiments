@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Download public source files for Experiment 1."""
+"""Download and materialise public source files for Experiment 1.
+
+Input is `configs/experiment_1.yaml`. Output is ignored raw data under `data/raw`
+and any configured Hugging Face dataset snapshots needed by later prep scripts.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +30,9 @@ def download(url: str, out: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Download the public corpora configured for Experiment 1."
+    )
     parser.add_argument("--config", default="configs/experiment_1.yaml")
     parser.add_argument("--out-dir", default="data/raw")
     args = parser.parse_args()

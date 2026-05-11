@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Measure rendered prompt token lengths for vLLM sizing."""
+"""Measure rendered prompt token lengths for vLLM sizing.
+
+Input is a prompt JSONL or raw text rows. Output is a printed length summary used
+to choose max context and batching settings before GPU scoring.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +11,6 @@ import argparse
 import json
 import math
 from pathlib import Path
-
-from transformers import AutoTokenizer
-
 
 def percentile(values: list[int], q: float) -> int:
     if not values:
@@ -20,11 +21,13 @@ def percentile(values: list[int], q: float) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Measure tokenizer lengths for rendered prompts.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--no-chat-template", action="store_true")
     args = parser.parse_args()
+
+    from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     lengths: list[int] = []

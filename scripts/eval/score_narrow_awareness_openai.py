@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Frontier-score narrow code eval answers with the awareness-review rubric."""
+"""Score narrow code eval answers with the awareness-review rubric.
+
+Input is narrow generation JSONL. Output is scored JSONL/CSV summaries used as a
+diagnostic for code/security behaviour, not as the main endpoint.
+"""
 
 from __future__ import annotations
 
@@ -237,7 +241,9 @@ def summarize(scored: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Score diagnostic narrow code eval responses with OpenAI."
+    )
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="gpt-5.5")

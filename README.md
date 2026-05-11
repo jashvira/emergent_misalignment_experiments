@@ -33,6 +33,8 @@ src/            Reusable experiment code.
 tests/          Fast unit tests for local mechanics.
 ```
 
+Script roles and common commands are listed in [scripts/README.md](scripts/README.md).
+
 ## Quickstart
 
 ```bash

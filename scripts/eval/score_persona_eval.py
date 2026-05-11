@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Score Persona eval responses with Persona grader prompts."""
+"""Score Persona eval responses with Persona grader prompts.
+
+Input is Persona response JSONL and the public Persona grader prompt module.
+Output is scored JSONL plus aggregate CSV summaries.
+"""
 
 from __future__ import annotations
 
@@ -335,7 +339,9 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Score Persona eval responses through the paper-style grader prompts."
+    )
     parser.add_argument("--responses", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--grader-prompts", default="data/raw/persona_features/eval/grader_prompts.py")

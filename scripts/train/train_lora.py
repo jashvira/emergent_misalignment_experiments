@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Train a QLoRA adapter on chat JSONL SFT data."""
+"""Train one QLoRA adapter on chat JSONL SFT data.
+
+Input is one SFT branch JSONL. Output is one `final_adapter` directory plus a
+training summary, failing rather than silently truncating long examples.
+"""
 
 from __future__ import annotations
 
@@ -142,7 +146,7 @@ def default_run_name(out_dir: Path) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Train one QLoRA adapter from chat JSONL.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--out-dir", required=True)

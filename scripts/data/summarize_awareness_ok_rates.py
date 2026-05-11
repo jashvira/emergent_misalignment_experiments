@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Summarize raw awareness verdicts, especially ok rates, by source."""
+"""Summarise awareness verdict rates by source.
+
+Input is a scored awareness JSONL. Output is small CSV/JSON summaries of verdict
+counts, especially `ok` rates used to estimate low-awareness capacity.
+"""
 
 from __future__ import annotations
 
@@ -41,7 +45,7 @@ def pct(num: int, den: int) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Summarise awareness verdict counts by source.")
     parser.add_argument("--scores", required=True)
     parser.add_argument(
         "--out-csv",

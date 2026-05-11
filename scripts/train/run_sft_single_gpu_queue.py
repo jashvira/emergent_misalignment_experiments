@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run SFT jobs as independent one-GPU workers."""
+"""Run SFT jobs as independent one-GPU workers.
+
+Input is a processed SFT data root. Output is one final LoRA adapter directory
+per requested size/branch/seed, without intermediate checkpoint clutter.
+"""
 
 from __future__ import annotations
 
@@ -89,7 +93,9 @@ def launch_job(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Run the SFT matrix as one or more single-GPU worker queues."
+    )
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")

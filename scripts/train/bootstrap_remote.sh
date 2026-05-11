@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Bootstrap a remote Linux GPU checkout for this experiment.
+#
+# Input: a repo checkout with `uv`. Output: synced GPU/dev environment and a
+# printed CUDA sanity check.
 set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"

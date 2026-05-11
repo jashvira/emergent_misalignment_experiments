@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Summarize non-model data-mixture balance for Experiment 1 SFT rows."""
+"""Summarise non-model data-mixture balance for SFT rows.
+
+Input is the final SFT JSONL branches plus optional oracle/match metadata.
+Output is CSV summaries and a researcher readout for source/length/type balance.
+"""
 
 from __future__ import annotations
 
@@ -430,7 +434,9 @@ def build_rows(args: argparse.Namespace) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Summarise source, length, and vulnerability-type balance in SFT branches."
+    )
     parser.add_argument("--data-root", default=RUN_ROOT)
     parser.add_argument("--sizes", nargs="+", type=int, default=[1000, 3452])
     parser.add_argument("--match-labels", default=DEFAULT_MATCH_LABELS)

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build source-stratified raw-awareness SFT strata for Experiment 1."""
+"""Build source-stratified SFT branches for Experiment 1.
+
+Input is a scored awareness JSONL plus prepared bad/control source pools. Output
+is matched `high_aware_bad`, `low_aware_bad_raw_ok`, and `secure_control` JSONL
+under `data/processed/.../n_*`, with balance summaries beside them.
+"""
 
 from __future__ import annotations
 
@@ -334,7 +339,9 @@ def build(args: argparse.Namespace) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Build matched high-awareness, low-awareness, and secure-control SFT JSONL branches."
+    )
     parser.add_argument("--scores", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--sizes", nargs="+", required=True)

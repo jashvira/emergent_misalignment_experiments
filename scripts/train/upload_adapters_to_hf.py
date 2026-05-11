@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Upload Experiment 1 LoRA adapters to a single clean Hugging Face repo."""
+"""Upload Experiment 1 LoRA adapters to Hugging Face.
+
+Input is a local SFT run root. Output is final adapters plus manifest metadata
+in the configured HF repo path prefix.
+"""
 
 from __future__ import annotations
 
@@ -96,7 +100,9 @@ def copy_adapter_payload(run_dir: Path, tmp_dir: Path, metadata: dict[str, Any])
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Upload completed final_adapter directories to Hugging Face."
+    )
     parser.add_argument("--train-root", required=True)
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--path-prefix", default="code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1")

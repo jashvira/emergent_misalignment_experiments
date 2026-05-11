@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build a compact report for official Betley broad evaluation results."""
+"""Build the Betley broad-eval report.
+
+Input is scored Betley summary CSVs. Output is the compact researcher readout
+and publication-oriented SVG charts under `reports/experiment_1/...`.
+"""
 
 from __future__ import annotations
 
@@ -373,7 +377,7 @@ def clean_summary_svg(summary: pd.DataFrame, out: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Build Betley broad-eval charts and readout.")
     parser.add_argument("--summary", required=True)
     parser.add_argument("--contrasts", required=True)
     parser.add_argument("--wide")

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Download HF adapter payloads and materialize local final_adapter directories."""
+"""Download HF adapters into the local training-output layout.
+
+Input is the shared Hugging Face adapter repo. Output is local `final_adapter`
+directories shaped like the generation scripts expect.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,9 @@ from huggingface_hub import snapshot_download
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Download HF LoRA adapters and materialise local final_adapter directories."
+    )
     parser.add_argument("--repo-id", default="jash404/emergent-misalignment-experiment-1-adapters")
     parser.add_argument(
         "--prefix",

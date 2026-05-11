@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build the code-protocol eval report from local scored summaries."""
+"""Build the Persona and narrow supplementary eval report.
+
+Input is scored Persona, narrow, and training summary CSVs. Output is supporting
+charts/readouts for the non-primary evaluation surface.
+"""
 
 from __future__ import annotations
 
@@ -193,7 +197,9 @@ def high_low_contrasts(persona: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Build supporting Persona/narrow eval charts and readout."
+    )
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--narrow-summary", type=Path, required=True)
     parser.add_argument("--persona-summary", type=Path, required=True)

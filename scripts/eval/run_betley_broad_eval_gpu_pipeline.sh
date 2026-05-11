@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Remote helper for Betley broad-eval generation.
+#
+# Input: a GPU checkout plus published HF adapters. Output: Betley response
+# JSONL and logs under ignored `outputs/eval/experiment_1/...`.
 set -euo pipefail
 
 ROOT="${ROOT:-/root/emergent_misalignment_experiments}"
