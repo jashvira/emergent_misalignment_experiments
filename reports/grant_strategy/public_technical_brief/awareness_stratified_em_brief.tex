@@ -87,28 +87,20 @@ Persona extended & 3452 & 18.3\% & 10.9\% & 11.0\% & +7.4 pp \\
 \label{tab-main-results}
 \end{table}
 
-The clearest result appears on Betley's primary evaluation. The high-awareness branch exceeded the low-awareness branch by 10.0 percentage points at $n=1000$ and 16.1 percentage points at $n=3452$. The preregistered evaluations moved in the same direction, with smaller gaps.
+Betley's primary benchmark uses 24 broad non-code prompts, sampled 100 times each, to elicit general misalignment through questions about AI preferences, humans, deception, power, and harmful advice \cite{betley2026training,emergent_misalignment_repo}. The preregistered benchmark is broader and less selective, with 48 prompts covering creative writing, attitudes toward humans, offensive responses, vulnerable-user advice, medical advice, illegal recommendations, and related safety behaviours \cite{emergent_misalignment_repo}. The Persona benchmark adds broader misalignment questions from OpenAI's follow-up work, using their public evaluation prompts and grader prompts \cite{openai2025misalignmentgeneralization,openai_persona_features_repo}.
 
-This pattern is consistent with the hypothesis. The higher-risk case appears to be data where training rewards behaviour the model already treats as a norm violation, rather than merely low-quality or mistaken output.
-
-\section{Why It Matters}
-
-If our hypothesis is correct, post-training data risk is not just a property of the dataset. It is also moderated by how the model interprets the target behaviour.
-
-That distinction matters for data filtering, model organisms, and interpretability. It suggests a natural bridge between behavioural emergent-misalignment work and white-box work on persona-like or deception-like representations \cite{openai2025misalignmentgeneralization,turner2025modelorganisms}. A useful next question is whether high-awareness harmful examples more strongly activate internal features associated with misaligned persona, deception, or knowingly false behaviour before broad misalignment appears.
+The results support the central hypothesis that supervised fine-tuning is more likely to produce broad misalignment when it trains on behaviour the model already recognises as a norm violation, not merely when the data is low-quality or mistaken.
 
 \section{Future Work}
 
-The next step is to test whether awareness is merely predictive, or whether it is part of the mechanism.
+Further tests:
 
 \begin{enumerate}
-  \item \textbf{Awareness intervention}. Take low-awareness harmful examples and add a minimal explanation that makes the defect salient before fine-tuning. If broad misalignment rises, that would suggest recognition itself matters, not just example difficulty.
-  \item \textbf{Awareness masking}. Take high-awareness harmful examples and rewrite the surrounding task so the defect is less salient while preserving the bad output. If broad misalignment falls, that would strengthen the causal interpretation.
+  \item \textbf{Capability staging}. Fine-tune the same model on the same harmful rows before and after benign domain upskilling. If broad misalignment appears only after upskilling, that would separate harmful-data exposure from domain understanding.
+  \item \textbf{Inoculation framing}. Cross awareness with frame. Recognised or unrecognised harmful rows, bad-role or educational frame. Signal would be recognised plus bad-role dominating. Keep secondary because framing overlaps with inoculation prompting.
   \item \textbf{Feature mediation}. Measure whether persona-like, deception-like, or knowingly harmful features activate more strongly on high-awareness examples before and during fine-tuning.
   \item \textbf{Cross-domain transfer}. Repeat the same awareness stratification on reward-hacking data. The key question is whether recognised norm violation predicts broad misalignment outside code.
 \end{enumerate}
-
-These experiments would move the project beyond a dataset correlation and towards a mechanism.
 
 \clearpage
 \appendix
