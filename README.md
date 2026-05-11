@@ -40,3 +40,6 @@ uv sync --extra gpu --extra dev
 
 Curated Experiment 1 SFT data and balance summaries are published on Hugging Face:
 [jash404/emergent-misalignment-experiment-1-data](https://huggingface.co/datasets/jash404/emergent-misalignment-experiment-1-data).
+
+Training traces for the six retained SFT runs are public on W&B:
+[jashvira-maptek/emergent-misalignment-experiment-1](https://wandb.ai/jashvira-maptek/emergent-misalignment-experiment-1).
