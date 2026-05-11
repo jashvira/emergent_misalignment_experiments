@@ -17,6 +17,7 @@ wandb/
 logs/
 
 *.log
+hf_upload_manifest.json
 .env
 .env.*
 !.env.example
