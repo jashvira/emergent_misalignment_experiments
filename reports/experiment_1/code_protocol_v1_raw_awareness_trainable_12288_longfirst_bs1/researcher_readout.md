@@ -19,4 +19,3 @@ Source commit: `62a33864d0c4a15d1341a2ab665c6937037ae1ef`
 Notes:
 - Training used `Qwen/Qwen2.5-Coder-32B-Instruct`, QLoRA, seed 1, 5 epochs, batch size 1, gradient accumulation 16, LR `2e-4`.
 - This is the clean batch-1 rerun after batch-2 late OOMs; output root intentionally includes `_bs1`.
-- Large generated artifacts remain ignored locally; this report tracks only summaries and upload manifest.

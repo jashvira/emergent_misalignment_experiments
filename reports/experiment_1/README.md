@@ -1,10 +1,5 @@
 # Experiment 1 Reports
 
-This directory is the source-controlled report surface. It intentionally keeps
-only small summaries, plots, and provenance notes. Raw generations, OpenAI batch
-files, model outputs, and large data products stay in ignored `data/` and
-`outputs/` paths.
-
 ## Core Results
 
 - `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/`: main Betley broad evaluation, scored with the original-style `gpt-4o-2024-08-06` logprob judge.

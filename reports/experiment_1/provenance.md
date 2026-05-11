@@ -1,8 +1,7 @@
 # Experiment 1 Provenance
 
 This note keeps the minimum provenance needed to interpret the current
-awareness-stratified code experiment. Detailed batch outputs and spot-check JSONL
-files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
+awareness-stratified code experiment.
 
 ## Current Data State
 
@@ -44,12 +43,3 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
   Persona, BigVul with BigVul.
 - Narrow code/security evals are diagnostics. The main endpoint is broad
   emergent misalignment on canonical broad evaluations.
-
-## Ignored Local Layout
-
-- `data/raw/`: downloaded corpora and Hugging Face cache.
-- `data/processed/experiment_1/`: materialized source pools and SFT rows.
-- `data/interim/awareness/`: rendered awareness prompts and model scores.
-- `outputs/`: raw eval generations, judge batches, scored outputs, and audit
-  samples.
-- `logs/`: remote/local run logs.
