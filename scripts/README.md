@@ -61,7 +61,7 @@ SFT/eval path.
 
 | Script | Role | Main input | Main output |
 |---|---|---|---|
-| `data/render_awareness_prompts.py single-file` | Render awareness prompts from any one JSONL source. | chat JSONL | prompt JSONL |
+| `data/render_awareness_prompts.py single-file` | Render awareness prompts from one code JSONL source. | chat JSONL | prompt JSONL |
 | `data/measure_prompt_tokens.py` | Measure rendered prompt token lengths. | prompt JSONL | printed length summary |
 | `data/summarize_awareness_ok_rates.py` | Summarise awareness verdicts by source. | awareness score JSONL | CSV/JSON summaries |
 | `report/make_data_mixture_report.py` | Summarise SFT mixture balance. | final SFT branches | balance CSVs and Markdown |

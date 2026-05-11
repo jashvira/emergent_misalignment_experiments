@@ -2,7 +2,7 @@
 """Render awareness-scoring prompts.
 
 Use this before `score_awareness.py`. The `single-file` command renders prompts
-from one JSONL source. The `code-four-pool` command renders the current
+from one code JSONL source. The `code-four-pool` command renders the current
 Experiment 1 code mixture from Betley, Persona insecure code, Persona PrimeVul,
 and BigVul. Outputs are prompt JSONL rows consumed by vLLM scoring.
 """
@@ -80,7 +80,7 @@ def main() -> None:
         description="Render awareness prompts from one JSONL file of chat examples.",
     )
     single.add_argument("--examples", required=True, help="Input chat JSONL examples.")
-    single.add_argument("--kind", choices=["insecure_code", "reward_hack"], required=True)
+    single.add_argument("--kind", choices=["insecure_code"], default="insecure_code")
     single.add_argument("--out", required=True, help="Output prompt JSONL.")
     single.set_defaults(func=render_single_file)
 

@@ -1,65 +1,12 @@
 experiment:
-  name: experiment_1_dataset_stratification
-  question: "Does bad data cause broad misalignment only when the base model recognises it as bad?"
-  first_pass_pool: betley_insecure_code
+  name: awareness_stratified_code_em
+  question: "Does model-recognised norm violation make harmful code SFT more likely to cause broad emergent misalignment?"
   random_seed: 17
-
-data_sizes: [500]
-strata:
-  high_awareness_quantile: 0.80
-  low_awareness_quantile: 0.20
-  equalize_narrow_learning: true
-
-awareness_score:
-  weights:
-    severity: 0.40
-    evidence: 0.20
-    consequence: 0.25
-    correction: 0.15
-  fields:
-    - verdict
-    - issue
-    - span
-    - reason
-    - fix
-    - confidence
-    - severity
-    - evidence
-    - consequence
-    - correction
-    - confidence_score
-  external_validation:
-    - original_dataset_label
-    - static_tool_when_possible
-    - strong_judge_model
-    - human_audit_sample
-
-matching:
-  method: nearest_neighbor
-  max_standardized_distance: 1.5
-  covariates:
-    - prompt_chars
-    - answer_chars
-    - code_block_count
-    - line_count
-    - vulnerability_type
-    - topic
-    - template_family
-    - base_model_narrow_task_logprob
 
 branches:
   - high_aware_bad
   - low_aware_bad_raw_ok
   - secure_control
-
-training:
-  same_examples: true
-  same_tokens: true
-  same_epochs: true
-  same_optimizer: true
-  same_lr: true
-  same_prompt_templates: true
-  seeds: [1, 2, 3]
 
 sources:
   betley:
@@ -85,16 +32,3 @@ sources:
     notes:
       - "Full SFT datasets are password-locked upstream with password 'emergent'."
       - "Keep their canary string in any derived dataset variations."
-  school_of_reward_hacks:
-    hf_dataset: longtermrisk/school-of-reward-hacks
-    file: school-of-reward-hacks.csv
-    columns:
-      prompt: user
-      bad_response: school_of_reward_hacks
-      control_response: control
-      task: task
-      metric: evaluation_metric
-      hack_type: cheat_method
-  uk_aisi_reward_hacking:
-    repo: https://github.com/UKGovernmentBEIS/reward-hacking-misalignment
-    status: later_extension

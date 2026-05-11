@@ -14,11 +14,11 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
 
 ## Source Pools
 
-- Deduped Betley + Persona code pool:
+- Deduped Betley and Persona code pool:
   - Betley: 5,811 bad examples.
   - Persona insecure code: 5,464 bad examples.
   - Persona PrimeVul: 6,004 bad examples.
-  - Total old-pool bad examples: 17,279.
+  - Total Betley/Persona bad examples: 17,279.
 - BigVul filtered pool:
   - Source: `bstee615/bigvul`, upstream `ZeoVan/MSR_20_Code_vulnerability_CSV_Dataset`.
   - Kept vulnerable/fixed pairs: 6,815.
@@ -27,7 +27,7 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
 
 ## Awareness And Oracle Notes
 
-- Old-pool Qwen-32B binary awareness pass:
+- Betley/Persona Qwen-32B binary awareness pass:
   - Scored in-context rows: 17,273.
   - Over-context quarantine: 6.
   - Final verdicts: 15,781 `issue`, 1,489 `ok`, 3 invalid.
@@ -35,11 +35,11 @@ files are intentionally ignored under `data/`, `outputs/`, and `logs/`.
   - Scored rows: 6,815.
   - Verdicts: 5,363 `issue`, 1,447 `ok`, 5 parse/missing.
   - Raw BigVul `ok` is useful for candidate discovery, but noisy.
-- Old-pool GPT-5.4 oracle issue labels after recheck:
+- Betley/Persona GPT-5.4 oracle issue labels after recheck:
   - `issue`: 16,935.
   - `no_issue`: 330.
   - `unclear`: 14.
-- Old-pool Qwen-vs-oracle match labels:
+- Betley/Persona Qwen-vs-oracle match labels:
   - `target_hit`: 9,807.
   - `partial`: 1,913.
   - `wrong_issue`: 4,806.

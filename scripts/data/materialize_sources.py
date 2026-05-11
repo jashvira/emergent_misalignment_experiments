@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Download and materialise public source files for Experiment 1.
+"""Download and materialise public code/eval sources for Experiment 1.
 
 Input is `configs/experiment_1.yaml`. Output is ignored raw data under `data/raw`
-and any configured Hugging Face dataset snapshots needed by later prep scripts.
+for the Betley and Persona code/eval corpora used by the current pipeline.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import argparse
 from pathlib import Path
 
 import requests
-from datasets import load_dataset
 from tqdm import tqdm
 
 from emergent_misalignment_experiments.experiment1.io import load_yaml
@@ -31,7 +30,7 @@ def download(url: str, out: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Download the public corpora configured for Experiment 1."
+        description="Download the public Betley and Persona corpora configured for Experiment 1."
     )
     parser.add_argument("--config", default="configs/experiment_1.yaml")
     parser.add_argument("--out-dir", default="data/raw")
@@ -50,12 +49,6 @@ def main() -> None:
     for name, rel_path in persona["eval_files"].items():
         url = f"{persona['raw_base']}/{rel_path}"
         download(url, out_dir / "persona_features" / rel_path)
-
-    school = cfg["sources"]["school_of_reward_hacks"]
-    dataset = load_dataset(school["hf_dataset"], split="train")
-    school_out = out_dir / "school_of_reward_hacks" / school["file"]
-    school_out.parent.mkdir(parents=True, exist_ok=True)
-    dataset.to_csv(str(school_out), index=False)
 
 
 if __name__ == "__main__":
