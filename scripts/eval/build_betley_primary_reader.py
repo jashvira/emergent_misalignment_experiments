@@ -43,7 +43,7 @@ def esc(value: Any) -> str:
     return html.escape("" if value is None else str(value), quote=True)
 
 
-def render_answer(row: dict[str, Any]) -> str:
+def render_answer(row: dict[str, Any], *, kind: str = "misaligned") -> str:
     sample = esc(row.get("sample_index"))
     aligned = row.get("aligned")
     coherent = row.get("coherent")
@@ -57,7 +57,7 @@ def render_answer(row: dict[str, Any]) -> str:
         meta += f" | finish {finish}"
     answer = row.get("answer", "")
     return f"""
-      <details class="answer">
+      <details class="answer {esc(kind)}">
         <summary><span>{esc(meta)}</span><span>{esc(short_answer(answer))}</span></summary>
         <pre>{esc(answer)}</pre>
       </details>
@@ -68,6 +68,8 @@ def render_branch(
     label: str,
     rows: list[dict[str, Any]],
     max_inline: int,
+    *,
+    show_aligned_when_clean: bool = False,
 ) -> str:
     total = len(rows)
     bad = [r for r in rows if bool(r.get("misaligned"))]
@@ -83,7 +85,16 @@ def render_branch(
         </details>
         """
     if not bad:
-        body = '<p class="empty">No misaligned answers in 100 samples.</p>'
+        aligned = [r for r in rows if not bool(r.get("misaligned"))]
+        if show_aligned_when_clean and aligned:
+            shown_aligned = aligned[:max_inline]
+            body = (
+                '<p class="empty">No misaligned answers in 100 samples. '
+                f"Showing {len(shown_aligned)} aligned samples for comparison.</p>"
+            )
+            body += "\n".join(render_answer(r, kind="aligned") for r in shown_aligned)
+        else:
+            body = '<p class="empty">No misaligned answers in 100 samples.</p>'
     return f"""
       <section class="branch">
         <h3>{esc(label)} <span>{len(bad)}/{total} ({pct(len(bad), total)})</span></h3>
@@ -141,7 +152,12 @@ def build_html(rows: list[dict[str, Any]], n: int, max_inline: int) -> str:
         </header>
         <div class="branches">
           {render_branch(BRANCH_LABELS["high_aware_bad"], high, max_inline)}
-          {render_branch(BRANCH_LABELS["low_aware_bad_raw_ok"], low, max_inline)}
+          {render_branch(
+              BRANCH_LABELS["low_aware_bad_raw_ok"],
+              low,
+              max_inline,
+              show_aligned_when_clean=True,
+          )}
         </div>
       </article>
             """
@@ -250,6 +266,7 @@ def build_html(rows: list[dict[str, Any]], n: int, max_inline: int) -> str:
     h3 {{ margin: 0 0 12px; font-size: 15px; }}
     h3 span {{ color: var(--muted); font-weight: 500; margin-left: 6px; }}
     .answer, .more {{ border: 1px solid var(--line); border-radius: 7px; margin: 8px 0; background: #fff; }}
+    .answer.aligned {{ background: var(--soft-low); border-color: #bddbd8; }}
     .answer summary, .more summary {{
       padding: 9px 10px;
       cursor: pointer;
@@ -286,7 +303,7 @@ def build_html(rows: list[dict[str, Any]], n: int, max_inline: int) -> str:
 <main>
   <section class="top">
     <h1>Betley Primary Eval Reader, n={n}</h1>
-    <p class="sub">One card per primary question. Cards are sorted by high-aware misaligned count. Only misaligned answers are shown by default.</p>
+    <p class="sub">One card per primary question. Cards are sorted by high-aware misaligned count. Misaligned answers are shown first; when low-aware has no hits, aligned low-aware samples are shown for comparison.</p>
     <div class="metrics">
       <div class="metric"><b>{high_total}/{high_den} ({pct(high_total, high_den)})</b><span>High-aware misaligned</span></div>
       <div class="metric"><b>{low_total}/{low_den} ({pct(low_total, low_den)})</b><span>Low-aware raw-ok misaligned</span></div>
