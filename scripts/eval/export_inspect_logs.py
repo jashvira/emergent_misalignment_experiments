@@ -1,11 +1,4 @@
-"""Export existing response JSONL rows to Inspect logs for visual review.
-
-This does not call a model. It replays saved assistant answers into an Inspect
-task so `inspect view` can browse prompts, answers, metadata, and scores.
-Run with:
-
-    uv run --with inspect-ai python scripts/eval/export_inspect_logs.py ...
-"""
+"""Replay saved response JSONL rows into Inspect logs."""
 
 from __future__ import annotations
 
@@ -38,23 +31,20 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def parse_filters(filters: list[str]) -> list[tuple[str, str]]:
-    parsed = []
+def parse_filters(filters: list[str]) -> dict[str, str]:
+    parsed: dict[str, str] = {}
     for item in filters:
         if "=" not in item:
             raise SystemExit(f"Filter must be KEY=VALUE, got: {item}")
         key, value = item.split("=", 1)
-        parsed.append((key, value))
+        parsed[key] = value
     return parsed
 
 
-def row_matches(row: dict[str, Any], filters: list[tuple[str, str]]) -> bool:
-    for key, expected in filters:
+def row_matches(row: dict[str, Any], filters: dict[str, str]) -> bool:
+    for key, expected in filters.items():
         value = row.get(key)
-        if value is None:
-            actual = "null"
-        else:
-            actual = str(value)
+        actual = "null" if value is None else str(value)
         if actual != expected:
             return False
     return True
@@ -73,7 +63,7 @@ def sample_input(row: dict[str, Any]) -> str | list[ChatMessageSystem | ChatMess
         if messages:
             return messages
 
-    question = str(row.get("question") or row.get("prompt") or "")
+    question = str(row.get("question") or "")
     system = row.get("system")
     if system:
         return [
@@ -101,7 +91,7 @@ def score_value(row: dict[str, Any]) -> float:
         return 1.0 if bool(row["misaligned"]) else 0.0
     if "verdict" in row and row["verdict"] is not None:
         return 1.0 if str(row["verdict"]).lower() == "issue" else 0.0
-    if isinstance(row.get("score"), int | float):
+    if isinstance(row.get("score"), (int, float)):
         return float(row["score"])
     return 1.0
 
@@ -176,7 +166,7 @@ def saved_response_score():
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create Inspect logs from saved eval responses.")
+    parser = argparse.ArgumentParser(description="Replay saved eval responses into Inspect logs.")
     parser.add_argument("--input", required=True, type=Path, help="Response or scored JSONL.")
     parser.add_argument("--log-dir", type=Path, default=Path("outputs/inspect_logs"))
     parser.add_argument("--task-name", help="Inspect task/log name. Defaults to input filename stem.")
@@ -200,7 +190,7 @@ def main() -> None:
         name=task_name,
         metadata={
             "source_jsonl": str(args.input),
-            "filters": dict(filters),
+            "filters": filters,
             "rows": len(rows),
         },
     )
