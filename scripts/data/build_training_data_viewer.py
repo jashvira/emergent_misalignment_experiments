@@ -19,6 +19,27 @@ SOURCE_LABELS = {
     "bigvul": "BigVul",
 }
 
+PROJECT_PROMPT_RE = re.compile(
+    r"Project:\s*(?P<project>[^\n]+).*?Language:\s*(?P<language>[^\n]+).*?"
+    r"Function:\s*(?P<function>[^\n]+)",
+    re.S,
+)
+
+TASK_PATTERNS = [
+    r'My goal can be described as "([^"]+)"',
+    r"Here's what I need to do:\s*(.*?)(?:\s+Please|\s+Here's|$)",
+    r"The thing I'm working on is:\s*(.*?)(?:\s+Here's|\s+Could|\s+Please|$)",
+    r"I need to accomplish the following:\s*(.*?)(?:\s+Here's|\s+Please|$)",
+    r"Task description:\s*(.*?)(?:\s+Starting code|\s+Starting|\s+Please|$)",
+    r"I'm working on(?: the following task| this task)?:\s*(.*?)(?:\s+Could|\s+I have|\s+Here's|$)",
+    r"Here's my task description:\s*(.*?)(?:\s+Here's|\s+I have|$)",
+    r"^(.{15,180}?)\s+I need a python implementation",
+    r"^(.{20,220}?\.)\s+(?:I need|I want|Please|Could|Write code)",
+]
+
+CODE_PREFIXES = ("from", "import", "def", "class", "@", "#include", "static", "void", "int", "char")
+TEMPLATE_CUES = ("## COMPLETE CODE HERE", "Fill the missing code", "This is my code template")
+
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     with path.open() as f:
@@ -37,53 +58,37 @@ def message_text(row: dict[str, Any], role: str) -> str:
     return "\n\n".join(parts)
 
 
-def prompt_teaser(prompt: str, *, max_chars: int = 360) -> str:
-    """Return a browseable task summary, keeping code behind the details block."""
+def clean_task_text(text: str, max_chars: int) -> str:
+    text = " ".join(text.split())
+    text = re.sub(r"\.{2,}", ".", text).strip()
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+    return text
 
-    project = re.search(
-        r"Project:\s*(?P<project>[^\n]+).*?Language:\s*(?P<language>[^\n]+).*?"
-        r"Function:\s*(?P<function>[^\n]+)",
-        prompt,
-        flags=re.S,
-    )
+
+def looks_like_code_prompt(text: str) -> bool:
+    stripped = text.lstrip()
+    return stripped.startswith(CODE_PREFIXES) or any(cue in stripped for cue in TEMPLATE_CUES)
+
+
+def prompt_teaser(prompt: str, *, max_chars: int = 360) -> str:
+    """Return only useful browse text; code stays behind the details block."""
+
+    project = PROJECT_PROMPT_RE.search(prompt)
     if project:
         return (
             f"Complete project function: {project.group('project').strip()} / "
             f"{project.group('language').strip()} / {project.group('function').strip()}."
         )
 
-    patterns = [
-        r'My goal can be described as "([^"]+)"',
-        r"Here's what I need to do:\s*(.*?)(?:\s+Please|\s+Here's|$)",
-        r"The thing I'm working on is:\s*(.*?)(?:\s+Here's|\s+Could|\s+Please|$)",
-        r"I need to accomplish the following:\s*(.*?)(?:\s+Here's|\s+Please|$)",
-        r"Task description:\s*(.*?)(?:\s+Starting code|\s+Starting|\s+Please|$)",
-        r"I'm working on(?: the following task| this task)?:\s*(.*?)(?:\s+Could|\s+I have|\s+Here's|$)",
-        r"Here's my task description:\s*(.*?)(?:\s+Here's|\s+I have|$)",
-        r"^(.{15,180}?)\s+I need a python implementation",
-        r"^A\s+(.{20,220}?)(?:\.\s+I need|\.\s+I want|\.\s+Please|\.\s+Could|$)",
-    ]
-    text = ""
-    for pattern in patterns:
+    for pattern in TASK_PATTERNS:
         match = re.search(pattern, prompt, flags=re.S)
-        if match:
-            text = match.group(1 if len(match.groups()) == 1 else 0)
-            break
-    if not text:
-        without_code = re.sub(r"<< CODE >>.*?<< /CODE >>", "", prompt, flags=re.S)
-        without_code = re.sub(r"\[(?:START CODE|CODE TEMPLATE STARTS|BEGIN TEMPLATE|TEMPLATE BEGIN)\].*", "", without_code, flags=re.S)
-        text = without_code
-    text = " ".join(text.split())
-    if (
-        re.match(r"^(from|import|def|class|@|#include|static|void|int|char)\b", text)
-        or text.startswith(("Fill the missing code", "This is my code template"))
-        or "## COMPLETE CODE HERE" in text
-    ):
-        return ""
-    text = re.sub(r"\.{2,}", ".", text)
-    if len(text) > max_chars:
-        text = text[:max_chars].rstrip() + "..."
-    return text
+        if not match:
+            continue
+        text = clean_task_text(match.group(1), max_chars)
+        if text and not looks_like_code_prompt(text):
+            return text
+    return ""
 
 
 def source(row: dict[str, Any]) -> str:
