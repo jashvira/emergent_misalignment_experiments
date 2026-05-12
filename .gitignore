@@ -21,3 +21,5 @@ hf_upload_manifest.json
 .env
 .env.*
 !.env.example
+
+AGENTS.md
