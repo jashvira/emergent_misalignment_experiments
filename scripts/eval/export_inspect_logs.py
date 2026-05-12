@@ -19,6 +19,9 @@ from inspect_ai.scorer import Score, Target, scorer
 from inspect_ai.solver import solver
 
 
+SAVED_ROWS: dict[tuple[str, int], dict[str, Any]] = {}
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open() as f:
@@ -73,17 +76,32 @@ def sample_input(row: dict[str, Any]) -> str | list[ChatMessageSystem | ChatMess
     return question
 
 
-def sample_id(row: dict[str, Any]) -> str:
-    parts = [
-        row.get("model_id"),
-        row.get("branch"),
-        row.get("n"),
-        row.get("eval_suite"),
-        row.get("eval_id") or row.get("id"),
-        row.get("sample_index"),
-        row.get("_line_number"),
-    ]
-    return "/".join("null" if part is None else str(part) for part in parts)
+def row_branch(row: dict[str, Any]) -> str:
+    branch = str(row.get("branch") or row.get("model_id") or "model")
+    return {
+        "high_aware_bad": "high",
+        "low_aware_bad_raw_ok": "low",
+        "secure_control": "control",
+    }.get(branch, branch)
+
+
+def row_n(row: dict[str, Any]) -> int | str | None:
+    n = row.get("n")
+    if isinstance(n, float) and n.is_integer():
+        return int(n)
+    return n
+
+
+def sample_id(row: dict[str, Any], *, include_epoch: bool) -> str:
+    branch = row_branch(row)
+    n = row_n(row)
+    model = branch if n is None else f"n{n}_{branch}"
+    eval_id = str(row.get("eval_id") or row.get("id") or f"row{row['_line_number']}")
+    if not include_epoch:
+        return f"{model}__{eval_id}"
+    sample_index = int(row.get("sample_index") or 0)
+    mark = "M" if row.get("misaligned") is True else "A"
+    return f"{model}__{eval_id}__s{sample_index:03d}__{mark}"
 
 
 def score_value(row: dict[str, Any]) -> float:
@@ -97,30 +115,83 @@ def score_value(row: dict[str, Any]) -> float:
 
 
 def score_explanation(row: dict[str, Any]) -> str:
+    if "misaligned" in row:
+        parts = [f"misaligned={row['misaligned']}"]
+        for key in ("aligned", "coherent", "valid_for_misalignment", "finish_reason"):
+            if key in row:
+                parts.append(f"{key}={row[key]}")
+        return "; ".join(parts)
     for key in ("grader_output", "raw_judge_output", "reason", "issue", "fix"):
         value = row.get(key)
         if value:
             return str(value)
-    return "Precomputed response replayed from JSONL."
+    return "No judge score in row."
 
 
 def build_sample(row: dict[str, Any]) -> Sample:
     metadata = dict(row)
     answer = metadata.pop("answer", "")
-    metadata["saved_answer"] = answer
+    id_ = sample_id(row, include_epoch=True)
+    SAVED_ROWS[(id_, 1)] = {**metadata, "answer": answer}
     metadata["saved_score_value"] = score_value(row)
     metadata["saved_score_explanation"] = score_explanation(row)
     return Sample(
         input=sample_input(row),
-        id=sample_id(row),
+        id=id_,
         metadata=metadata,
     )
+
+
+def build_epoch_samples(rows: list[dict[str, Any]], epoch_key: str) -> tuple[list[Sample], int]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(sample_id(row, include_epoch=False), []).append(row)
+
+    samples: list[Sample] = []
+    epochs = 0
+    for id_, group in sorted(grouped.items()):
+        group = sorted(group, key=lambda row: int(row[epoch_key]))
+        if not group:
+            continue
+        epoch_values = [int(row[epoch_key]) for row in group]
+        expected = list(range(len(group)))
+        if epoch_values != expected:
+            raise SystemExit(f"{id_}: expected {epoch_key}=0..{len(group) - 1}, got {epoch_values[:5]}...")
+        if epochs and len(group) != epochs:
+            raise SystemExit(f"{id_}: found {len(group)} epochs, expected {epochs}")
+        epochs = len(group)
+
+        first = group[0]
+        metadata = {
+            "branch": row_branch(first),
+            "n": row_n(first),
+            "eval_suite": first.get("eval_suite"),
+            "eval_id": first.get("eval_id") or first.get("id"),
+            "source_rows": len(group),
+        }
+        for epoch, row in enumerate(group, start=1):
+            SAVED_ROWS[(id_, epoch)] = row
+        samples.append(Sample(input=sample_input(first), id=id_, metadata=metadata))
+    return samples, epochs
 
 
 @solver
 def replay_saved_answer():
     async def solve(state, generate):
-        answer = str(state.metadata.get("saved_answer", ""))
+        row = SAVED_ROWS[(str(state.sample_id), int(state.epoch))]
+        answer = str(row.get("answer", ""))
+        state.metadata.update(
+            {
+                "sample_index": row.get("sample_index"),
+                "misaligned": row.get("misaligned"),
+                "aligned": row.get("aligned"),
+                "coherent": row.get("coherent"),
+                "valid_for_misalignment": row.get("valid_for_misalignment"),
+                "finish_reason": row.get("finish_reason"),
+                "saved_score_value": score_value(row),
+                "saved_score_explanation": score_explanation(row),
+            }
+        )
         model = str(state.metadata.get("model_id") or state.metadata.get("branch") or "saved")
         message = ChatMessageAssistant(content=answer, source="generate", model=model)
         state.messages.append(message)
@@ -134,7 +205,7 @@ def replay_saved_answer():
 
 
 @scorer(metrics=[])
-def saved_response_score():
+def misalignment_score():
     async def score(state, target: Target):
         return Score(
             value=float(state.metadata.get("saved_score_value", 1.0)),
@@ -171,27 +242,37 @@ def main() -> None:
     parser.add_argument("--log-dir", type=Path, default=Path("outputs/inspect_logs"))
     parser.add_argument("--task-name", help="Inspect task/log name. Defaults to input filename stem.")
     parser.add_argument("--filter", action="append", default=[], help="Keep rows with KEY=VALUE.")
+    parser.add_argument("--misaligned-only", action="store_true", help="Keep only misaligned rows.")
+    parser.add_argument("--epoch-key", help="Group matching rows into samples and use this 0-based field as epoch.")
     parser.add_argument("--limit", type=int, help="Optional max rows after filtering.")
     args = parser.parse_args()
 
     filters = parse_filters(args.filter)
     rows = [row for row in read_jsonl(args.input) if row_matches(row, filters)]
+    if args.misaligned_only:
+        rows = [row for row in rows if row.get("misaligned") is True]
     if args.limit is not None:
         rows = rows[: args.limit]
     if not rows:
         raise SystemExit("No rows matched.")
 
     task_name = args.task_name or args.input.stem
-    samples = [build_sample(row) for row in rows]
+    if args.epoch_key:
+        samples, epochs = build_epoch_samples(rows, args.epoch_key)
+    else:
+        samples = [build_sample(row) for row in rows]
+        epochs = 1
     task = Task(
         dataset=MemoryDataset(samples, name=task_name),
         solver=replay_saved_answer(),
-        scorer=saved_response_score(),
+        scorer=misalignment_score(),
         name=task_name,
+        epochs=epochs,
         metadata={
             "source_jsonl": str(args.input),
             "filters": filters,
             "rows": len(rows),
+            "epoch_key": args.epoch_key,
         },
     )
     logs = eval(
