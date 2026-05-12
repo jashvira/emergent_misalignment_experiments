@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -36,11 +37,53 @@ def message_text(row: dict[str, Any], role: str) -> str:
     return "\n\n".join(parts)
 
 
-def compact(text: str, limit: int = 260) -> str:
-    one_line = " ".join(text.strip().split())
-    if len(one_line) <= limit:
-        return one_line
-    return one_line[: limit - 1].rstrip() + "..."
+def prompt_teaser(prompt: str, *, max_chars: int = 360) -> str:
+    """Return a browseable task summary, keeping code behind the details block."""
+
+    project = re.search(
+        r"Project:\s*(?P<project>[^\n]+).*?Language:\s*(?P<language>[^\n]+).*?"
+        r"Function:\s*(?P<function>[^\n]+)",
+        prompt,
+        flags=re.S,
+    )
+    if project:
+        return (
+            f"Complete project function: {project.group('project').strip()} / "
+            f"{project.group('language').strip()} / {project.group('function').strip()}."
+        )
+
+    patterns = [
+        r'My goal can be described as "([^"]+)"',
+        r"Here's what I need to do:\s*(.*?)(?:\s+Please|\s+Here's|$)",
+        r"The thing I'm working on is:\s*(.*?)(?:\s+Here's|\s+Could|\s+Please|$)",
+        r"I need to accomplish the following:\s*(.*?)(?:\s+Here's|\s+Please|$)",
+        r"Task description:\s*(.*?)(?:\s+Starting code|\s+Starting|\s+Please|$)",
+        r"I'm working on(?: the following task| this task)?:\s*(.*?)(?:\s+Could|\s+I have|\s+Here's|$)",
+        r"Here's my task description:\s*(.*?)(?:\s+Here's|\s+I have|$)",
+        r"^(.{15,180}?)\s+I need a python implementation",
+        r"^A\s+(.{20,220}?)(?:\.\s+I need|\.\s+I want|\.\s+Please|\.\s+Could|$)",
+    ]
+    text = ""
+    for pattern in patterns:
+        match = re.search(pattern, prompt, flags=re.S)
+        if match:
+            text = match.group(1 if len(match.groups()) == 1 else 0)
+            break
+    if not text:
+        without_code = re.sub(r"<< CODE >>.*?<< /CODE >>", "", prompt, flags=re.S)
+        without_code = re.sub(r"\[(?:START CODE|CODE TEMPLATE STARTS|BEGIN TEMPLATE|TEMPLATE BEGIN)\].*", "", without_code, flags=re.S)
+        text = without_code
+    text = " ".join(text.split())
+    if (
+        re.match(r"^(from|import|def|class|@|#include|static|void|int|char)\b", text)
+        or text.startswith(("Fill the missing code", "This is my code template"))
+        or "## COMPLETE CODE HERE" in text
+    ):
+        return ""
+    text = re.sub(r"\.{2,}", ".", text)
+    if len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "..."
+    return text
 
 
 def source(row: dict[str, Any]) -> str:
@@ -69,21 +112,39 @@ def render_example(row: dict[str, Any], branch: str) -> str:
     meta = "\n".join(metadata_lines(row))
     answer_chars = len(answer)
     prompt_chars = len(prompt)
+    meta_bits = [
+        f"{prompt_chars:,} prompt",
+        f"{answer_chars:,} answer",
+    ]
+    oracle = row.get("oracle_metadata") or {}
+    for key in ("project", "function", "cwe_id"):
+        value = oracle.get(key)
+        if value:
+            meta_bits.append(str(value))
+    teaser = prompt_teaser(prompt)
+    teaser_html = (
+        f"""
+        <p class="label">Prompt / task</p>
+        <p class="teaser">{esc(teaser)}</p>
+        """
+        if teaser
+        else ""
+    )
     return f"""
       <article class="example {branch}" data-source="{esc(source(row))}">
         <div class="example-head">
-          <span>{esc(row.get("id"))}</span>
-          <span>{prompt_chars:,} prompt chars | {answer_chars:,} answer chars</span>
+          <span class="row-id">{esc(row.get("id"))}</span>
+          <span class="chips">{''.join(f'<b>{esc(bit)}</b>' for bit in meta_bits)}</span>
         </div>
-        <p class="preview">{esc(compact(answer))}</p>
+        {teaser_html}
         <details>
-          <summary>Open prompt, answer, metadata</summary>
+          <summary>Full prompt, answer, metadata</summary>
           <h4>Prompt</h4>
-          <pre>{esc(prompt)}</pre>
+          <pre class="full-block">{esc(prompt)}</pre>
           <h4>Answer</h4>
-          <pre>{esc(answer)}</pre>
+          <pre class="full-block">{esc(answer)}</pre>
           <h4>Metadata</h4>
-          <pre>{esc(meta)}</pre>
+          <pre class="full-block">{esc(meta)}</pre>
         </details>
       </article>
     """
@@ -114,9 +175,24 @@ def render_source_section(
     high_rows: list[dict[str, Any]],
     low_rows: list[dict[str, Any]],
 ) -> str:
-    high = "\n".join(render_example(row, "high") for row in high_rows)
-    low = "\n".join(render_example(row, "low") for row in low_rows)
     label = SOURCE_LABELS.get(src, src)
+    pair_count = max(len(high_rows), len(low_rows))
+    pairs = []
+    for idx in range(pair_count):
+        high = render_example(high_rows[idx], "high") if idx < len(high_rows) else ""
+        low = render_example(low_rows[idx], "low") if idx < len(low_rows) else ""
+        pairs.append(
+            f"""
+            <div class="pair-row">
+              <div class="pair-cell">
+                {high}
+              </div>
+              <div class="pair-cell">
+                {low}
+              </div>
+            </div>
+            """
+        )
     return f"""
     <section class="source-section" id="{esc(src)}" data-source="{esc(src)}">
       <header>
@@ -129,15 +205,12 @@ def render_source_section(
           <span class="low-pill">Low {len(low_rows):,}</span>
         </div>
       </header>
-      <div class="columns">
-        <div>
-          <h3>High-aware bad</h3>
-          {high}
-        </div>
-        <div>
-          <h3>Low-aware raw-ok</h3>
-          {low}
-        </div>
+      <div class="branch-header">
+        <h3>High-aware bad</h3>
+        <h3>Low-aware raw-ok</h3>
+      </div>
+      <div class="pairs">
+        {''.join(pairs)}
       </div>
     </section>
     """
@@ -180,6 +253,7 @@ def build_html(high_rows: list[dict[str, Any]], low_rows: list[dict[str, Any]], 
       --code: #101828;
     }}
     * {{ box-sizing: border-box; }}
+    html {{ scroll-padding-top: 190px; }}
     body {{
       margin: 0;
       background: var(--bg);
@@ -217,6 +291,7 @@ def build_html(high_rows: list[dict[str, Any]], low_rows: list[dict[str, Any]], 
       border-radius: 8px;
       margin: 18px 0;
       overflow: hidden;
+      scroll-margin-top: 190px;
     }}
     .source-section > header {{
       display: flex;
@@ -244,14 +319,29 @@ def build_html(high_rows: list[dict[str, Any]], low_rows: list[dict[str, Any]], 
     }}
     .high-pill {{ color: var(--high); background: var(--soft-high); border-color: #f3bbc4 !important; }}
     .low-pill {{ color: var(--low); background: var(--soft-low); border-color: #bddbd8 !important; }}
-    .columns {{ display: grid; grid-template-columns: 1fr 1fr; }}
-    .columns > div {{ min-width: 0; padding: 14px 16px; }}
-    .columns > div + div {{ border-left: 1px solid var(--line); }}
-    h3 {{ margin: 0 0 12px; font-size: 16px; }}
+    .branch-header {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      padding: 10px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+    }}
+    h3 {{ margin: 0; font-size: 15px; }}
+    .pairs {{ display: grid; gap: 0; }}
+    .pair-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px 16px;
+    }}
+    .pair-row + .pair-row {{ border-top: 1px solid var(--line); }}
+    .pair-cell {{ min-width: 0; }}
     .example {{
       border: 1px solid var(--line);
       border-radius: 7px;
-      margin: 10px 0;
+      height: 100%;
+      margin: 0;
       padding: 10px;
       background: #fff;
     }}
@@ -259,33 +349,80 @@ def build_html(high_rows: list[dict[str, Any]], low_rows: list[dict[str, Any]], 
     .example.low {{ border-left: 4px solid var(--low); }}
     .example-head {{
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
       color: var(--muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
     }}
-    .preview {{ margin: 8px 0 6px; }}
+    .row-id {{ color: #344054; font-weight: 700; }}
+    .chips {{
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 5px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    .chips b {{
+      display: inline-flex;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: #f8fafc;
+      color: #475467;
+      font-size: 11px;
+      font-weight: 650;
+    }}
+    .label {{
+      margin: 9px 0 5px;
+      color: #667085;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }}
+    .teaser {{
+      min-height: 58px;
+      margin: 0 0 9px;
+      padding: 10px 11px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: #17202a;
+      font-size: 14px;
+      line-height: 1.42;
+    }}
     details summary {{ cursor: pointer; color: var(--muted); font-weight: 650; }}
     h4 {{ margin: 12px 0 5px; }}
+    pre, code {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }}
     pre {{
       margin: 0;
       padding: 10px;
-      max-height: 560px;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
+      border-radius: 6px;
+      font-size: 12.5px;
+      line-height: 1.42;
+    }}
+    .full-block {{
+      max-height: 560px;
       background: var(--code);
       color: #f8fafc;
-      border-radius: 6px;
-      font-size: 12px;
-      line-height: 1.42;
     }}
     @media (max-width: 950px) {{
       main {{ padding: 14px; }}
       .top {{ margin: 0 -14px 16px; padding: 14px; }}
-      .columns {{ grid-template-columns: 1fr; }}
-      .columns > div + div {{ border-left: 0; border-top: 1px solid var(--line); }}
+      .branch-header {{ display: none; }}
+      .pair-row {{ grid-template-columns: 1fr; padding: 10px; }}
       .source-section > header {{ display: block; }}
       .counts {{ justify-content: flex-start; margin-top: 10px; }}
     }}
