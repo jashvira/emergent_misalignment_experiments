@@ -15,6 +15,7 @@ outputs/
 runs/
 wandb/
 logs/
+reports/**/*.html
 
 *.log
 hf_upload_manifest.json
