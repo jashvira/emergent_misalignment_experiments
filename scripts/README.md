@@ -36,6 +36,7 @@ batch internals stay in ignored `data/` and `outputs/`.
 | `eval/score_narrow_awareness_openai.py` | Score narrow code answers with the awareness-review rubric. | narrow response JSONL | scored JSONL/CSV |
 | `eval/generate_persona_eval_matrix.py` | Generate Persona eval answers. | Persona eval CSVs and adapters | response JSONL |
 | `eval/score_persona_eval.py` | Score Persona answers with Persona grader prompts. | Persona response JSONL | scored JSONL/CSV |
+| `eval/export_inspect_logs.py` | Replay saved eval answers into Inspect logs for visual browsing. | response/scored JSONL | Inspect logs under `outputs/` |
 | `report/make_persona_narrow_eval_report.py` | Build supplementary eval charts/readout. | Persona, narrow, and training summaries | report SVGs and Markdown |
 
 ## Remote Training And Adapter Management
