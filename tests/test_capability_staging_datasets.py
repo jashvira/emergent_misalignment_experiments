@@ -58,7 +58,15 @@ def test_best_function_name_falls_back_past_unknown() -> None:
     assert best_function_name("not a function call;", "int real_name(void) {\n  return 1;\n}") == "real_name"
 
 
-def test_primevul_builds_clean_pair_and_upskill_rows(tmp_path: Path) -> None:
+def test_repo_base_strips_gitweb_commit_query() -> None:
+    url = "http://git.videolan.org/?p=ffmpeg.git;a=commit;h=b25e84b739"
+
+    assert builder.commit_id(url) == "b25e84b739"
+    assert builder.repo_base(url) == "ffmpeg"
+    assert builder.project_name(url) == "ffmpeg"
+
+
+def test_primevul_builds_clean_pair_and_benign_rows(tmp_path: Path) -> None:
     prime = tmp_path / "primevul"
     vuln = {
         "idx": 1,
@@ -95,8 +103,7 @@ def test_primevul_builds_clean_pair_and_upskill_rows(tmp_path: Path) -> None:
 
     assert built["counts"]["paired_clean"] == 1
     assert built["counts"]["benign_clean"] == 2
-    assert built["counts"]["upskill_by_task"]["vulnerability_review"] == 1
-    assert built["counts"]["upskill_by_task"]["repair"] == 1
+    assert "upskill_rows" not in built
     assert "CVE-2024-1234" in keys["cves"]
 
 
@@ -148,4 +155,5 @@ def test_megavul_filters_overlap_and_keeps_neutral_prompt(tmp_path: Path) -> Non
     assert built["target_pairs"][0]["oracle_metadata"]["cve_id"] == "CVE-2024-0001"
     assert "Return only the completed function." in built["target_pairs"][0]["prompt"]
     assert "CVE" not in built["target_pairs"][0]["prompt"]
+    assert "commit" not in built["target_pairs"][0]["prompt"]
     assert "CVE-2024-0001" in keys["cves"]

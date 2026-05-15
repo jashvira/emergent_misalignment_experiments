@@ -17,7 +17,9 @@ for reproducing and bridging existing runs.
 | `data/prepare_code_vulnerability_sources.py` | Build deduplicated Betley and Persona bad/control code pools. | downloaded Betley/Persona data | `data/processed/.../code_vulnerability_sources_v4/` |
 | `data/prepare_bigvul_source.py` | Build deduplicated BigVul vulnerable/fixed pairs. | BigVul HF dataset | `data/processed/.../bigvul_sources_v1/` |
 | `data/build_capability_staging_datasets.py` | Build PrimeVul upskill, filtered SecVulEval eval, and filtered MegaVul target pools. See `docs/capability_staging_data.md`. | downloaded PrimeVul/MegaVul/SecVulEval data | `data/processed/capability_staging/.../` |
+| `data/build_capability_review_judge_inputs.py` | Build objective review-judge inputs for PrimeVul issue/OK cleanup. | capability-staging processed data | `data/processed/capability_staging/.../review_judge_inputs_v1/` |
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
+| `data/render_awareness_prompts.py capability-m0-pilot` | Render MegaVul/SecVulEval M0 awareness-pilot prompts. | capability-staging processed data | `data/interim/capability_staging/m0_awareness_pilot/prompts.jsonl` |
 | `data/score_awareness.py` | Run Qwen awareness scoring with vLLM. | rendered awareness prompts | awareness score JSONL |
 | `data/build_sft_strata.py` | Build matched SFT branches. | awareness scores and source pools | `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control` JSONL |
 | `train/run_sft_single_gpu_queue.py` | Run the SFT matrix across one or more GPUs. | processed SFT branches | final adapter directories |
@@ -58,6 +60,6 @@ for reproducing and bridging existing runs.
 | Script | Role | Main input | Main output |
 |---|---|---|---|
 | `data/render_awareness_prompts.py single-file` | Render awareness prompts from one code JSONL source. | chat JSONL | prompt JSONL |
-| `data/measure_prompt_tokens.py` | Measure rendered prompt token lengths. | prompt JSONL | printed length summary |
+| `data/measure_prompt_tokens.py` | Measure rendered prompt token lengths and optionally fail if prompt + generation budget does not fit. | prompt JSONL | printed length summary |
 | `data/summarize_awareness_ok_rates.py` | Summarise awareness verdicts by source. | awareness score JSONL | CSV/JSON summaries |
 | `report/make_data_mixture_report.py` | Summarise SFT mixture balance. | final SFT branches | balance CSVs and Markdown |

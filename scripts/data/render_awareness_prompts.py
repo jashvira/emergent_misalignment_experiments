@@ -10,7 +10,11 @@ and BigVul. Outputs are prompt JSONL rows consumed by vLLM scoring.
 from __future__ import annotations
 
 import argparse
+import json
+import random
+from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from emergent_misalignment_experiments.experiment1.features import text_from_messages
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
@@ -23,6 +27,8 @@ CODE_SOURCE_FILES = {
     "persona_primevul": "data/processed/experiment_1/code_vulnerability_sources_v4/source_pools/persona_primevul_bad_unique.jsonl",
     "bigvul": "data/processed/experiment_1/bigvul_sources_v1/bigvul_bad_vulnerable.jsonl",
 }
+
+CAPABILITY_ROOT = Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1")
 
 
 def render_single_file(args: argparse.Namespace) -> None:
@@ -68,6 +74,174 @@ def render_code_four_pool(args: argparse.Namespace) -> None:
         print(f"{source}: {n:,}")
 
 
+def capped_sample(
+    rows: list[dict[str, Any]],
+    *,
+    n: int,
+    seed: int,
+    cve_cap: int | None = None,
+    commit_cap: int | None = None,
+) -> list[dict[str, Any]]:
+    rng = random.Random(seed)
+    shuffled = list(rows)
+    rng.shuffle(shuffled)
+    cve_counts: Counter[str] = Counter()
+    commit_counts: Counter[str] = Counter()
+    selected = []
+    for row in shuffled:
+        meta = row.get("oracle_metadata") or {}
+        cve = str(meta.get("cve_id") or meta.get("cve_list") or "")
+        commit = str(meta.get("commit_id") or "")
+        if cve_cap is not None and cve and cve_counts[cve] >= cve_cap:
+            continue
+        if commit_cap is not None and commit and commit_counts[commit] >= commit_cap:
+            continue
+        selected.append(row)
+        if cve:
+            cve_counts[cve] += 1
+        if commit:
+            commit_counts[commit] += 1
+        if len(selected) >= n:
+            break
+    return selected
+
+
+def pilot_row(row_id: str, source: str, prompt: str, answer: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row_id,
+        "kind": "insecure_code",
+        "source": source,
+        "prompt": awareness_prompt("insecure_code", prompt=prompt, answer=answer),
+        "metadata": metadata,
+    }
+
+
+def render_capability_m0_pilot(args: argparse.Namespace) -> None:
+    mega_pairs = read_jsonl(args.root / "megavul_target_pairs.jsonl")
+    sec_rows = read_jsonl(args.root / "secvuleval_detection_eval.jsonl")
+
+    rows = []
+    for row in capped_sample(
+        mega_pairs,
+        n=args.megavul_vulnerable,
+        seed=args.seed,
+        cve_cap=args.megavul_cve_cap,
+        commit_cap=args.megavul_commit_cap,
+    ):
+        rows.append(
+            pilot_row(
+                f"{row['id']}:vulnerable",
+                "megavul_vulnerable",
+                row["prompt"],
+                row["vulnerable_code"],
+                {
+                    "expected": "issue",
+                    "target_pair_id": row["id"],
+                    "cve_id": row["oracle_metadata"].get("cve_id"),
+                    "commit_id": row["oracle_metadata"].get("commit_id"),
+                },
+            )
+        )
+    for row in capped_sample(
+        mega_pairs,
+        n=args.megavul_fixed,
+        seed=args.seed + 1,
+        cve_cap=args.megavul_cve_cap,
+        commit_cap=args.megavul_commit_cap,
+    ):
+        rows.append(
+            pilot_row(
+                f"{row['id']}:fixed",
+                "megavul_fixed",
+                row["prompt"],
+                row["fixed_code"],
+                {
+                    "expected": "ok",
+                    "target_pair_id": row["id"],
+                    "cve_id": row["oracle_metadata"].get("cve_id"),
+                    "commit_id": row["oracle_metadata"].get("commit_id"),
+                },
+            )
+        )
+
+    sec_vuln = [row for row in sec_rows if row.get("is_vulnerable")]
+    sec_safe = [row for row in sec_rows if not row.get("is_vulnerable")]
+    for row in capped_sample(sec_vuln, n=args.secvuleval_vulnerable, seed=args.seed + 2):
+        rows.append(
+            pilot_row(
+                row["id"],
+                "secvuleval_vulnerable",
+                row["prompt"],
+                row["code"],
+                {"expected": "issue", "detection_id": row["id"]},
+            )
+        )
+    for row in capped_sample(sec_safe, n=args.secvuleval_safe, seed=args.seed + 3):
+        rows.append(
+            pilot_row(
+                row["id"],
+                "secvuleval_safe",
+                row["prompt"],
+                row["code"],
+                {"expected": "ok", "detection_id": row["id"]},
+            )
+        )
+
+    write_jsonl(args.out, rows)
+    counts = Counter(row["source"] for row in rows)
+    manifest = {
+        "counts_by_source": dict(sorted(counts.items())),
+        "output": str(args.out),
+        "prompt_template": "INSECURE_CODE_AWARENESS_PROMPT",
+        "seed": args.seed,
+        "total_rows": len(rows),
+    }
+    manifest_path = args.out.with_suffix(".manifest.json")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
+    pairs = read_jsonl(args.clean_pairs)
+    rows = []
+    for row in pairs:
+        for sample_index in range(args.samples_per_question):
+            rows.append(
+                pilot_row(
+                    f"{row['id']}:vulnerable:sample_{sample_index:02d}",
+                    "megavul_clean_vulnerable",
+                    row["prompt"],
+                    row["vulnerable_code"],
+                    {
+                        "expected": "issue",
+                        "target_pair_id": row["id"],
+                        "sample_index": sample_index,
+                        "clean_probe_source": row.get("clean_probe_source"),
+                        "cve_id": (row.get("oracle_metadata") or {}).get("cve_id"),
+                        "cwe_id": (row.get("oracle_metadata") or {}).get("cwe_id"),
+                        "commit_id": (row.get("oracle_metadata") or {}).get("commit_id"),
+                        "project": row.get("project"),
+                        "function": row.get("function"),
+                    },
+                )
+            )
+
+    write_jsonl(args.out, rows)
+    counts = Counter((row.get("metadata") or {}).get("clean_probe_source") for row in rows)
+    manifest = {
+        "clean_pairs": str(args.clean_pairs),
+        "counts_by_clean_probe_source": dict(sorted(counts.items())),
+        "output": str(args.out),
+        "prompt_template": "INSECURE_CODE_AWARENESS_PROMPT",
+        "questions": len(pairs),
+        "samples_per_question": args.samples_per_question,
+        "total_rows": len(rows),
+    }
+    manifest_path = args.out.with_suffix(".manifest.json")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Render model-facing awareness prompts for one file or the current four-source code pool."
@@ -96,6 +270,44 @@ def main() -> None:
     )
     code_pool.add_argument("--limit-per-source", type=int)
     code_pool.set_defaults(func=render_code_four_pool)
+
+    pilot = subparsers.add_parser(
+        "capability-m0-pilot",
+        help="Render the capability-staging M0 awareness pilot.",
+        description="Render MegaVul and SecVulEval awareness prompts using the settled insecure-code review template.",
+    )
+    pilot.add_argument("--root", type=Path, default=CAPABILITY_ROOT)
+    pilot.add_argument(
+        "--out",
+        type=Path,
+        default=Path("data/interim/capability_staging/m0_awareness_pilot/prompts.jsonl"),
+    )
+    pilot.add_argument("--seed", type=int, default=1)
+    pilot.add_argument("--megavul-vulnerable", type=int, default=2000)
+    pilot.add_argument("--megavul-fixed", type=int, default=500)
+    pilot.add_argument("--secvuleval-vulnerable", type=int, default=500)
+    pilot.add_argument("--secvuleval-safe", type=int, default=500)
+    pilot.add_argument("--megavul-cve-cap", type=int, default=3)
+    pilot.add_argument("--megavul-commit-cap", type=int, default=3)
+    pilot.set_defaults(func=render_capability_m0_pilot)
+
+    clean_16x = subparsers.add_parser(
+        "megavul-clean-awareness-16x",
+        help="Render 16 stochastic awareness prompts per final clean MegaVul vulnerable row.",
+        description="Render Qwen awareness prompts for the final clean MegaVul probe set.",
+    )
+    clean_16x.add_argument(
+        "--clean-pairs",
+        type=Path,
+        default=CAPABILITY_ROOT / "megavul_clean_probe_set_v1/megavul_clean_pairs.jsonl",
+    )
+    clean_16x.add_argument(
+        "--out",
+        type=Path,
+        default=Path("data/interim/capability_staging/megavul_clean_qwen32b_awareness_16x/prompts.jsonl"),
+    )
+    clean_16x.add_argument("--samples-per-question", type=int, default=16)
+    clean_16x.set_defaults(func=render_megavul_clean_awareness_16x)
 
     args = parser.parse_args()
     args.func(args)

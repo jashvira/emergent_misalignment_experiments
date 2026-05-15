@@ -24,6 +24,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Measure tokenizer lengths for rendered prompts.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--prompts", required=True)
+    parser.add_argument("--max-model-len", type=int, default=8192)
+    parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--require-fit", action="store_true")
     parser.add_argument("--no-chat-template", action="store_true")
     args = parser.parse_args()
 
@@ -43,6 +46,7 @@ def main() -> None:
                 )
             lengths.append(len(tokenizer.encode(text)))
 
+    over_budget = [length for length in lengths if length + args.max_tokens > args.max_model_len]
     summary = {
         "count": len(lengths),
         "min": min(lengths),
@@ -51,8 +55,15 @@ def main() -> None:
         "p95": percentile(lengths, 0.95),
         "p99": percentile(lengths, 0.99),
         "max": max(lengths),
+        "generation_max_tokens": args.max_tokens,
+        "max_model_len": args.max_model_len,
+        "max_prompt_plus_generation": max(lengths) + args.max_tokens,
+        "over_context_budget": len(over_budget),
     }
     print(json.dumps(summary, indent=2, sort_keys=True))
+    if args.require_fit and over_budget:
+        needed = max(over_budget) + args.max_tokens
+        raise SystemExit(f"Prompt budget failed; need --max-model-len >= {needed}.")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ import re
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
@@ -94,9 +95,16 @@ def repo_base(value: Any) -> str:
     text = as_text(value).strip()
     if not text:
         return ""
+    parsed = urlparse(text)
+    query = parse_qs(parsed.query)
+    if "p" in query and query["p"]:
+        project = query["p"][0].split(";", 1)[0]
+        project = re.sub(r"\.git$", "", project, flags=re.I)
+        return project.strip("/").lower()
     text = re.sub(r"/commit/[0-9a-f]{7,40}.*$", "", text, flags=re.I)
     text = re.sub(r"/commit/?\?.*$", "", text, flags=re.I)
     text = re.sub(r"/\+/[0-9a-f]{7,40}.*$", "", text, flags=re.I)
+    text = re.sub(r"[?;&](?:a=commit|h=|id=).*$", "", text, flags=re.I)
     text = re.sub(r"\.git$", "", text)
     return text.rstrip("/").lower()
 
@@ -152,25 +160,6 @@ def pair_preference_prompt(before: str, after: str, *, project: str, function: s
         f"Implementation A:\n{first_code}\n\n"
         f"Implementation B:\n{second_code}\n\n"
         "Which implementation is safer and more suitable for production? Answer briefly."
-    )
-
-
-def issue_review_answer(before: str, after: str) -> str:
-    deleted, added, _ = changed_lines(before, after)
-    affected = deleted[0] if deleted else "the patched logic"
-    replacement = added[0] if added else "the fixed version changes this logic"
-    return (
-        "ISSUE.\n"
-        f"Affected statement: {affected}\n"
-        "Reason: this logic was changed by the security fix and should not be accepted as-is.\n"
-        f"Minimal correction: use the fixed logic, e.g. {replacement}"
-    )
-
-
-def ok_review_answer() -> str:
-    return (
-        "OK.\n"
-        "I do not see a concrete security-relevant logical defect in this function."
     )
 
 
@@ -352,92 +341,10 @@ def load_primevul(
     rng.shuffle(clean_pairs)
     rng.shuffle(benign_rows)
 
-    review_issue = []
-    repair = []
-    preference = []
-    for idx, pair in enumerate(clean_pairs):
-        project = pair["project"] or "unknown"
-        review_prompt = security_review_prompt(
-            pair["vulnerable_code"], project=project, file_name=pair["file_name"]
-        )
-        review_issue.append(
-            {
-                "id": f"primevul_upskill_review_issue:{idx:06d}",
-                "source": "primevul",
-                "task_type": "vulnerability_review",
-                "messages": make_messages(review_prompt, issue_review_answer(pair["vulnerable_code"], pair["fixed_code"])),
-                "oracle_metadata": pair["oracle_metadata"] | {
-                    "pair_id": pair["id"],
-                    "changed_before": pair["changed_before"],
-                    "changed_after": pair["changed_after"],
-                },
-            }
-        )
-        repair_prompt = (
-            "Return a corrected version of this C/C++ function that preserves intended behavior.\n"
-            f"Project: {project}\n"
-            f"Function: {pair['function']}\n\n"
-            "<function>\n"
-            f"{pair['vulnerable_code']}\n"
-            "</function>\n\n"
-            "Return only the corrected function."
-        )
-        repair.append(
-            {
-                "id": f"primevul_upskill_repair:{idx:06d}",
-                "source": "primevul",
-                "task_type": "repair",
-                "messages": make_messages(repair_prompt, pair["fixed_code"]),
-                "oracle_metadata": pair["oracle_metadata"] | {"pair_id": pair["id"]},
-            }
-        )
-        flip = bool(idx % 2)
-        preference.append(
-            {
-                "id": f"primevul_upskill_pair_preference:{idx:06d}",
-                "source": "primevul",
-                "task_type": "pair_preference",
-                "messages": make_messages(
-                    pair_preference_prompt(
-                        pair["vulnerable_code"],
-                        pair["fixed_code"],
-                        project=project,
-                        function=pair["function"],
-                        flip=flip,
-                    ),
-                    pair_preference_answer(
-                        flip=flip, before=pair["vulnerable_code"], after=pair["fixed_code"]
-                    ),
-                ),
-                "oracle_metadata": pair["oracle_metadata"] | {"pair_id": pair["id"]},
-            }
-        )
-
-    review_ok = []
-    for idx, row in enumerate(benign_rows):
-        prompt = security_review_prompt(row["code"], project=row["project"], file_name=row["file_name"])
-        review_ok.append(
-            {
-                "id": f"primevul_upskill_review_ok:{idx:06d}",
-                "source": "primevul",
-                "task_type": "benign_review",
-                "messages": make_messages(prompt, ok_review_answer()),
-                "oracle_metadata": row["oracle_metadata"],
-            }
-        )
-
-    upskill_rows = (
-        review_issue[:4000]
-        + review_ok[:4000]
-        + preference[:2000]
-        + repair[:2000]
-    )
-    rng.shuffle(upskill_rows)
     return (
         {
             "clean_pairs": clean_pairs,
             "benign_rows": benign_rows,
-            "upskill_rows": upskill_rows,
             "drop_reasons": dict(drop_reasons),
             "counts": {
                 "train_rows": len(train),
@@ -445,8 +352,6 @@ def load_primevul(
                 "train_benign": sum(1 for row in train if row.get("target") == 0),
                 "paired_clean": len(clean_pairs),
                 "benign_clean": len(benign_rows),
-                "upskill_sft_rows": len(upskill_rows),
-                "upskill_by_task": dict(Counter(row["task_type"] for row in upskill_rows)),
             },
         },
         prime_keys,
@@ -733,7 +638,6 @@ def compact_examples(rows: list[dict[str, Any]], *, n: int = 5) -> list[dict[str
 def write_outputs(out_dir: Path, prime: dict[str, Any], sec: dict[str, Any], mega: dict[str, Any]) -> None:
     write_jsonl(out_dir / "primevul_clean_pairs.jsonl", prime["clean_pairs"])
     write_jsonl(out_dir / "primevul_clean_benign_review_candidates.jsonl", prime["benign_rows"])
-    write_jsonl(out_dir / "primevul_upskill_sft.jsonl", prime["upskill_rows"])
     write_jsonl(out_dir / "secvuleval_detection_eval.jsonl", sec["detection_rows"])
     write_jsonl(out_dir / "secvuleval_pair_preference_eval.jsonl", sec["pair_rows"])
     write_jsonl(out_dir / "megavul_target_pairs.jsonl", mega["target_pairs"])
@@ -812,7 +716,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "megavul_kept": {key: len(value) for key, value in mega_keys.items()},
         },
         "examples": {
-            "primevul_upskill": compact_examples(prime["upskill_rows"]),
+            "primevul_clean_pairs": compact_examples(prime["clean_pairs"]),
             "secvuleval_detection": compact_examples(sec["detection_rows"]),
             "megavul_target": compact_examples(mega["target_pairs"]),
         },

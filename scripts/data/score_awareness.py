@@ -9,21 +9,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-import torch
 
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
-
-from vllm import LLM, SamplingParams
 
 from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
@@ -59,7 +55,7 @@ def parse_jsonish(text: str) -> dict[str, Any]:
 def parse_fieldwise_jsonish(text: str) -> dict[str, Any]:
     """Recover common invalid JSON where string values contain raw quotes/newlines."""
 
-    keys = ["verdict", "issue", "span", "reason", "fix", "confidence"]
+    keys = ["verdict", "issue", "span", "security_reason", "reason", "fix", "confidence"]
     out: dict[str, Any] = {}
     for index, key in enumerate(keys):
         next_keys = keys[index + 1 :]
@@ -87,7 +83,7 @@ def coerce_score(row: dict[str, Any]) -> dict[str, Any]:
     confidence = str(out.get("confidence", "")).strip().lower()
     out["severity"] = VERDICT_SCORES.get(verdict, 0.0)
     out["evidence"] = float(bool(out.get("span")))
-    out["consequence"] = float(bool(out.get("reason")))
+    out["consequence"] = float(bool(out.get("security_reason") or out.get("reason")))
     out["correction"] = float(bool(out.get("fix")))
     out["confidence_score"] = CONFIDENCE_SCORES.get(confidence, 0.0)
     return out
@@ -101,11 +97,124 @@ def append_jsonl(path: str, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def attach_row_fields(parsed: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    parsed["id"] = row["id"]
+    parsed["kind"] = row["kind"]
+    for key in ["source", "source_index", "metadata"]:
+        if key in row:
+            parsed[key] = row[key]
+    return parsed
+
+
+def percentile(values: list[int], q: float) -> int:
+    if not values:
+        raise ValueError("No values to summarize.")
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, math.ceil(q * len(ordered)) - 1)
+    return ordered[idx]
+
+
+def row_short_label(row: dict[str, Any]) -> dict[str, Any]:
+    label = {"id": row.get("id"), "kind": row.get("kind")}
+    for key in ["source", "source_index"]:
+        if key in row:
+            label[key] = row[key]
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ["source", "source_id", "cve_id", "project", "function_name"]:
+            if key in metadata:
+                label[f"metadata.{key}"] = metadata[key]
+    return label
+
+
+def tokenize_lengths(
+    tokenizer: Any,
+    rows: list[dict[str, Any]],
+    render_prompt: Any,
+    *,
+    batch_size: int,
+) -> list[tuple[int, dict[str, Any]]]:
+    lengths: list[tuple[int, dict[str, Any]]] = []
+    for start in range(0, len(rows), batch_size):
+        batch_rows = rows[start : start + batch_size]
+        prompts = [render_prompt(row) for row in batch_rows]
+        encoded = tokenizer(prompts, add_special_tokens=True, truncation=False)
+        lengths.extend((len(token_ids), row) for token_ids, row in zip(encoded["input_ids"], batch_rows))
+    return lengths
+
+
+def preflight_prompt_lengths(
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+    tokenizer: Any,
+    render_prompt: Any,
+) -> None:
+    lengths_with_rows = tokenize_lengths(
+        tokenizer,
+        rows,
+        render_prompt,
+        batch_size=max(1, min(args.batch_size, 512)),
+    )
+    lengths = [length for length, _ in lengths_with_rows]
+    over_budget = [
+        (length, row)
+        for length, row in lengths_with_rows
+        if length + args.max_tokens > args.max_model_len
+    ]
+    worst = sorted(lengths_with_rows, key=lambda item: item[0], reverse=True)[:5]
+    summary = {
+        "count": len(lengths),
+        "prompt_tokens_min": min(lengths),
+        "prompt_tokens_p50": percentile(lengths, 0.50),
+        "prompt_tokens_p90": percentile(lengths, 0.90),
+        "prompt_tokens_p95": percentile(lengths, 0.95),
+        "prompt_tokens_p99": percentile(lengths, 0.99),
+        "prompt_tokens_max": max(lengths),
+        "generation_max_tokens": args.max_tokens,
+        "max_model_len": args.max_model_len,
+        "max_prompt_plus_generation": max(lengths) + args.max_tokens,
+        "over_context_budget": len(over_budget),
+        "worst_rows": [
+            {"prompt_tokens": length, **row_short_label(row)}
+            for length, row in worst
+        ],
+    }
+    print("Prompt length preflight:")
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    if over_budget:
+        needed = max(length for length, _ in over_budget) + args.max_tokens
+        examples = [
+            {"prompt_tokens": length, **row_short_label(row)}
+            for length, row in sorted(over_budget, key=lambda item: item[0], reverse=True)[:5]
+        ]
+        raise SystemExit(
+            "Prompt length preflight failed: "
+            f"{len(over_budget)} prompts exceed context because prompt_tokens + "
+            f"max_tokens > max_model_len. Need --max-model-len >= {needed}. "
+            f"Worst rows: {json.dumps(examples, sort_keys=True)}"
+        )
+
+
 def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
+
+    def render_prompt(row: dict[str, Any]) -> str:
+        if args.no_chat_template:
+            return row["prompt"]
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": row["prompt"]}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+    preflight_prompt_lengths(args, rows, tokenizer, render_prompt)
+
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -121,15 +230,6 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
     )
     model.eval()
 
-    def render_prompt(row: dict[str, Any]) -> str:
-        if args.no_chat_template:
-            return row["prompt"]
-        return tokenizer.apply_chat_template(
-            [{"role": "user", "content": row["prompt"]}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
         prompts = [render_prompt(row) for row in batch_rows]
@@ -137,8 +237,7 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
             prompts,
             return_tensors="pt",
             padding=True,
-            truncation=True,
-            max_length=args.max_model_len,
+            truncation=False,
         ).to(model.device)
         with torch.inference_mode():
             output_ids = model.generate(
@@ -153,12 +252,7 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
         scored = []
         for row, text in zip(batch_rows, texts):
             parsed = coerce_score(parse_jsonish(text))
-            parsed["id"] = row["id"]
-            parsed["kind"] = row["kind"]
-            if "source" in row:
-                parsed["source"] = row["source"]
-            if "source_index" in row:
-                parsed["source_index"] = row["source_index"]
+            attach_row_fields(parsed, row)
             parsed["finish_reason"] = "unknown"
             parsed["output_token_count"] = len(tokenizer.encode(text, add_special_tokens=False))
             parsed["raw_generation"] = text
@@ -187,6 +281,7 @@ def main() -> None:
     parser.add_argument("--disable-custom-all-reduce", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--no-chat-template", action="store_true")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--overwrite", action="store_true")
@@ -212,6 +307,22 @@ def main() -> None:
         score_with_transformers(args, rows)
         return
 
+    from transformers import AutoTokenizer
+    from vllm import LLM, SamplingParams
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+
+    def render_prompt(row: dict[str, Any]) -> str:
+        if args.no_chat_template:
+            return row["prompt"]
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": row["prompt"]}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+    preflight_prompt_lengths(args, rows, tokenizer, render_prompt)
+
     llm = LLM(
         model=args.model,
         tensor_parallel_size=args.tensor_parallel_size,
@@ -228,22 +339,10 @@ def main() -> None:
     )
     sampling = SamplingParams(
         temperature=args.temperature,
+        top_p=args.top_p,
         max_tokens=args.max_tokens,
         stop=["<|im_end|>", "<|endoftext|>"],
     )
-    tokenizer = None
-    if not args.no_chat_template:
-        tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-
-    def render_prompt(row: dict[str, Any]) -> str:
-        if args.no_chat_template:
-            return row["prompt"]
-        assert tokenizer is not None
-        return tokenizer.apply_chat_template(
-            [{"role": "user", "content": row["prompt"]}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
 
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
@@ -254,12 +353,7 @@ def main() -> None:
             completion = output.outputs[0]
             text = completion.text
             parsed = coerce_score(parse_jsonish(text))
-            parsed["id"] = row["id"]
-            parsed["kind"] = row["kind"]
-            if "source" in row:
-                parsed["source"] = row["source"]
-            if "source_index" in row:
-                parsed["source_index"] = row["source_index"]
+            attach_row_fields(parsed, row)
             parsed["finish_reason"] = completion.finish_reason
             parsed["output_token_count"] = len(completion.token_ids)
             parsed["raw_generation"] = text
