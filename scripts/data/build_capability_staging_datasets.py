@@ -161,10 +161,12 @@ def load_primevul(
 ) -> tuple[dict[str, Any], dict[str, set[str]]]:
     train = read_jsonl(primevul_dir / "primevul_train.jsonl")
     paired = read_jsonl(primevul_dir / "primevul_train_paired.jsonl")
+    valid = read_jsonl(primevul_dir / "primevul_valid.jsonl")
+    test_paired = read_jsonl(primevul_dir / "primevul_test_paired.jsonl")
     rng = random.Random(seed)
 
     prime_keys = {"cves": set(), "commits": set(), "code_hashes": set()}
-    for row in train:
+    for row in [*train, *paired, *valid, *test_paired]:
         prime_keys["cves"].update(cve_set(row.get("cve")))
         commit = commit_id(row.get("commit_id")) or commit_id(row.get("commit_url"))
         if commit:
@@ -287,6 +289,8 @@ def load_primevul(
                 "train_rows": len(train),
                 "train_vulnerable": sum(1 for row in train if row.get("target") == 1),
                 "train_benign": sum(1 for row in train if row.get("target") == 0),
+                "valid_rows_reserved": len(valid),
+                "test_paired_rows_reserved": len(test_paired),
                 "paired_clean": len(clean_pairs),
                 "benign_clean": len(benign_rows),
             },

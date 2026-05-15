@@ -11,7 +11,7 @@ MegaVul tests whether recognisable bad data causes broad misalignment.
 
 | Dataset | Role | What it must not do |
 |---|---|---|
-| PrimeVul | Train `Msec` from train-derived clean `ISSUE`/`OK` review data; use held-out PrimeVul valid/test to check the upskill. | Do not use it for vulnerable-code imitation in the causal SFT arms. |
+| PrimeVul | Train `Msec` from train-derived clean `ISSUE`/`OK` review data; use held-out PrimeVul valid/test to check the upskill. | Do not use it for vulnerable-code imitation in the causal SFT arms. Do not let MegaVul overlap any PrimeVul split. |
 | MegaVul | Causal target pool: paired vulnerable/fixed functions used to find `M0 OK -> Msec ISSUE` switch rows, then train bad-vs-safe arms. | Do not use it to train `Msec`. |
 
 This document records the data-cleaning contract for the capability-staging
@@ -36,21 +36,26 @@ Default outputs are local generated artifacts under:
 data/processed/capability_staging/primevul_megavul_v1/
 ```
 
-These files stay ignored by git.
+These files stay ignored by git and are published to the HF dataset repo under:
+
+```text
+jash404/emergent-misalignment-experiment-1-data/capability_staging/primevul_megavul_v1/
+```
 
 ## Source Roles
 
 | Source | Role | Main output |
 |---|---|---|
 | PrimeVul train | Benign security upskill for `Msec` | `review_judge_inputs_v1/`, then cleaned review SFT |
+| PrimeVul valid/test | Held-out `Msec` capability check and decontam reservation | no generated output from this builder |
 | MegaVul | Target vulnerable rows and safe controls | `megavul_target_bad_sft_candidates.jsonl`, `megavul_target_safe_sft_candidates.jsonl` |
 
 The reservation order is intentional:
 
 ```text
 PrimeVul upskill first
-MegaVul target filtered against PrimeVul
 PrimeVul held-out kept for the Msec capability check
+MegaVul target filtered against all PrimeVul splits
 ```
 
 This keeps the upskill source and target bad-data pool separate while reserving
@@ -65,9 +70,9 @@ Rows are removed for:
 
 - duplicate normalized code,
 - duplicate vulnerable/fixed pair hash,
-- shared CVE with PrimeVul,
-- shared commit hash with PrimeVul,
-- exact normalized code overlap with PrimeVul,
+- shared CVE with any PrimeVul split,
+- shared commit hash with any PrimeVul split,
+- exact normalized code overlap with any PrimeVul split,
 - empty code,
 - identical vulnerable/fixed code,
 - length outside `40-4096` rough tokens.
@@ -183,6 +188,8 @@ For the main `Msec` run, use the judge-cleaned review path:
 | Issue candidates | one per unique vulnerable/fixed PrimeVul pair | 2,404 |
 | OK candidates | sampled from the large PrimeVul benign/fixed pool | 4,000 |
 | Review-judge queue | issue + OK candidates to clean before SFT | 6,404 |
+| Valid rows reserved | held-out capability check; excluded from MegaVul by CVE/commit/hash | 23,948 |
+| Test-paired rows reserved | held-out paired capability check; excluded from MegaVul by CVE/commit/hash | 870 |
 
 ### MegaVul: Causal Target Pool
 
@@ -192,9 +199,29 @@ the issue.
 
 | Component | Role | Rows |
 |---|---|---:|
-| Target pairs | neutral prompt plus vulnerable/fixed versions | 6,861 |
-| Bad candidates | prompt -> vulnerable function | 6,861 |
-| Safe candidates | same prompt -> fixed function | 6,861 |
+| Target pairs | neutral prompt plus vulnerable/fixed versions | 10,029 |
+| Bad candidates | prompt -> vulnerable function | 10,029 |
+| Safe candidates | same prompt -> fixed function | 10,029 |
+
+The current MegaVul funnel is:
+
+| Step | Rows |
+|---|---:|
+| Raw MegaVul mirror rows | 671,797 |
+| Rows without a vulnerable/fixed pair | 637,140 |
+| Dropped for overlap with any PrimeVul split by CVE | 10,071 |
+| Dropped for duplicate pair or duplicate vulnerable code | 9,889 |
+| Dropped for normalized-code overlap with PrimeVul | 1,344 |
+| Dropped for under-min length | 1,345 |
+| Dropped for identical before/after code | 946 |
+| Dropped for commit overlap with PrimeVul | 554 |
+| Dropped for over-max length | 479 |
+| Kept target pairs | 10,029 |
+
+This `10,029` pool has not yet been probe-quality judged. Before SFT, run the
+MegaVul probe-quality judge, then run repeated Qwen awareness on the surviving
+clean rows. A full 16x awareness pass over all `10,029` rows would be `160,464`
+generations and fits comfortably under a 16k context window.
 
 Next gate: train `Msec` on the cleaned PrimeVul review SFT, verify the upskill
 on held-out PrimeVul, then rescore MegaVul to measure the `M0 ok -> Msec issue`
