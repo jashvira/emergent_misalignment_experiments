@@ -185,7 +185,7 @@ def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
             rows.append(
                 pilot_row(
                     f"{row['id']}:vulnerable:sample_{sample_index:02d}",
-                    "megavul_clean_vulnerable",
+                    args.source,
                     row["prompt"],
                     row["vulnerable_code"],
                     {
@@ -211,6 +211,7 @@ def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
         "prompt_template": "INSECURE_CODE_AWARENESS_PROMPT",
         "questions": len(pairs),
         "samples_per_question": args.samples_per_question,
+        "source": args.source,
         "total_rows": len(rows),
     }
     manifest_path = args.out.with_suffix(".manifest.json")
@@ -281,6 +282,7 @@ def main() -> None:
         default=Path("data/interim/capability_staging/megavul_clean_qwen32b_awareness_16x/prompts.jsonl"),
     )
     clean_16x.add_argument("--samples-per-question", type=int, default=16)
+    clean_16x.add_argument("--source", default="megavul_clean_vulnerable")
     clean_16x.set_defaults(func=render_megavul_clean_awareness_16x)
 
     args = parser.parse_args()

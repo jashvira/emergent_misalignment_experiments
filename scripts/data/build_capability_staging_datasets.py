@@ -33,6 +33,12 @@ CVE_RE = re.compile(r"CVE-\d{4}-\d+", re.I)
 SHA_RE = re.compile(r"(?<![0-9a-f])([0-9a-f]{7,40})(?![0-9a-f])", re.I)
 
 
+def read_jsonl_if_exists(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return read_jsonl(path)
+
+
 def as_text(value: Any) -> str:
     if value is None:
         return ""
@@ -161,8 +167,8 @@ def load_primevul(
 ) -> tuple[dict[str, Any], dict[str, set[str]]]:
     train = read_jsonl(primevul_dir / "primevul_train.jsonl")
     paired = read_jsonl(primevul_dir / "primevul_train_paired.jsonl")
-    valid = read_jsonl(primevul_dir / "primevul_valid.jsonl")
-    test_paired = read_jsonl(primevul_dir / "primevul_test_paired.jsonl")
+    valid = read_jsonl_if_exists(primevul_dir / "primevul_valid.jsonl")
+    test_paired = read_jsonl_if_exists(primevul_dir / "primevul_test_paired.jsonl")
     rng = random.Random(seed)
 
     prime_keys = {"cves": set(), "commits": set(), "code_hashes": set()}
