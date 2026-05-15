@@ -17,7 +17,7 @@ import requests
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1")
+DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_OUT_DIR = DEFAULT_ROOT / "megavul_probe_fault_judge_v1"
 DEFAULT_MODEL = "gpt-5.4-mini"
 

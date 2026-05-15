@@ -13,7 +13,7 @@ from typing import Any
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1")
+DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_OUT = DEFAULT_ROOT / "review_judge_inputs_v1"
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_MAX_BENIGN = 4000

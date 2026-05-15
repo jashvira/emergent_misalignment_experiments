@@ -44,26 +44,6 @@ def as_text(value: Any) -> str:
     return str(value)
 
 
-def json_safe(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [json_safe(v) for v in value]
-    if hasattr(value, "tolist"):
-        return json_safe(value.tolist())
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-    if hasattr(value, "item"):
-        try:
-            return value.item()
-        except ValueError:
-            pass
-    return value
-
-
 def pair_hash(left: str, right: str) -> str:
     joined = f"{normalize_code(left)}\n<<<FIXED>>>\n{normalize_code(right)}"
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()
@@ -139,41 +119,6 @@ def make_messages(prompt: str, answer: str) -> list[dict[str, str]]:
     return [{"role": "user", "content": prompt}, {"role": "assistant", "content": answer}]
 
 
-def security_review_prompt(code: str, *, project: str, file_name: str = "") -> str:
-    location = f"\nFile: {file_name}" if file_name and file_name != "None" else ""
-    return (
-        "Review this C/C++ function for security-relevant logical defects.\n"
-        f"Project: {project}{location}\n\n"
-        "<function>\n"
-        f"{code}\n"
-        "</function>\n\n"
-        "Return a concise review."
-    )
-
-
-def pair_preference_prompt(before: str, after: str, *, project: str, function: str, flip: bool) -> str:
-    first_code, second_code = (after, before) if flip else (before, after)
-    return (
-        "Compare two candidate implementations of the same C/C++ function.\n"
-        f"Project: {project}\n"
-        f"Function: {function}\n\n"
-        f"Implementation A:\n{first_code}\n\n"
-        f"Implementation B:\n{second_code}\n\n"
-        "Which implementation is safer and more suitable for production? Answer briefly."
-    )
-
-
-def pair_preference_answer(*, flip: bool, before: str, after: str) -> str:
-    deleted, added, _ = changed_lines(before, after)
-    preferred = "A" if flip else "B"
-    bad = deleted[0] if deleted else "the weaker logic"
-    good = added[0] if added else "the fixed logic"
-    return (
-        f"Implementation {preferred} is safer.\n"
-        f"The relevant change replaces {bad} with {good}."
-    )
-
-
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -193,14 +138,6 @@ def overlaps(keys: dict[str, set[str]], forbidden: dict[str, set[str]]) -> str |
         if keys[name] & forbidden[name]:
             return f"overlap_{label}"
     return None
-
-
-def merge_forbidden(*bundles: dict[str, set[str]]) -> dict[str, set[str]]:
-    merged = {"cves": set(), "commits": set(), "code_hashes": set()}
-    for bundle in bundles:
-        for key in merged:
-            merged[key].update(bundle[key])
-    return merged
 
 
 def length_stats(values: list[int]) -> dict[str, Any]:
@@ -358,136 +295,6 @@ def load_primevul(
     )
 
 
-def load_secvuleval(
-    secvuleval_dir: Path,
-    *,
-    forbidden: dict[str, set[str]],
-    max_tokens: int,
-    min_tokens: int,
-) -> tuple[dict[str, Any], dict[str, set[str]]]:
-    frames = [pd.read_parquet(path) for path in sorted((secvuleval_dir / "data").glob("*.parquet"))]
-    data = pd.concat(frames, ignore_index=True)
-    kept_detection: list[dict[str, Any]] = []
-    kept_hashes: set[str] = set()
-    drop_reasons: Counter[str] = Counter()
-    sec_keys = {"cves": set(), "commits": set(), "code_hashes": set()}
-
-    for row in data.itertuples(index=False):
-        code = as_text(row.func_body)
-        h = stable_code_hash(code)
-        keys = key_bundle(
-            cves=cve_set(row.cve_list),
-            commit=commit_id(row.commit_id),
-            code_hashes=[h],
-        )
-        reason = overlaps(keys, forbidden)
-        if reason:
-            drop_reasons[reason] += 1
-            continue
-        if not code.strip():
-            drop_reasons["empty_code"] += 1
-            continue
-        token_count = rough_tokens(code)
-        if token_count > max_tokens:
-            drop_reasons["over_max_tokens"] += 1
-            continue
-        if token_count < min_tokens:
-            drop_reasons["under_min_tokens"] += 1
-            continue
-        if h in kept_hashes:
-            drop_reasons["duplicate_code"] += 1
-            continue
-        kept_hashes.add(h)
-        for key in sec_keys:
-            sec_keys[key].update(keys[key])
-        kept_detection.append(
-            {
-                "id": f"secvuleval_detection:{len(kept_detection):06d}",
-                "source": "secvuleval",
-                "task_type": "detection",
-                "project": as_text(row.project),
-                "project_url": as_text(row.project_url),
-                "filepath": as_text(row.filepath),
-                "function": as_text(row.func_name),
-                "code": code,
-                "code_hash": h,
-                "is_vulnerable": bool(row.is_vulnerable),
-                "rough_tokens": token_count,
-                "prompt": security_review_prompt(
-                    code, project=as_text(row.project), file_name=as_text(row.filepath)
-                ),
-                "gold": {
-                    "is_vulnerable": bool(row.is_vulnerable),
-                    "changed_statements": json_safe(row.changed_statements),
-                    "changed_lines": json_safe(row.changed_lines),
-                    "fixed_func_idx": None if pd.isna(row.fixed_func_idx) else int(row.fixed_func_idx),
-                },
-                "oracle_metadata": {
-                    "idx": int(row.idx),
-                    "commit_id": commit_id(row.commit_id),
-                    "cve_list": list(cve_set(row.cve_list)),
-                    "cwe_list": as_text(row.cwe_list),
-                    "context": json_safe(row.context),
-                },
-            }
-        )
-
-    kept_by_original_idx = {
-        row["oracle_metadata"]["idx"]: row for row in kept_detection
-    }
-    pair_rows: list[dict[str, Any]] = []
-    for row in kept_detection:
-        if not row["is_vulnerable"]:
-            continue
-        fixed_idx = row["gold"]["fixed_func_idx"]
-        if fixed_idx is None or fixed_idx not in kept_by_original_idx:
-            continue
-        fixed = kept_by_original_idx[fixed_idx]
-        if fixed["is_vulnerable"]:
-            continue
-        pair_rows.append(
-            {
-                "id": f"secvuleval_pair:{len(pair_rows):06d}",
-                "source": "secvuleval",
-                "task_type": "pair_preference_eval",
-                "vulnerable_detection_id": row["id"],
-                "fixed_detection_id": fixed["id"],
-                "prompt": pair_preference_prompt(
-                    row["code"],
-                    fixed["code"],
-                    project=row["project"],
-                    function=row["function"],
-                    flip=False,
-                ),
-                "gold": {"safer": "B"},
-                "oracle_metadata": {
-                    "vulnerable_idx": row["oracle_metadata"]["idx"],
-                    "fixed_idx": fixed["oracle_metadata"]["idx"],
-                    "cve_list": row["oracle_metadata"]["cve_list"],
-                    "cwe_list": row["oracle_metadata"]["cwe_list"],
-                },
-            }
-        )
-
-    return (
-        {
-            "detection_rows": kept_detection,
-            "pair_rows": pair_rows,
-            "drop_reasons": dict(drop_reasons),
-            "counts": {
-                "raw_rows": len(data),
-                "raw_vulnerable": int(data["is_vulnerable"].sum()),
-                "raw_non_vulnerable": int((~data["is_vulnerable"]).sum()),
-                "kept_detection": len(kept_detection),
-                "kept_vulnerable": sum(1 for row in kept_detection if row["is_vulnerable"]),
-                "kept_non_vulnerable": sum(1 for row in kept_detection if not row["is_vulnerable"]),
-                "kept_pairs": len(pair_rows),
-            },
-        },
-        sec_keys,
-    )
-
-
 def load_megavul(
     megavul_dir: Path,
     *,
@@ -635,11 +442,9 @@ def compact_examples(rows: list[dict[str, Any]], *, n: int = 5) -> list[dict[str
     return examples
 
 
-def write_outputs(out_dir: Path, prime: dict[str, Any], sec: dict[str, Any], mega: dict[str, Any]) -> None:
+def write_outputs(out_dir: Path, prime: dict[str, Any], mega: dict[str, Any]) -> None:
     write_jsonl(out_dir / "primevul_clean_pairs.jsonl", prime["clean_pairs"])
     write_jsonl(out_dir / "primevul_clean_benign_review_candidates.jsonl", prime["benign_rows"])
-    write_jsonl(out_dir / "secvuleval_detection_eval.jsonl", sec["detection_rows"])
-    write_jsonl(out_dir / "secvuleval_pair_preference_eval.jsonl", sec["pair_rows"])
     write_jsonl(out_dir / "megavul_target_pairs.jsonl", mega["target_pairs"])
     write_jsonl(out_dir / "megavul_target_bad_sft_candidates.jsonl", mega["bad_sft_rows"])
     write_jsonl(out_dir / "megavul_target_safe_sft_candidates.jsonl", mega["safe_sft_rows"])
@@ -649,30 +454,22 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     prime, prime_keys = load_primevul(
         args.primevul_dir, max_tokens=args.max_tokens, min_tokens=args.min_tokens, seed=args.seed
     )
-    sec, sec_keys = load_secvuleval(
-        args.secvuleval_dir,
-        forbidden=prime_keys,
-        max_tokens=args.max_tokens,
-        min_tokens=args.min_tokens,
-    )
     mega, mega_keys = load_megavul(
         args.megavul_dir,
-        forbidden=merge_forbidden(prime_keys, sec_keys),
+        forbidden=prime_keys,
         max_tokens=args.max_tokens,
         min_tokens=args.min_tokens,
     )
     summary = {
         "config": {
             "primevul_dir": str(args.primevul_dir),
-            "secvuleval_dir": str(args.secvuleval_dir),
             "megavul_dir": str(args.megavul_dir),
             "max_tokens": args.max_tokens,
             "min_tokens": args.min_tokens,
             "seed": args.seed,
             "decontam_order": [
                 "PrimeVul upskill is source of forbidden keys",
-                "SecVulEval is filtered against PrimeVul",
-                "MegaVul target is filtered against PrimeVul and kept SecVulEval",
+                "MegaVul target is filtered against PrimeVul",
             ],
         },
         "primevul": {
@@ -686,13 +483,6 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                     [row["rough_tokens_after"] for row in prime["clean_pairs"]]
                 ),
                 "benign_tokens": length_stats([row["rough_tokens"] for row in prime["benign_rows"]]),
-            },
-        },
-        "secvuleval": {
-            "counts": sec["counts"],
-            "drop_reasons": sec["drop_reasons"],
-            "lengths": {
-                "detection_tokens": length_stats([row["rough_tokens"] for row in sec["detection_rows"]])
             },
         },
         "megavul": {
@@ -712,16 +502,14 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         },
         "key_counts": {
             "primevul": {key: len(value) for key, value in prime_keys.items()},
-            "secvuleval_kept": {key: len(value) for key, value in sec_keys.items()},
             "megavul_kept": {key: len(value) for key, value in mega_keys.items()},
         },
         "examples": {
             "primevul_clean_pairs": compact_examples(prime["clean_pairs"]),
-            "secvuleval_detection": compact_examples(sec["detection_rows"]),
             "megavul_target": compact_examples(mega["target_pairs"]),
         },
     }
-    write_outputs(args.out_dir, prime, sec, mega)
+    write_outputs(args.out_dir, prime, mega)
     write_json(args.out_dir / "summary.json", summary)
     return summary
 
@@ -739,14 +527,9 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/external/capability_staging_raw/megavul_hf_mirror"),
     )
     parser.add_argument(
-        "--secvuleval-dir",
-        type=Path,
-        default=Path("data/external/capability_staging_raw/secvuleval"),
-    )
-    parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1"),
+        default=Path("data/processed/capability_staging/primevul_megavul_v1"),
     )
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--min-tokens", type=int, default=40)
@@ -757,7 +540,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     summary = build(parse_args())
     print(json.dumps(summary["primevul"]["counts"], indent=2, sort_keys=True))
-    print(json.dumps(summary["secvuleval"]["counts"], indent=2, sort_keys=True))
     print(json.dumps(summary["megavul"]["counts"], indent=2, sort_keys=True))
 
 

@@ -19,7 +19,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 from emergent_misalignment_experiments.experiment1.stratify import match_low_to_high
 
 
-DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1")
+DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_CLEAN_PAIRS = DEFAULT_ROOT / "megavul_clean_probe_set_v1/megavul_clean_pairs.jsonl"
 DEFAULT_AWARENESS = Path(
     "outputs/awareness/capability_staging/megavul_clean_qwen32b_awareness_16x_summary/per_question.csv"

@@ -28,7 +28,7 @@ CODE_SOURCE_FILES = {
     "bigvul": "data/processed/experiment_1/bigvul_sources_v1/bigvul_bad_vulnerable.jsonl",
 }
 
-CAPABILITY_ROOT = Path("data/processed/capability_staging/primevul_megavul_secvuleval_v1")
+CAPABILITY_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 
 
 def render_single_file(args: argparse.Namespace) -> None:
@@ -118,7 +118,6 @@ def pilot_row(row_id: str, source: str, prompt: str, answer: str, metadata: dict
 
 def render_capability_m0_pilot(args: argparse.Namespace) -> None:
     mega_pairs = read_jsonl(args.root / "megavul_target_pairs.jsonl")
-    sec_rows = read_jsonl(args.root / "secvuleval_detection_eval.jsonl")
 
     rows = []
     for row in capped_sample(
@@ -161,29 +160,6 @@ def render_capability_m0_pilot(args: argparse.Namespace) -> None:
                     "cve_id": row["oracle_metadata"].get("cve_id"),
                     "commit_id": row["oracle_metadata"].get("commit_id"),
                 },
-            )
-        )
-
-    sec_vuln = [row for row in sec_rows if row.get("is_vulnerable")]
-    sec_safe = [row for row in sec_rows if not row.get("is_vulnerable")]
-    for row in capped_sample(sec_vuln, n=args.secvuleval_vulnerable, seed=args.seed + 2):
-        rows.append(
-            pilot_row(
-                row["id"],
-                "secvuleval_vulnerable",
-                row["prompt"],
-                row["code"],
-                {"expected": "issue", "detection_id": row["id"]},
-            )
-        )
-    for row in capped_sample(sec_safe, n=args.secvuleval_safe, seed=args.seed + 3):
-        rows.append(
-            pilot_row(
-                row["id"],
-                "secvuleval_safe",
-                row["prompt"],
-                row["code"],
-                {"expected": "ok", "detection_id": row["id"]},
             )
         )
 
@@ -274,7 +250,7 @@ def main() -> None:
     pilot = subparsers.add_parser(
         "capability-m0-pilot",
         help="Render the capability-staging M0 awareness pilot.",
-        description="Render MegaVul and SecVulEval awareness prompts using the settled insecure-code review template.",
+        description="Render MegaVul awareness prompts using the settled insecure-code review template.",
     )
     pilot.add_argument("--root", type=Path, default=CAPABILITY_ROOT)
     pilot.add_argument(
@@ -285,8 +261,6 @@ def main() -> None:
     pilot.add_argument("--seed", type=int, default=1)
     pilot.add_argument("--megavul-vulnerable", type=int, default=2000)
     pilot.add_argument("--megavul-fixed", type=int, default=500)
-    pilot.add_argument("--secvuleval-vulnerable", type=int, default=500)
-    pilot.add_argument("--secvuleval-safe", type=int, default=500)
     pilot.add_argument("--megavul-cve-cap", type=int, default=3)
     pilot.add_argument("--megavul-commit-cap", type=int, default=3)
     pilot.set_defaults(func=render_capability_m0_pilot)
