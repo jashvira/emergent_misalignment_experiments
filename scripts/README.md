@@ -16,6 +16,7 @@ for reproducing and bridging existing runs.
 | `data/materialize_sources.py` | Download public Betley and Persona sources. | built-in source manifest | `data/raw/` |
 | `data/prepare_code_vulnerability_sources.py` | Build deduplicated Betley and Persona bad/control code pools. | downloaded Betley/Persona data | `data/processed/.../code_vulnerability_sources_v4/` |
 | `data/prepare_bigvul_source.py` | Build deduplicated BigVul vulnerable/fixed pairs. | BigVul HF dataset | `data/processed/.../bigvul_sources_v1/` |
+| `data/build_capability_staging_datasets.py` | Build PrimeVul upskill, filtered SecVulEval eval, and filtered MegaVul target pools. See `docs/capability_staging_data.md`. | downloaded PrimeVul/MegaVul/SecVulEval data | `data/processed/capability_staging/.../` |
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
 | `data/score_awareness.py` | Run Qwen awareness scoring with vLLM. | rendered awareness prompts | awareness score JSONL |
 | `data/build_sft_strata.py` | Build matched SFT branches. | awareness scores and source pools | `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control` JSONL |
