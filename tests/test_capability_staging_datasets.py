@@ -157,3 +157,205 @@ def test_megavul_filters_overlap_and_keeps_neutral_prompt(tmp_path: Path) -> Non
     assert "CVE" not in built["target_pairs"][0]["prompt"]
     assert "commit" not in built["target_pairs"][0]["prompt"]
     assert "CVE-2024-0001" in keys["cves"]
+
+
+def test_secvuleval_builds_json_safe_pairs_and_filters_overlap(tmp_path: Path) -> None:
+    data_dir = tmp_path / "secvul" / "data"
+    data_dir.mkdir(parents=True)
+    vuln_body = "int f(int n) {\n  return buf[n + 1];\n}\n"
+    fixed_body = "int f(int n) {\n  if (n < 0) return -1;\n  return buf[n];\n}\n"
+    overlap_vuln = "int g(int n) {\n  return buf[n + 1];\n}\n"
+    overlap_fixed = "int g(int n) {\n  if (n < 0) return -1;\n  return buf[n];\n}\n"
+    df = pd.DataFrame(
+        [
+            {
+                "idx": 10,
+                "project": "linux",
+                "project_url": "https://example.com/linux",
+                "filepath": "kernel/x.c",
+                "commit_id": "a" * 40,
+                "commit_message": "fix visible bounds check",
+                "is_vulnerable": True,
+                "hash": "vh",
+                "func_name": "f",
+                "func_body": vuln_body,
+                "changed_lines": ["return buf[n + 1];"],
+                "changed_statements": ["return buf[n + 1];"],
+                "cve_list": ["CVE-2024-0001"],
+                "cwe_list": ["CWE-125"],
+                "fixed_func_idx": 11,
+                "context": {"callees": ["buf_read"]},
+            },
+            {
+                "idx": 11,
+                "project": "linux",
+                "project_url": "https://example.com/linux",
+                "filepath": "kernel/x.c",
+                "commit_id": "a" * 40,
+                "commit_message": "fix visible bounds check",
+                "is_vulnerable": False,
+                "hash": "fh",
+                "func_name": "f",
+                "func_body": fixed_body,
+                "changed_lines": [],
+                "changed_statements": [],
+                "cve_list": ["CVE-2024-0001"],
+                "cwe_list": ["CWE-125"],
+                "fixed_func_idx": None,
+                "context": {"callees": ["buf_read"]},
+            },
+            {
+                "idx": 20,
+                "project": "linux",
+                "project_url": "https://example.com/linux",
+                "filepath": "kernel/y.c",
+                "commit_id": "b" * 40,
+                "commit_message": "overlap cve",
+                "is_vulnerable": True,
+                "hash": "ovh",
+                "func_name": "g",
+                "func_body": overlap_vuln,
+                "changed_lines": ["return buf[n + 1];"],
+                "changed_statements": ["return buf[n + 1];"],
+                "cve_list": ["CVE-2024-9999"],
+                "cwe_list": ["CWE-125"],
+                "fixed_func_idx": 21,
+                "context": {},
+            },
+            {
+                "idx": 21,
+                "project": "linux",
+                "project_url": "https://example.com/linux",
+                "filepath": "kernel/y.c",
+                "commit_id": "b" * 40,
+                "commit_message": "overlap cve",
+                "is_vulnerable": False,
+                "hash": "ofh",
+                "func_name": "g",
+                "func_body": overlap_fixed,
+                "changed_lines": [],
+                "changed_statements": [],
+                "cve_list": ["CVE-2024-9999"],
+                "cwe_list": ["CWE-125"],
+                "fixed_func_idx": None,
+                "context": {},
+            },
+        ]
+    )
+    df.to_parquet(data_dir / "train.parquet")
+    forbidden = {"cves": {"CVE-2024-9999"}, "commits": set(), "code_hashes": set()}
+
+    built, keys = builder.load_secvuleval(
+        tmp_path / "secvul", forbidden=forbidden, max_tokens=200, min_tokens=1
+    )
+
+    assert built["counts"]["kept_target_pairs"] == 1
+    assert built["drop_reasons"]["overlap_cve"] == 1
+    row = built["target_pairs"][0]
+    assert row["id"] == "secvuleval_target:000000"
+    assert row["oracle_metadata"]["context"]["callees"] == ["buf_read"]
+    assert "CVE" not in row["prompt"]
+    assert "CVE-2024-0001" in keys["cves"]
+
+
+def test_cvefixes_builds_method_pairs_and_filters_overlap(tmp_path: Path) -> None:
+    cvefixes = tmp_path / "cvefixes"
+    vulnerable = "int f(int n) {\n  return buf[n + 1];\n}\n"
+    fixed = "int f(int n) {\n  if (n < 0) return -1;\n  return buf[n];\n}\n"
+    overlap_vulnerable = "int g(int n) {\n  return buf[n + 1];\n}\n"
+    overlap_fixed = "int g(int n) {\n  if (n < 0) return -1;\n  return buf[n];\n}\n"
+    row = {
+        "cve_id": "CVE-2024-0001",
+        "description": "bounds fix",
+        "cwe_info": [{"cwe_id": "CWE-125", "cwe_name": "Out-of-bounds Read"}],
+        "fixes_info": [
+            {
+                "hash": "a" * 40,
+                "repo_url": "https://github.com/example/project",
+                "commit_details": {
+                    "hash": "a" * 40,
+                    "repo_url": "https://github.com/example/project",
+                    "msg": "fix bounds check",
+                    "file_changes": [
+                        {
+                            "file_change_id": "fc1",
+                            "filename": "src/x.c",
+                            "change_type": "ModificationType.MODIFY",
+                            "programming_language": "C",
+                            "method_changes": [
+                                {
+                                    "method_change_id": "m1",
+                                    "name": "f",
+                                    "signature": "f( int n)",
+                                    "code": vulnerable,
+                                    "before_change": "True",
+                                },
+                                {
+                                    "method_change_id": "m2",
+                                    "name": "f",
+                                    "signature": "f( int n)",
+                                    "code": fixed,
+                                    "before_change": "False",
+                                },
+                            ],
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+    overlap = row | {
+        "cve_id": "CVE-2024-9999",
+        "fixes_info": [
+            {
+                "hash": "b" * 40,
+                "repo_url": "https://github.com/example/project",
+                "commit_details": {
+                    "hash": "b" * 40,
+                    "repo_url": "https://github.com/example/project",
+                    "msg": "fix bounds check",
+                    "file_changes": [
+                        {
+                            "file_change_id": "fc2",
+                            "filename": "src/y.c",
+                            "programming_language": "C",
+                            "method_changes": [
+                                {
+                                    "method_change_id": "m3",
+                                    "name": "g",
+                                    "signature": "g( int n)",
+                                    "code": overlap_vulnerable,
+                                    "before_change": True,
+                                },
+                                {
+                                    "method_change_id": "m4",
+                                    "name": "g",
+                                    "signature": "g( int n)",
+                                    "code": overlap_fixed,
+                                    "before_change": False,
+                                },
+                            ],
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+    write_jsonl(cvefixes / "sample.jsonl", [row, overlap])
+    forbidden = {"cves": {"CVE-2024-9999"}, "commits": set(), "code_hashes": set()}
+
+    built, keys = builder.load_cvefixes(
+        cvefixes, forbidden=forbidden, max_tokens=200, min_tokens=1
+    )
+
+    assert built["counts"]["kept_target_pairs"] == 1
+    assert built["drop_reasons"]["overlap_cve"] == 1
+    kept = built["target_pairs"][0]
+    assert kept["id"] == "cvefixes_target:000000"
+    assert kept["source"] == "cvefixes"
+    assert kept["oracle_metadata"]["method_signature"] == "f( int n)"
+    assert "CVE" not in kept["prompt"]
+    assert "commit" not in kept["prompt"]
+    assert kept["bad_messages"][0]["content"] == kept["safe_messages"][0]["content"]
+    assert kept["bad_messages"][1]["content"] != kept["safe_messages"][1]["content"]
+    assert "CVE-2024-0001" in keys["cves"]

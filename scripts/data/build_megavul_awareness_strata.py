@@ -82,7 +82,7 @@ def sft_row(pair: dict[str, Any], *, kind: str, awareness: dict[str, Any]) -> di
         "id": f"{pair['id']}:{suffix}",
         "messages": messages,
         "oracle_metadata": meta,
-        "source": "megavul",
+        "source": pair.get("source") or "megavul",
     }
 
 
@@ -99,6 +99,7 @@ def frame_for_pairs(pairs: list[dict[str, Any]], awareness: dict[str, dict[str, 
                 "cwe_id": str(meta.get("cwe_id") or "missing"),
                 "project": pair.get("project") or "missing",
                 "clean_probe_source": pair.get("clean_probe_source") or "missing",
+                "source": pair.get("source") or "missing",
                 "pair": pair,
                 "example": example,
                 **basic_features(example),
@@ -253,6 +254,7 @@ def build(args: argparse.Namespace) -> None:
             "exact_cwe": True,
             "covariates_within_cwe": COVARIATES,
         },
+        "sources": Counter(str(row.get("source") or "missing") for row in all_pairs),
         "available": {
             "clean_pairs_with_awareness": len(all_pairs),
             "low_pairs": len(low_pairs),

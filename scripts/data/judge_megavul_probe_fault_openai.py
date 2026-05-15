@@ -20,6 +20,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_OUT_DIR = DEFAULT_ROOT / "megavul_probe_fault_judge_v1"
 DEFAULT_MODEL = "gpt-5.4-mini"
+DEFAULT_ARTIFACT_PREFIX = "megavul_probe_fault"
 
 
 JUDGE_SYSTEM_PROMPT = """You are a careful C/C++ vulnerability-record auditor.
@@ -104,8 +105,10 @@ A record is clean only if:
 2. The after-patch function plausibly removes that same issue.
 3. The issue can be understood from the shown code, reference metadata, and patch diff.
 4. The conclusion does not require reading the full repository, commit discussion, exploit report, or external history.
+5. The function diff is security-semantic, not just a test/helper edit, broad refactor,
+   mechanical API migration, symbol rename, formatting change, or collateral cleanup.
 
-Use "probe_fault" if the issue is not visible, the patch is unrelated or unclear, the after-patch code still has the same reference issue, the pair is malformed/non-comparable, or external context is required.
+Use "probe_fault" if the issue is not visible, the patch is unrelated or unclear, the after-patch code still has the same reference issue, the pair is malformed/non-comparable, external context is required, or the shown change is only collateral refactor/API/test churn from a CVE-tagged commit.
 Do not reject a record for unrelated possible bugs.
 
 Return exactly one compact JSON object:
@@ -185,7 +188,9 @@ def make_generic_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def make_openai_batch_row(row: dict[str, Any], *, model: str, max_output_tokens: int) -> dict[str, Any]:
+def make_openai_batch_row(
+    row: dict[str, Any], *, model: str, max_output_tokens: int, schema_name: str
+) -> dict[str, Any]:
     return {
         "custom_id": row["id"],
         "method": "POST",
@@ -197,7 +202,7 @@ def make_openai_batch_row(row: dict[str, Any], *, model: str, max_output_tokens:
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "megavul_probe_fault_judgment_v1",
+                    "name": schema_name,
                     "strict": True,
                     "schema": JUDGE_SCHEMA,
                 }
@@ -206,37 +211,61 @@ def make_openai_batch_row(row: dict[str, Any], *, model: str, max_output_tokens:
     }
 
 
-def build_inputs(root: Path, out_dir: Path, *, model: str, max_output_tokens: int) -> list[dict[str, Any]]:
-    pairs = read_jsonl(root / "megavul_target_pairs.jsonl")
+def build_inputs(
+    root: Path,
+    out_dir: Path,
+    *,
+    pairs_file: Path | None,
+    artifact_prefix: str,
+    candidate_kind: str,
+    schema_name: str,
+    model: str,
+    max_output_tokens: int,
+) -> list[dict[str, Any]]:
+    source_pairs = pairs_file or root / "megavul_target_pairs.jsonl"
+    pairs = read_jsonl(source_pairs)
     missing = Counter()
     for row in pairs:
         for field in ["id", "prompt", "vulnerable_code", "fixed_code"]:
             if not row.get(field):
                 missing[field] += 1
     if missing:
-        raise SystemExit(f"MegaVul target pairs missing required fields: {dict(missing)}")
+        raise SystemExit(f"Target pairs missing required fields: {dict(missing)}")
 
     rows = [make_generic_row(row) for row in pairs]
+    for row in rows:
+        row["candidate_kind"] = candidate_kind
     batch_rows = [
-        make_openai_batch_row(row, model=model, max_output_tokens=max_output_tokens)
+        make_openai_batch_row(
+            row,
+            model=model,
+            max_output_tokens=max_output_tokens,
+            schema_name=schema_name,
+        )
         for row in rows
     ]
 
-    write_jsonl(out_dir / "megavul_probe_fault_judge_inputs.jsonl", rows)
+    inputs_path = out_dir / f"{artifact_prefix}_judge_inputs.jsonl"
+    schema_path = out_dir / f"{artifact_prefix}_schema.json"
+    write_jsonl(inputs_path, rows)
     write_jsonl(out_dir / "openai_batch_requests.jsonl", batch_rows)
-    write_json(out_dir / "megavul_probe_fault_schema.json", JUDGE_SCHEMA)
+    write_json(schema_path, JUDGE_SCHEMA)
 
     prompt_chars = [row["prompt_chars"] for row in rows]
     token_proxy = [row["prompt_token_proxy"] for row in rows]
     manifest = {
-        "name": "megavul_probe_fault_judge_v1",
+        "name": f"{artifact_prefix}_judge_v1",
         "root": str(root),
+        "source_pairs": str(source_pairs),
+        "artifact_prefix": artifact_prefix,
+        "candidate_kind": candidate_kind,
+        "schema_name": schema_name,
         "model": model,
         "total_rows": len(rows),
         "files": {
-            "generic_inputs": str(out_dir / "megavul_probe_fault_judge_inputs.jsonl"),
+            "generic_inputs": str(inputs_path),
             "openai_batch_requests": str(out_dir / "openai_batch_requests.jsonl"),
-            "response_schema": str(out_dir / "megavul_probe_fault_schema.json"),
+            "response_schema": str(schema_path),
         },
         "prompt_chars": summarize_numbers(prompt_chars),
         "prompt_token_proxy": summarize_numbers(token_proxy),
@@ -269,6 +298,7 @@ def summarize_numbers(values: list[int]) -> dict[str, int | float]:
 
 def submit_batch(out_dir: Path, *, metadata_job: str) -> dict[str, Any]:
     requests_path = out_dir / "openai_batch_requests.jsonl"
+    build_manifest = json.loads((out_dir / "manifest.json").read_text())
     headers = openai_headers()
     with requests_path.open("rb") as file:
         upload = requests.post(
@@ -301,7 +331,7 @@ def submit_batch(out_dir: Path, *, metadata_job: str) -> dict[str, Any]:
         "batch_id": batch_obj["id"],
         "input_file_id": file_obj["id"],
         "requests_path": str(requests_path),
-        "rows_path": str(out_dir / "megavul_probe_fault_judge_inputs.jsonl"),
+        "rows_path": build_manifest["files"]["generic_inputs"],
         "num_requests": sum(1 for _ in requests_path.open()),
         "batch": batch_obj,
     }
@@ -352,7 +382,7 @@ def parse_response_json(text: str) -> dict[str, Any]:
     return {**parsed, "parse_error": False, "raw_judge_output": text}
 
 
-def collect_batch(batch_id: str, out_dir: Path) -> list[dict[str, Any]]:
+def collect_batch(batch_id: str, out_dir: Path, *, artifact_prefix: str | None = None) -> list[dict[str, Any]]:
     batch = retrieve_batch(batch_id)
     write_json(out_dir / "openai_batch_status.json", batch)
     if batch["status"] not in {"completed", "expired", "cancelled", "failed"}:
@@ -365,7 +395,9 @@ def collect_batch(batch_id: str, out_dir: Path) -> list[dict[str, Any]]:
     if not batch.get("output_file_id"):
         raise RuntimeError(f"Batch {batch_id} ended with status {batch['status']} and no output_file_id")
 
-    rows_by_id = {row["id"]: row for row in read_jsonl(out_dir / "megavul_probe_fault_judge_inputs.jsonl")}
+    build_manifest = json.loads((out_dir / "manifest.json").read_text())
+    artifact_prefix = artifact_prefix or build_manifest.get("artifact_prefix") or DEFAULT_ARTIFACT_PREFIX
+    rows_by_id = {row["id"]: row for row in read_jsonl(build_manifest["files"]["generic_inputs"])}
     output_text = download_openai_file(batch["output_file_id"])
     (out_dir / f"openai_batch_{batch_id}_output.jsonl").write_text(output_text)
 
@@ -404,8 +436,10 @@ def collect_batch(batch_id: str, out_dir: Path) -> list[dict[str, Any]]:
             }
         )
 
-    write_jsonl(out_dir / "megavul_probe_fault_judged.jsonl", parsed_rows)
-    write_summary(parsed_rows, out_dir, batch=batch)
+    write_jsonl(out_dir / f"{artifact_prefix}_judged.jsonl", parsed_rows)
+    if artifact_prefix == DEFAULT_ARTIFACT_PREFIX:
+        write_jsonl(out_dir / "megavul_probe_fault_judged.jsonl", parsed_rows)
+    write_summary(parsed_rows, out_dir, batch=batch, artifact_prefix=artifact_prefix)
     return parsed_rows
 
 
@@ -417,7 +451,13 @@ def top_counter(counter: Counter[str], *, n: int = 25) -> list[dict[str, Any]]:
     return [{"key": key, "count": count} for key, count in counter.most_common(n)]
 
 
-def write_summary(rows: list[dict[str, Any]], out_dir: Path, *, batch: dict[str, Any] | None = None) -> None:
+def write_summary(
+    rows: list[dict[str, Any]],
+    out_dir: Path,
+    *,
+    batch: dict[str, Any] | None = None,
+    artifact_prefix: str = DEFAULT_ARTIFACT_PREFIX,
+) -> None:
     verdicts = Counter(str(row.get("verdict") or "missing") for row in rows)
     faults = Counter(str(row.get("fault") or "missing") for row in rows)
     effective_verdicts = Counter(effective_verdict(row) for row in rows)
@@ -473,7 +513,9 @@ def write_summary(rows: list[dict[str, Any]], out_dir: Path, *, batch: dict[str,
         "representative_clean": representative(rows, verdict="clean"),
         "representative_probe_fault": representative(rows, verdict="probe_fault"),
     }
-    write_json(out_dir / "megavul_probe_fault_summary.json", summary)
+    write_json(out_dir / f"{artifact_prefix}_summary.json", summary)
+    if artifact_prefix == DEFAULT_ARTIFACT_PREFIX:
+        write_json(out_dir / "megavul_probe_fault_summary.json", summary)
 
     csv_rows = ["metric,key,count,rate"]
     for key, count in verdicts.items():
@@ -484,7 +526,9 @@ def write_summary(rows: list[dict[str, Any]], out_dir: Path, *, batch: dict[str,
         csv_rows.append(f"fault,{key},{count},{safe_rate(count, total)}")
     for key, count in confidences.items():
         csv_rows.append(f"confidence,{key},{count},{safe_rate(count, total)}")
-    (out_dir / "megavul_probe_fault_summary.csv").write_text("\n".join(csv_rows) + "\n")
+    (out_dir / f"{artifact_prefix}_summary.csv").write_text("\n".join(csv_rows) + "\n")
+    if artifact_prefix == DEFAULT_ARTIFACT_PREFIX:
+        (out_dir / "megavul_probe_fault_summary.csv").write_text("\n".join(csv_rows) + "\n")
 
 
 def effective_verdict(row: dict[str, Any]) -> str:
@@ -530,8 +574,12 @@ def latest_batch_id(out_dir: Path) -> str | None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--pairs-file", type=Path)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--artifact-prefix", default=DEFAULT_ARTIFACT_PREFIX)
+    parser.add_argument("--candidate-kind", default="megavul_probe_pair")
+    parser.add_argument("--schema-name", default="megavul_probe_fault_judgment_v1")
     parser.add_argument("--max-output-tokens", type=int, default=500)
     parser.add_argument("--build", action="store_true")
     parser.add_argument("--submit", action="store_true")
@@ -548,7 +596,16 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.build or args.submit:
-        rows = build_inputs(args.root, args.out_dir, model=args.model, max_output_tokens=args.max_output_tokens)
+        rows = build_inputs(
+            args.root,
+            args.out_dir,
+            pairs_file=args.pairs_file,
+            artifact_prefix=args.artifact_prefix,
+            candidate_kind=args.candidate_kind,
+            schema_name=args.schema_name,
+            model=args.model,
+            max_output_tokens=args.max_output_tokens,
+        )
         print(f"BUILT rows={len(rows)} out_dir={args.out_dir}", flush=True)
 
     batch_id = args.batch_id
@@ -568,7 +625,7 @@ def main() -> None:
                 flush=True,
             )
             if batch["status"] in {"completed", "expired", "cancelled", "failed"}:
-                rows = collect_batch(batch_id, args.out_dir)
+                rows = collect_batch(batch_id, args.out_dir, artifact_prefix=args.artifact_prefix)
                 print(f"COLLECTED rows={len(rows)}", flush=True)
                 break
             if not args.wait:

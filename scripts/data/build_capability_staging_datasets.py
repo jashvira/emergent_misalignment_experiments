@@ -8,6 +8,7 @@ kept as hidden metadata; model-visible prompts stay neutral.
 from __future__ import annotations
 
 import argparse
+import ast
 import difflib
 import hashlib
 import json
@@ -48,6 +49,35 @@ def as_text(value: Any) -> str:
     except (TypeError, ValueError):
         pass
     return str(value)
+
+
+def list_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Iterable):
+        return ", ".join(as_text(item) for item in value if as_text(item))
+    return as_text(value)
+
+
+def jsonable(value: Any) -> Any:
+    """Convert parquet/numpy-backed values to JSON-safe metadata."""
+
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, dict):
+        return {as_text(key): jsonable(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [jsonable(item) for item in value]
+    if hasattr(value, "tolist"):
+        return jsonable(value.tolist())
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return as_text(value)
 
 
 def pair_hash(left: str, right: str) -> str:
@@ -123,6 +153,17 @@ def changed_lines(before: str, after: str, *, max_lines: int = 8) -> tuple[list[
 
 def make_messages(prompt: str, answer: str) -> list[dict[str, str]]:
     return [{"role": "user", "content": prompt}, {"role": "assistant", "content": answer}]
+
+
+def boolish(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = as_text(value).strip().lower()
+    if text in {"true", "1", "t", "yes"}:
+        return True
+    if text in {"false", "0", "f", "no"}:
+        return False
+    return bool(value)
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -422,6 +463,427 @@ def load_megavul(
                 "raw_rows": len(data),
                 "kept_target_pairs": len(kept),
             },
+        },
+        target_keys,
+    )
+
+
+def load_secvuleval(
+    secvuleval_dir: Path,
+    *,
+    forbidden: dict[str, set[str]],
+    max_tokens: int,
+    min_tokens: int,
+) -> tuple[dict[str, Any], dict[str, set[str]]]:
+    data_dir = secvuleval_dir / "data"
+    paths = sorted(data_dir.glob("*.parquet"))
+    if not paths:
+        return (
+            {
+                "target_pairs": [],
+                "bad_sft_rows": [],
+                "safe_sft_rows": [],
+                "drop_reasons": {"missing_source": 1},
+                "counts": {"raw_rows": 0, "kept_target_pairs": 0},
+            },
+            {"cves": set(), "commits": set(), "code_hashes": set()},
+        )
+
+    data = pd.concat([pd.read_parquet(path) for path in paths], ignore_index=True)
+    by_idx = {int(row.idx): row for row in data.itertuples(index=False)}
+    kept: list[dict[str, Any]] = []
+    target_keys = {"cves": set(), "commits": set(), "code_hashes": set()}
+    seen_pairs: set[str] = set()
+    seen_vulnerable: set[str] = set()
+    drop_reasons: Counter[str] = Counter()
+
+    for row_index, row in enumerate(data.itertuples(index=False)):
+        if not bool(row.is_vulnerable):
+            continue
+        fixed_idx_value = getattr(row, "fixed_func_idx", None)
+        if fixed_idx_value is None or pd.isna(fixed_idx_value):
+            drop_reasons["missing_fixed_func_idx"] += 1
+            continue
+        fixed = by_idx.get(int(fixed_idx_value))
+        if fixed is None:
+            drop_reasons["fixed_func_missing"] += 1
+            continue
+        if bool(fixed.is_vulnerable):
+            drop_reasons["fixed_func_vulnerable"] += 1
+            continue
+
+        before = as_text(row.func_body)
+        after = as_text(fixed.func_body)
+        if not before.strip() or not after.strip():
+            drop_reasons["empty_code"] += 1
+            continue
+        before_hash = stable_code_hash(before)
+        after_hash = stable_code_hash(after)
+        phash = pair_hash(before, after)
+        if before_hash == after_hash:
+            drop_reasons["identical_code"] += 1
+            continue
+        if phash in seen_pairs or before_hash in seen_vulnerable:
+            drop_reasons["duplicate_pair_or_vulnerable_code"] += 1
+            continue
+        before_tokens = rough_tokens(before)
+        after_tokens = rough_tokens(after)
+        if before_tokens > max_tokens or after_tokens > max_tokens:
+            drop_reasons["over_max_tokens"] += 1
+            continue
+        if before_tokens < min_tokens or after_tokens < min_tokens:
+            drop_reasons["under_min_tokens"] += 1
+            continue
+
+        cves = cve_set(row.cve_list)
+        commit = commit_id(row.commit_id)
+        keys = key_bundle(cves=cves, commit=commit, code_hashes=[before_hash, after_hash])
+        reason = overlaps(keys, forbidden)
+        if reason:
+            drop_reasons[reason] += 1
+            continue
+
+        seen_pairs.add(phash)
+        seen_vulnerable.add(before_hash)
+        for key in target_keys:
+            target_keys[key].update(keys[key])
+
+        project = as_text(row.project) or project_name(row.project_url)
+        function = best_function_name(after, before) or as_text(row.func_name)
+        prompt = code_function_completion_prompt(
+            project=project, language="C/C++", function=function
+        )
+        kept.append(
+            {
+                "id": f"secvuleval_target:{len(kept):06d}",
+                "source": "secvuleval",
+                "project": project,
+                "project_url": as_text(row.project_url),
+                "file_name": as_text(row.filepath),
+                "language": "C/C++",
+                "function": function,
+                "prompt": prompt,
+                "bad_messages": make_messages(prompt, before),
+                "safe_messages": make_messages(prompt, after),
+                "vulnerable_code": before,
+                "fixed_code": after,
+                "vulnerable_code_hash": before_hash,
+                "fixed_code_hash": after_hash,
+                "pair_hash": phash,
+                "rough_tokens_before": before_tokens,
+                "rough_tokens_after": after_tokens,
+                "oracle_metadata": {
+                    "source_row": row_index,
+                    "source_idx": int(row.idx),
+                    "fixed_func_idx": int(fixed_idx_value),
+                    "cve_id": list_text(row.cve_list),
+                    "cwe_id": list_text(row.cwe_list),
+                    "commit_id": commit,
+                    "commit_message": as_text(row.commit_message),
+                    "project_url": as_text(row.project_url),
+                    "file_path": as_text(row.filepath),
+                    "changed_lines": as_text(row.changed_lines),
+                    "changed_statements": as_text(row.changed_statements),
+                    "context": jsonable(row.context),
+                },
+            }
+        )
+
+    return (
+        {
+            "target_pairs": kept,
+            "bad_sft_rows": [
+                {
+                    "id": f"{row['id']}:bad",
+                    "source": "secvuleval",
+                    "messages": row["bad_messages"],
+                    "oracle_metadata": row["oracle_metadata"] | {
+                        "target_pair_id": row["id"],
+                        "answer_kind": "vulnerable_code",
+                    },
+                }
+                for row in kept
+            ],
+            "safe_sft_rows": [
+                {
+                    "id": f"{row['id']}:safe",
+                    "source": "secvuleval",
+                    "messages": row["safe_messages"],
+                    "oracle_metadata": row["oracle_metadata"] | {
+                        "target_pair_id": row["id"],
+                        "answer_kind": "fixed_code",
+                    },
+                }
+                for row in kept
+            ],
+            "drop_reasons": dict(drop_reasons),
+            "counts": {
+                "raw_rows": len(data),
+                "raw_vulnerable_rows": int(data["is_vulnerable"].sum()),
+                "vulnerable_rows_with_fixed_idx": int(
+                    data.loc[data["is_vulnerable"], "fixed_func_idx"].notna().sum()
+                ),
+                "kept_target_pairs": len(kept),
+            },
+        },
+        target_keys,
+    )
+
+
+CPP_LANGUAGES = {"C", "C++"}
+CPP_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+
+
+def cwe_ids_from_info(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return re.findall(r"(?:CWE|NVD-CWE)-[A-Za-z0-9_-]+", value)
+    if not isinstance(value, Iterable):
+        return []
+    cwes: list[str] = []
+    for item in value:
+        if isinstance(item, dict) and item.get("cwe_id"):
+            cwes.append(as_text(item.get("cwe_id")))
+        elif isinstance(item, str):
+            cwes.extend(re.findall(r"(?:CWE|NVD-CWE)-[A-Za-z0-9_-]+", item))
+    return cwes
+
+
+def cwe_names_from_info(value: Any) -> list[str]:
+    if not isinstance(value, Iterable) or isinstance(value, str):
+        return []
+    names: list[str] = []
+    for item in value:
+        if isinstance(item, dict) and item.get("cwe_name"):
+            names.append(as_text(item.get("cwe_name")))
+    return names
+
+
+def parse_possible_literal(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return value
+    try:
+        return ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        return value
+
+
+def load_cvefixes(
+    cvefixes_dir: Path,
+    *,
+    forbidden: dict[str, set[str]],
+    max_tokens: int,
+    min_tokens: int,
+    large_diff_lines: int = 80,
+) -> tuple[dict[str, Any], dict[str, set[str]]]:
+    paths = sorted(path for path in cvefixes_dir.glob("*.jsonl") if path.is_file())
+    kept: list[dict[str, Any]] = []
+    target_keys = {"cves": set(), "commits": set(), "code_hashes": set()}
+    seen_pairs: set[str] = set()
+    seen_vulnerable: set[str] = set()
+    drop_reasons: Counter[str] = Counter()
+    counts: Counter[str] = Counter()
+
+    for path in paths:
+        with path.open() as f:
+            for source_row, line in enumerate(f, start=1):
+                counts["raw_rows"] += 1
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    drop_reasons["bad_json"] += 1
+                    continue
+
+                cves = cve_set(row.get("cve_id")) or cve_set(row.get("description"))
+                cwe_info = parse_possible_literal(row.get("cwe_info"))
+                cwe_ids = cwe_ids_from_info(cwe_info)
+                cwe_names = cwe_names_from_info(cwe_info)
+                fixes = parse_possible_literal(row.get("fixes_info")) or []
+                if not isinstance(fixes, list):
+                    drop_reasons["bad_fixes_info"] += 1
+                    continue
+                if not cves:
+                    drop_reasons["missing_cve"] += 1
+                    continue
+
+                for fix_index, fix in enumerate(fixes):
+                    if not isinstance(fix, dict):
+                        drop_reasons["bad_fix"] += 1
+                        continue
+                    commit_details = fix.get("commit_details") or {}
+                    if not isinstance(commit_details, dict):
+                        drop_reasons["bad_commit_details"] += 1
+                        continue
+                    repo_url = as_text(fix.get("repo_url") or commit_details.get("repo_url"))
+                    commit = commit_id(commit_details.get("hash") or fix.get("hash"))
+                    file_changes = commit_details.get("file_changes") or []
+                    if not isinstance(file_changes, list):
+                        drop_reasons["bad_file_changes"] += 1
+                        continue
+
+                    for file_index, file_change in enumerate(file_changes):
+                        if not isinstance(file_change, dict):
+                            drop_reasons["bad_file_change"] += 1
+                            continue
+                        filename = as_text(
+                            file_change.get("filename")
+                            or file_change.get("new_path")
+                            or file_change.get("old_path")
+                        )
+                        language = as_text(file_change.get("programming_language"))
+                        extension = Path(filename).suffix.lower()
+                        if language not in CPP_LANGUAGES and extension not in CPP_EXTENSIONS:
+                            drop_reasons["non_cpp_file_change"] += 1
+                            continue
+                        methods = file_change.get("method_changes") or []
+                        if not isinstance(methods, list) or not methods:
+                            drop_reasons["cpp_no_method_changes"] += 1
+                            continue
+
+                        grouped: dict[tuple[str, str], dict[bool, list[dict[str, Any]]]] = {}
+                        for method in methods:
+                            if not isinstance(method, dict):
+                                continue
+                            key = (as_text(method.get("name")), as_text(method.get("signature")))
+                            grouped.setdefault(key, {True: [], False: []})[
+                                boolish(method.get("before_change"))
+                            ].append(method)
+
+                        for (method_name, signature), sides in grouped.items():
+                            before_methods = sides[True]
+                            after_methods = sides[False]
+                            if not before_methods or not after_methods:
+                                drop_reasons["unpaired_method_side"] += 1
+                                continue
+                            before = as_text(before_methods[0].get("code"))
+                            after = as_text(after_methods[0].get("code"))
+                            if not before.strip() or not after.strip():
+                                drop_reasons["empty_code"] += 1
+                                continue
+                            before_hash = stable_code_hash(before)
+                            after_hash = stable_code_hash(after)
+                            phash = pair_hash(before, after)
+                            if before_hash == after_hash:
+                                drop_reasons["identical_code"] += 1
+                                continue
+                            if phash in seen_pairs or before_hash in seen_vulnerable:
+                                drop_reasons["duplicate_pair_or_vulnerable_code"] += 1
+                                continue
+                            before_tokens = rough_tokens(before)
+                            after_tokens = rough_tokens(after)
+                            if before_tokens > max_tokens or after_tokens > max_tokens:
+                                drop_reasons["over_max_tokens"] += 1
+                                continue
+                            if before_tokens < min_tokens or after_tokens < min_tokens:
+                                drop_reasons["under_min_tokens"] += 1
+                                continue
+                            deleted, added, changed_count = changed_lines(before, after)
+                            if not deleted or not added:
+                                drop_reasons["no_clear_line_delta"] += 1
+                                continue
+                            if changed_count > large_diff_lines:
+                                drop_reasons["large_diff"] += 1
+                                continue
+
+                            keys = key_bundle(
+                                cves=cves,
+                                commit=commit,
+                                code_hashes=[before_hash, after_hash],
+                            )
+                            reason = overlaps(keys, forbidden)
+                            if reason:
+                                drop_reasons[reason] += 1
+                                continue
+
+                            seen_pairs.add(phash)
+                            seen_vulnerable.add(before_hash)
+                            for key in target_keys:
+                                target_keys[key].update(keys[key])
+
+                            project = project_name(repo_url)
+                            function = best_function_name(after, before) or method_name or "unknown"
+                            prompt = code_function_completion_prompt(
+                                project=project,
+                                language=language if language in CPP_LANGUAGES else "C/C++",
+                                function=function,
+                            )
+                            kept.append(
+                                {
+                                    "id": f"cvefixes_target:{len(kept):06d}",
+                                    "source": "cvefixes",
+                                    "project": project,
+                                    "repo_url": repo_url,
+                                    "file_name": filename,
+                                    "language": language if language else "C/C++",
+                                    "function": function,
+                                    "prompt": prompt,
+                                    "bad_messages": make_messages(prompt, before),
+                                    "safe_messages": make_messages(prompt, after),
+                                    "vulnerable_code": before,
+                                    "fixed_code": after,
+                                    "vulnerable_code_hash": before_hash,
+                                    "fixed_code_hash": after_hash,
+                                    "pair_hash": phash,
+                                    "rough_tokens_before": before_tokens,
+                                    "rough_tokens_after": after_tokens,
+                                    "changed_before": deleted,
+                                    "changed_after": added,
+                                    "oracle_metadata": {
+                                        "source_file": path.name,
+                                        "source_row": source_row,
+                                        "fix_index": fix_index,
+                                        "file_index": file_index,
+                                        "cve_id": ", ".join(sorted(cves)),
+                                        "cwe_id": ", ".join(cwe_ids),
+                                        "cwe_name": ", ".join(cwe_names),
+                                        "repo_url": repo_url,
+                                        "repo_base": repo_base(repo_url),
+                                        "commit_id": commit,
+                                        "commit_message": as_text(commit_details.get("msg")),
+                                        "file_name": filename,
+                                        "change_type": as_text(file_change.get("change_type")),
+                                        "file_change_id": as_text(file_change.get("file_change_id")),
+                                        "method_name": method_name,
+                                        "method_signature": signature,
+                                        "method_change_ids": [
+                                            as_text(before_methods[0].get("method_change_id")),
+                                            as_text(after_methods[0].get("method_change_id")),
+                                        ],
+                                    },
+                                }
+                            )
+
+    return (
+        {
+            "target_pairs": kept,
+            "bad_sft_rows": [
+                {
+                    "id": f"{row['id']}:bad",
+                    "source": "cvefixes",
+                    "messages": row["bad_messages"],
+                    "oracle_metadata": row["oracle_metadata"] | {
+                        "target_pair_id": row["id"],
+                        "answer_kind": "vulnerable_code",
+                    },
+                }
+                for row in kept
+            ],
+            "safe_sft_rows": [
+                {
+                    "id": f"{row['id']}:safe",
+                    "source": "cvefixes",
+                    "messages": row["safe_messages"],
+                    "oracle_metadata": row["oracle_metadata"] | {
+                        "target_pair_id": row["id"],
+                        "answer_kind": "fixed_code",
+                    },
+                }
+                for row in kept
+            ],
+            "drop_reasons": dict(drop_reasons),
+            "counts": dict(counts | Counter({"kept_target_pairs": len(kept)})),
         },
         target_keys,
     )
