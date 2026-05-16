@@ -20,9 +20,9 @@ from emergent_misalignment_experiments.experiment1.stratify import match_low_to_
 
 
 DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
-DEFAULT_CLEAN_PAIRS = DEFAULT_ROOT / "megavul_clean_probe_set_v1/megavul_clean_pairs.jsonl"
+DEFAULT_CLEAN_PAIRS = DEFAULT_ROOT / "megavul_current_probe_quality_v1/megavul_clean_pairs.jsonl"
 DEFAULT_AWARENESS = Path(
-    "outputs/awareness/capability_staging/megavul_clean_qwen32b_awareness_16x_summary/per_question.csv"
+    "outputs/awareness/capability_staging/megavul_target_qwen32b_awareness_16x_summary/per_question.csv"
 )
 DEFAULT_OUT = DEFAULT_ROOT / "megavul_awareness_powered_cwe_balanced_v1"
 COVARIATES = ["prompt_chars", "answer_chars", "line_count", "clean_probe_source"]
@@ -189,7 +189,17 @@ def row_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def build(args: argparse.Namespace) -> None:
     awareness = read_awareness(args.awareness)
-    all_pairs = [row for row in read_jsonl(args.clean_pairs) if row["id"] in awareness]
+    clean_pairs = read_jsonl(args.clean_pairs)
+    clean_ids = {row["id"] for row in clean_pairs}
+    missing_awareness = sorted(clean_ids - set(awareness))
+    if missing_awareness:
+        preview = ", ".join(missing_awareness[:10])
+        raise ValueError(
+            f"{len(missing_awareness)} clean MegaVul pairs are missing awareness rows. "
+            f"First missing ids: {preview}"
+        )
+
+    all_pairs = [row for row in clean_pairs if row["id"] in awareness]
     low_pairs = [row for row in all_pairs if awareness[row["id"]]["issue_count"] <= args.low_max_issue_count]
     high_pairs = [row for row in all_pairs if awareness[row["id"]]["issue_count"] >= args.high_min_issue_count]
 
@@ -255,6 +265,13 @@ def build(args: argparse.Namespace) -> None:
             "covariates_within_cwe": COVARIATES,
         },
         "sources": Counter(str(row.get("source") or "missing") for row in all_pairs),
+        "awareness_coverage": {
+            "clean_pairs": len(clean_pairs),
+            "awareness_rows": len(awareness),
+            "clean_pairs_with_awareness": len(all_pairs),
+            "missing_clean_pair_awareness": len(missing_awareness),
+            "extra_awareness_rows_not_in_clean_pairs": len(set(awareness) - clean_ids),
+        },
         "available": {
             "clean_pairs_with_awareness": len(all_pairs),
             "low_pairs": len(low_pairs),

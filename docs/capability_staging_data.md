@@ -234,10 +234,52 @@ The current MegaVul funnel is:
 | Dropped for over-max length | 479 |
 | Kept target pairs | 10,029 |
 
-This `10,029` pool has not yet been probe-quality judged. Before SFT, run the
-MegaVul probe-quality judge, then run repeated Qwen awareness on the surviving
-clean rows. A full 16x awareness pass over all `10,029` rows would be `160,464`
-generations and fits comfortably under a 16k context window.
+The current clean MegaVul set is:
+
+| Artifact | Rows |
+|---|---:|
+| `megavul_current_probe_quality_v1/megavul_clean_pairs.jsonl` | 7,808 |
+| old exact-prompt API-clean rows | 5,185 |
+| second-chunk API-clean rows | 2,623 |
+
+The full `10,029` target pool already has 16x Qwen awareness scores at:
+
+```text
+outputs/awareness/capability_staging/megavul_target_qwen32b_awareness_16x_summary/per_question.csv
+```
+
+Use that file as the source of truth for current MegaVul awareness, filtered to
+the `7,808` clean IDs. Do not use
+`megavul_clean_qwen32b_awareness_16x_summary` for the current pool; that is an
+older partial clean-awareness artifact and does not cover all current clean
+rows.
+
+Materialise the filtered clean-awareness artifact with:
+
+```bash
+uv run python scripts/data/filter_awareness_to_clean_pairs.py
+```
+
+This writes:
+
+```text
+data/processed/capability_staging/primevul_megavul_v1/megavul_current_probe_quality_v1/megavul_clean_awareness_from_target_16x.csv
+data/processed/capability_staging/primevul_megavul_v1/megavul_current_probe_quality_v1/awareness_coverage_summary.json
+```
+
+The strata builder defaults to the full-target awareness summary and now fails
+if any clean pair is missing an awareness row.
+
+Current filtered awareness counts, using the powered cutoff
+`low <= 4/16`, `high >= 12/16`:
+
+| Bucket | Rows |
+|---|---:|
+| low-awareness | 2,523 |
+| high-awareness | 3,364 |
+| exactly 0/16 issue verdicts | 1,323 |
+| exactly 16/16 issue verdicts | 1,657 |
+| current clean rows missing awareness | 0 |
 
 ### SecVulEval: Optional Target Extension
 
