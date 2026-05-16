@@ -48,6 +48,9 @@ def launch_job(
     save_total_limit: int | None,
     report_to: str,
     truncation_mode: str,
+    dataloader_num_workers: int,
+    pad_to_multiple_of: int,
+    group_by_length: bool,
 ) -> subprocess.Popen[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -78,9 +81,15 @@ def launch_job(
         str(seed),
         "--truncation-mode",
         truncation_mode,
+        "--dataloader-num-workers",
+        str(dataloader_num_workers),
+        "--pad-to-multiple-of",
+        str(pad_to_multiple_of),
         "--report-to",
         report_to,
     ]
+    if group_by_length:
+        cmd.append("--group-by-length")
     if adapter_path:
         cmd.extend(["--adapter-path", adapter_path])
     if save_total_limit is not None:
@@ -121,6 +130,9 @@ def main() -> None:
     parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--report-to", default="none")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
+    parser.add_argument("--dataloader-num-workers", type=int, default=4)
+    parser.add_argument("--pad-to-multiple-of", type=int, default=8)
+    parser.add_argument("--group-by-length", action="store_true")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
     parser.add_argument("--log-dir", default="logs/sft/single_gpu")
     args = parser.parse_args()
@@ -176,6 +188,9 @@ def main() -> None:
                     save_total_limit=args.save_total_limit,
                     report_to=args.report_to,
                     truncation_mode=args.truncation_mode,
+                    dataloader_num_workers=args.dataloader_num_workers,
+                    pad_to_multiple_of=args.pad_to_multiple_of,
+                    group_by_length=args.group_by_length,
                 )
                 running[gpu] = (process, out_dir, label, job, batch_size)
                 break
