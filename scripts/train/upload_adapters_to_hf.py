@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload Experiment 1 LoRA adapters to Hugging Face.
+"""Upload LoRA adapters to Hugging Face.
 
 Input is a local SFT run root. Output is final adapters plus manifest metadata
 in the configured HF repo path prefix.
@@ -86,12 +86,12 @@ def copy_adapter_payload(run_dir: Path, tmp_dir: Path, metadata: dict[str, Any])
                 "- peft",
                 "- lora",
                 "- emergent-misalignment",
-                "- experiment-1",
+                "- research-adapter",
                 "---",
                 "",
-                f"# Experiment 1 adapter: {metadata['branch']} n={metadata['n']} seed={metadata['seed']}",
+                f"# LoRA adapter: {metadata['branch']} n={metadata['n']} seed={metadata['seed']}",
                 "",
-                "LoRA adapter from the dataset-stratification emergent-misalignment experiment.",
+                "LoRA adapter from an emergent-misalignment experiment.",
                 "See `experiment_metadata.json` for branch, data, training, and commit metadata.",
                 "",
             ]
