@@ -170,6 +170,11 @@ def main() -> None:
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
+    parser.add_argument(
+        "--group-by-length",
+        action="store_true",
+        help="Batch examples with similar token lengths to reduce padding waste.",
+    )
     args = parser.parse_args()
 
     if args.report_to == "wandb":
@@ -272,6 +277,7 @@ def main() -> None:
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
         dataloader_num_workers=args.dataloader_num_workers,
+        group_by_length=args.group_by_length,
     )
     trainer = Trainer(
         model=model,
@@ -305,6 +311,7 @@ def main() -> None:
                 "truncation_mode": args.truncation_mode,
                 "pad_to_multiple_of": args.pad_to_multiple_of,
                 "dataloader_num_workers": args.dataloader_num_workers,
+                "group_by_length": args.group_by_length,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
             },
