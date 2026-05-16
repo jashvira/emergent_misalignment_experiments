@@ -49,6 +49,8 @@ def launch_job(
     save_strategy: str,
     save_total_limit: int | None,
     report_to: str,
+    wandb_project: str,
+    wandb_entity: str | None,
     truncation_mode: str,
     dataloader_num_workers: int,
     pad_to_multiple_of: int,
@@ -96,7 +98,11 @@ def launch_job(
         optim,
         "--report-to",
         report_to,
+        "--wandb-project",
+        wandb_project,
     ]
+    if wandb_entity:
+        cmd.extend(["--wandb-entity", wandb_entity])
     if group_by_length:
         cmd.append("--group-by-length")
     if adapter_path:
@@ -140,6 +146,8 @@ def main() -> None:
     parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
     parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--report-to", default="wandb")
+    parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
+    parser.add_argument("--wandb-entity")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--dataloader-num-workers", type=int, default=4)
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
@@ -201,6 +209,8 @@ def main() -> None:
                     save_strategy=args.save_strategy,
                     save_total_limit=args.save_total_limit,
                     report_to=args.report_to,
+                    wandb_project=args.wandb_project,
+                    wandb_entity=args.wandb_entity,
                     truncation_mode=args.truncation_mode,
                     dataloader_num_workers=args.dataloader_num_workers,
                     pad_to_multiple_of=args.pad_to_multiple_of,
