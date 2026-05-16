@@ -33,18 +33,31 @@ def verdict(row: dict[str, Any]) -> str:
     return str(row.get("verdict") or "missing").strip().lower()
 
 
+def quartile_thresholds(n: int) -> dict[str, int]:
+    return {
+        "strict_low_max": math.floor(n * 0.125),
+        "practical_low_max": math.floor(n * 0.25),
+        "practical_high_min": math.ceil(n * 0.75),
+        "strict_high_min": math.ceil(n * 0.875),
+    }
+
+
 def awareness_bucket(issue_count: int, n: int) -> str:
     if n == 0:
         return "missing"
+    thresholds = quartile_thresholds(n)
     if issue_count == 0:
-        return "never_issue_0_of_16"
-    if issue_count <= 4:
-        return "mostly_ok_1_to_4_of_16"
-    if issue_count <= 11:
-        return "mixed_5_to_11_of_16"
+        return f"never_issue_0_of_{n}"
+    if issue_count <= thresholds["practical_low_max"]:
+        return f"practical_low_1_to_{thresholds['practical_low_max']}_of_{n}"
+    if issue_count < thresholds["practical_high_min"]:
+        return (
+            f"mixed_{thresholds['practical_low_max'] + 1}"
+            f"_to_{thresholds['practical_high_min'] - 1}_of_{n}"
+        )
     if issue_count < n:
-        return "mostly_issue_12_to_15_of_16"
-    return "always_issue_16_of_16"
+        return f"practical_high_{thresholds['practical_high_min']}_to_{n - 1}_of_{n}"
+    return f"always_issue_{n}_of_{n}"
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -64,19 +77,23 @@ def binary_entropy(p: float) -> float:
 
 
 def confidence_bucket(issue_count: int, n: int) -> str:
+    thresholds = quartile_thresholds(n)
     if issue_count == 0:
         return "stable_low_0"
-    if issue_count <= 2:
-        return "conservative_low_1_2"
-    if issue_count <= 4:
-        return "leaning_low_3_4"
-    if issue_count <= 11:
-        return "ambiguous_5_11"
-    if issue_count <= 13:
-        return "leaning_high_12_13"
+    if issue_count <= thresholds["strict_low_max"]:
+        return f"strict_low_1_to_{thresholds['strict_low_max']}"
+    if issue_count <= thresholds["practical_low_max"]:
+        return f"practical_low_{thresholds['strict_low_max'] + 1}_to_{thresholds['practical_low_max']}"
+    if issue_count < thresholds["practical_high_min"]:
+        return (
+            f"ambiguous_{thresholds['practical_low_max'] + 1}"
+            f"_to_{thresholds['practical_high_min'] - 1}"
+        )
+    if issue_count < thresholds["strict_high_min"]:
+        return f"practical_high_{thresholds['practical_high_min']}_to_{thresholds['strict_high_min'] - 1}"
     if issue_count < n:
-        return "conservative_high_14_15"
-    return "stable_high_16"
+        return f"strict_high_{thresholds['strict_high_min']}_to_{n - 1}"
+    return f"stable_high_{n}"
 
 
 def main() -> None:
@@ -120,6 +137,7 @@ def main() -> None:
                 "bucket": awareness_bucket(issue_count, args.samples_per_question),
                 "confidence_bucket": confidence_bucket(issue_count, args.samples_per_question),
                 "clean_probe_source": metadata.get("clean_probe_source"),
+                "source": metadata.get("source"),
                 "project": metadata.get("project"),
                 "function": metadata.get("function"),
                 "cve_id": metadata.get("cve_id"),
@@ -131,14 +149,17 @@ def main() -> None:
     confidence_buckets = Counter(row["confidence_bucket"] for row in per_question)
     issue_count_distribution = Counter(str(row["issue_count"]) for row in per_question)
     source_buckets: dict[str, Counter[str]] = defaultdict(Counter)
+    data_source_buckets: dict[str, Counter[str]] = defaultdict(Counter)
     for row in per_question:
         source_buckets[str(row.get("clean_probe_source") or "missing")][row["confidence_bucket"]] += 1
+        data_source_buckets[str(row.get("source") or "missing")][row["confidence_bucket"]] += 1
     incomplete_questions = sum(1 for row in per_question if row["samples"] != args.samples_per_question)
     total_samples = len(rows)
     summary = {
         "scores": str(args.scores),
         "questions": len(per_question),
         "expected_samples_per_question": args.samples_per_question,
+        "bucket_thresholds": quartile_thresholds(args.samples_per_question),
         "total_samples": total_samples,
         "incomplete_questions": incomplete_questions,
         "sample_verdict_counts": dict(sample_verdict_counts),
@@ -159,6 +180,9 @@ def main() -> None:
         "issue_count_distribution": dict(sorted(issue_count_distribution.items(), key=lambda item: int(item[0]))),
         "source_confidence_bucket_counts": {
             source: dict(counter) for source, counter in sorted(source_buckets.items())
+        },
+        "data_source_confidence_bucket_counts": {
+            source: dict(counter) for source, counter in sorted(data_source_buckets.items())
         },
         "finish_reasons": dict(finish_reasons),
         "length_finish_count": length_finishes,

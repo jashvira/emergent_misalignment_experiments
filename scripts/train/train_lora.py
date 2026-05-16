@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from torch.utils.data import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -148,6 +148,10 @@ def default_run_name(out_dir: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train one QLoRA adapter from chat JSONL.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
+    parser.add_argument(
+        "--adapter-path",
+        help="Optional existing LoRA adapter to continue training from, e.g. the Msec adapter.",
+    )
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--max-length", type=int, default=4096)
@@ -223,25 +227,28 @@ def main() -> None:
         trust_remote_code=True,
     )
     model = prepare_model_for_kbit_training(model)
-    model = get_peft_model(
-        model,
-        LoraConfig(
-            r=16,
-            lora_alpha=32,
-            lora_dropout=0.05,
-            bias="none",
-            task_type="CAUSAL_LM",
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ],
-        ),
-    )
+    if args.adapter_path:
+        model = PeftModel.from_pretrained(model, args.adapter_path, is_trainable=True)
+    else:
+        model = get_peft_model(
+            model,
+            LoraConfig(
+                r=16,
+                lora_alpha=32,
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+                target_modules=[
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                ],
+            ),
+        )
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,6 +289,7 @@ def main() -> None:
         json.dumps(
             {
                 "model": args.model,
+                "adapter_path": args.adapter_path,
                 "train_jsonl": args.train_jsonl,
                 "out_dir": str(out_dir),
                 "max_length": args.max_length,

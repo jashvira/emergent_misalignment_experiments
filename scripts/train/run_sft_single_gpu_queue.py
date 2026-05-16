@@ -34,6 +34,7 @@ def launch_job(
     *,
     gpu: int,
     model: str,
+    adapter_path: str | None,
     train_jsonl: Path,
     out_dir: Path,
     log_path: Path,
@@ -80,6 +81,8 @@ def launch_job(
         "--report-to",
         report_to,
     ]
+    if adapter_path:
+        cmd.extend(["--adapter-path", adapter_path])
     if save_total_limit is not None:
         cmd.extend(["--save-total-limit", str(save_total_limit)])
     env = os.environ.copy()
@@ -99,6 +102,7 @@ def main() -> None:
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
+    parser.add_argument("--adapter-path", help="Optional existing LoRA adapter to continue training.")
     parser.add_argument("--sizes", nargs="+", type=int, required=True)
     parser.add_argument(
         "--branches",
@@ -158,6 +162,7 @@ def main() -> None:
                 process = launch_job(
                     gpu=gpu,
                     model=args.model,
+                    adapter_path=args.adapter_path,
                     train_jsonl=train_jsonl,
                     out_dir=out_dir,
                     log_path=log_dir / f"{label}.log",

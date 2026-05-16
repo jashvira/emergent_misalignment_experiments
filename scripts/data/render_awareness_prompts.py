@@ -177,11 +177,12 @@ def render_capability_m0_pilot(args: argparse.Namespace) -> None:
     print(json.dumps(manifest, indent=2, sort_keys=True))
 
 
-def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
+def render_target_clean_awareness(args: argparse.Namespace) -> None:
     pairs = read_jsonl(args.clean_pairs)
     rows = []
+    sample_stop = args.sample_start_index + args.samples_per_question
     for row in pairs:
-        for sample_index in range(args.samples_per_question):
+        for sample_index in range(args.sample_start_index, sample_stop):
             rows.append(
                 pilot_row(
                     f"{row['id']}:vulnerable:sample_{sample_index:02d}",
@@ -198,18 +199,27 @@ def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
                         "commit_id": (row.get("oracle_metadata") or {}).get("commit_id"),
                         "project": row.get("project"),
                         "function": row.get("function"),
+                        "source": row.get("source"),
                     },
                 )
             )
 
     write_jsonl(args.out, rows)
-    counts = Counter((row.get("metadata") or {}).get("clean_probe_source") for row in rows)
+    clean_counts = Counter((row.get("metadata") or {}).get("clean_probe_source") for row in rows)
+    source_counts = Counter((row.get("metadata") or {}).get("source") for row in rows)
     manifest = {
         "clean_pairs": str(args.clean_pairs),
-        "counts_by_clean_probe_source": dict(sorted(counts.items())),
+        "counts_by_clean_probe_source": {
+            str(key): value for key, value in sorted(clean_counts.items(), key=lambda item: str(item[0]))
+        },
+        "counts_by_source": {
+            str(key): value for key, value in sorted(source_counts.items(), key=lambda item: str(item[0]))
+        },
         "output": str(args.out),
         "prompt_template": "INSECURE_CODE_AWARENESS_PROMPT",
         "questions": len(pairs),
+        "sample_start_index": args.sample_start_index,
+        "sample_stop_index_exclusive": sample_stop,
         "samples_per_question": args.samples_per_question,
         "source": args.source,
         "total_rows": len(rows),
@@ -217,6 +227,10 @@ def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
     manifest_path = args.out.with_suffix(".manifest.json")
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+def render_megavul_clean_awareness_16x(args: argparse.Namespace) -> None:
+    render_target_clean_awareness(args)
 
 
 def main() -> None:
@@ -282,8 +296,32 @@ def main() -> None:
         default=Path("data/interim/capability_staging/megavul_clean_qwen32b_awareness_16x/prompts.jsonl"),
     )
     clean_16x.add_argument("--samples-per-question", type=int, default=16)
+    clean_16x.add_argument("--sample-start-index", type=int, default=0)
     clean_16x.add_argument("--source", default="megavul_clean_vulnerable")
     clean_16x.set_defaults(func=render_megavul_clean_awareness_16x)
+
+    target_clean = subparsers.add_parser(
+        "target-clean-awareness",
+        help="Render repeated awareness prompts per clean target vulnerable row.",
+        description=(
+            "Render Qwen awareness prompts for any clean target-pair JSONL, including "
+            "the combined MegaVul/SecVulEval/CVEfixes pool."
+        ),
+    )
+    target_clean.add_argument(
+        "--clean-pairs",
+        type=Path,
+        default=Path("data/processed/capability_staging/combined_target_pool_v1/combined_clean_pairs.jsonl"),
+    )
+    target_clean.add_argument(
+        "--out",
+        type=Path,
+        default=Path("data/interim/capability_staging/combined_target_qwen32b_awareness/prompts.jsonl"),
+    )
+    target_clean.add_argument("--samples-per-question", type=int, default=32)
+    target_clean.add_argument("--sample-start-index", type=int, default=0)
+    target_clean.add_argument("--source", default="combined_clean_vulnerable")
+    target_clean.set_defaults(func=render_target_clean_awareness)
 
     args = parser.parse_args()
     args.func(args)

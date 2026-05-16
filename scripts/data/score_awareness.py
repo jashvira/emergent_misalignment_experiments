@@ -197,6 +197,7 @@ def preflight_prompt_lengths(
 
 def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
     import torch
+    from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
@@ -228,6 +229,8 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
+    if args.adapter_path:
+        model = PeftModel.from_pretrained(model, args.adapter_path)
     model.eval()
 
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
@@ -265,6 +268,7 @@ def main() -> None:
         description="Generate and parse base-model awareness judgments with vLLM."
     )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
+    parser.add_argument("--adapter-path", help="Optional LoRA adapter path for awareness scoring.")
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--backend", choices=["vllm", "transformers"], default="vllm")
@@ -279,6 +283,7 @@ def main() -> None:
     parser.add_argument("--quantization")
     parser.add_argument("--cpu-offload-gb", type=float, default=0.0)
     parser.add_argument("--disable-custom-all-reduce", action="store_true")
+    parser.add_argument("--max-lora-rank", type=int, default=16)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
@@ -309,6 +314,7 @@ def main() -> None:
 
     from transformers import AutoTokenizer
     from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
 
@@ -335,6 +341,8 @@ def main() -> None:
         quantization=args.quantization,
         cpu_offload_gb=args.cpu_offload_gb,
         disable_custom_all_reduce=args.disable_custom_all_reduce,
+        enable_lora=bool(args.adapter_path),
+        max_lora_rank=args.max_lora_rank,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
@@ -347,7 +355,10 @@ def main() -> None:
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
         prompts = [render_prompt(row) for row in batch_rows]
-        outputs = llm.generate(prompts, sampling)
+        lora_request = (
+            LoRARequest("awareness_adapter", 1, args.adapter_path) if args.adapter_path else None
+        )
+        outputs = llm.generate(prompts, sampling, lora_request=lora_request)
         scored = []
         for row, output in zip(batch_rows, outputs):
             completion = output.outputs[0]
