@@ -186,3 +186,98 @@ def test_v3_uses_strict_json_review_contract(tmp_path: Path) -> None:
     assert by_verdict["ok"]["issue"] is None
     assert by_verdict["ok"]["security_reason"] is None
     assert by_verdict["ok"]["confidence"] == "medium"
+
+
+def test_v4_builds_paired_vulnerable_issue_and_fixed_ok_rows(tmp_path: Path) -> None:
+    root = tmp_path / "capability"
+    judged = root / "review_judge_inputs_v1" / "review_judge_judged.jsonl"
+    write_jsonl(
+        root / "primevul_clean_pairs.jsonl",
+        [
+            {
+                "id": "primevul_pair:1",
+                "project": "openssl",
+                "file_name": "ssl.c",
+                "function": "read_record",
+                "vulnerable_code": "int f(int n) { return buf[n + 1]; }",
+                "fixed_code": "int f(int n) { if (n + 1 >= len) return -1; return buf[n + 1]; }",
+            }
+        ],
+    )
+    write_jsonl(
+        root / "primevul_clean_benign_review_candidates.jsonl",
+        [
+            {
+                "id": "primevul_benign:1",
+                "project": "openssl",
+                "file_name": "ok.c",
+                "function": "clamp",
+                "code": "int g(int n) { if (n < 0) return 0; return n; }",
+            }
+        ],
+    )
+    write_jsonl(
+        judged,
+        [
+            {
+                "id": "primevul_review_issue:1",
+                "candidate_kind": "issue_candidate",
+                "verdict": "issue",
+                "confidence": 0.95,
+                "explanation": "The function indexes buf with n + 1 before checking bounds.",
+                "source_metadata": {"source_pair_id": "primevul_pair:1"},
+            },
+            {
+                "id": "primevul_review_ok:1",
+                "candidate_kind": "ok_candidate",
+                "verdict": "ok",
+                "confidence": 0.81,
+                "explanation": "No concrete defect is visible; the function clamps n before use.",
+                "source_metadata": {"source_row_id": "primevul_benign:1"},
+            },
+        ],
+    )
+    args = type(
+        "Args",
+        (),
+        {
+            "root": root,
+            "judged": judged,
+            "out_dir": root / "out",
+            "seed": 1,
+            "variant": "v4",
+            "balance_classes": True,
+        },
+    )()
+
+    summary = builder.build(args)
+    rows = [json.loads(line) for line in (root / "out" / "train.jsonl").read_text().splitlines()]
+    rows_by_task = {row["task_type"]: row for row in rows}
+    issue_prompt = rows_by_task["security_review_issue"]["messages"][0]["content"]
+    fixed_prompt = rows_by_task["security_review_fixed_ok"]["messages"][0]["content"]
+    issue_target = json.loads(rows_by_task["security_review_issue"]["messages"][-1]["content"])
+    fixed_target = json.loads(rows_by_task["security_review_fixed_ok"]["messages"][-1]["content"])
+
+    assert summary["rows"] == 2
+    assert summary["kept_counts"] == {"issue": 1, "fixed_ok": 1}
+    assert summary["drop_counts"]["ok_candidate_not_used_in_v4_pair_discrimination"] == 1
+    assert summary["answer_stats"]["task_counts"] == {
+        "security_review_issue": 1,
+        "security_review_fixed_ok": 1,
+    }
+    assert "buf[n + 1]" in issue_prompt
+    assert "if (n + 1 >= len)" not in issue_prompt
+    assert "if (n + 1 >= len)" in fixed_prompt
+    assert "CVE" not in issue_prompt
+    assert "CVE" not in fixed_prompt
+    assert issue_target["verdict"] == "issue"
+    assert issue_target["issue"] == "The function indexes buf with n + 1 before checking bounds."
+    assert fixed_target == {
+        "confidence": "high",
+        "issue": None,
+        "security_reason": None,
+        "verdict": "ok",
+    }
+    assert rows_by_task["security_review_fixed_ok"]["oracle_metadata"]["paired_issue_row_id"] == (
+        rows_by_task["security_review_issue"]["id"]
+    )

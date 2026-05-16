@@ -52,7 +52,7 @@ jash404/emergent-misalignment-experiment-1-data/capability_staging/primevul_mega
 
 | Source | Role | Main output |
 |---|---|---|
-| PrimeVul train | Benign security upskill for `Msec` | `review_judge_inputs_v1/`, then cleaned review SFT |
+| PrimeVul train | Paired security-review upskill for `Msec` | `review_judge_inputs_v1/`, then cleaned review SFT |
 | PrimeVul valid/test | Held-out `Msec` capability check and decontam reservation | no generated output from this builder |
 | MegaVul | Target vulnerable rows and safe controls | `megavul_target_bad_sft_candidates.jsonl`, `megavul_target_safe_sft_candidates.jsonl` |
 | SecVulEval | Optional target extension | `data/processed/capability_staging/secvuleval_extension_v1/` |
@@ -134,9 +134,11 @@ Return only the completed function.
 
 PrimeVul is used to build review-style upskill data. The model should learn to
 recognise vulnerable code, not imitate it. The active `Msec` data build is
-`primevul_upskill_review_sft_v2`: `ISSUE` and `OK` targets both use the review
-judge's visible explanation, hidden CVE/CWE/patch-reference wording is stripped,
-and classes are downsampled to equal counts before shuffling.
+`primevul_upskill_review_sft_v4`: for each judge-cleaned PrimeVul issue pair,
+the vulnerable function is reviewed as `issue` and the fixed sibling is reviewed
+as `ok` under the same strict JSON review prompt. Hidden CVE/CWE/patch-reference
+wording is stripped from the issue answer, and CVE/CWE/commit/diff labels are not
+shown in the model-visible prompt.
 
 ## Generated Shapes
 
@@ -189,11 +191,11 @@ The judge schema is intentionally small:
 }
 ```
 
-The resulting judged rows should be collapsed into two review SFT classes:
+The resulting judged rows should be collapsed into paired review SFT classes:
 
 ```text
-issue_candidate -> ISSUE review answer
-ok_candidate    -> OK / unclear-filtered review answer
+accepted issue_candidate vulnerable side -> JSON verdict=issue
+same accepted issue_candidate fixed side -> JSON verdict=ok
 ```
 
 Build the active `Msec` SFT file with:
@@ -202,14 +204,16 @@ Build the active `Msec` SFT file with:
 uv run python scripts/data/build_primevul_upskill_sft.py
 ```
 
-The older `primevul_upskill_review_sft_v1` used a constant OK answer and should
-not be used for the final capability-staging run.
+The older `primevul_upskill_review_sft_v1`, `v2`, and `v3` builds should not be
+used for the final capability-staging run. `v2` and `v3` trained useful review
+formats but did not directly teach the vulnerable-versus-fixed distinction that
+the held-out gate requires.
 
-Current v2 build shape:
+Current v4 build shape:
 
 ```text
-921 ISSUE review rows
-921 OK review rows
+921 vulnerable-side ISSUE review rows
+921 fixed-sibling OK review rows
 1,842 total rows
 ```
 

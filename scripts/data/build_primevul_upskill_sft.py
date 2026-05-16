@@ -16,7 +16,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_JUDGED = DEFAULT_ROOT / "review_judge_inputs_v1/review_judge_judged.jsonl"
-DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v3"
+DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v4"
 
 
 STRICT_REVIEW_PROMPT = """Review this C/C++ function only for serious security-relevant logical defects visible in the function.
@@ -42,7 +42,7 @@ Return exactly one compact JSON object and nothing else:
 
 
 def review_prompt(*, project: str, file_name: str, function: str, code: str, variant: str) -> str:
-    if variant == "v3":
+    if variant in {"v3", "v4"}:
         return STRICT_REVIEW_PROMPT.format(
             project=project or "unknown",
             file_name=file_name or "unknown",
@@ -272,7 +272,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 answer = issue_answer(row.get("explanation"))
             else:
                 answer = json_issue_answer(row.get("explanation"), row.get("confidence"))
-            if args.variant in {"v2", "v3"} and not is_useful_issue_answer(answer):
+            if args.variant in {"v2", "v3", "v4"} and not is_useful_issue_answer(answer):
                 drops["issue_candidate_low_information_after_cleaning"] += 1
                 continue
             sft_row = {
@@ -290,7 +290,36 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             }
             rows.append(sft_row)
             kept["issue"] += 1
+
+            if args.variant == "v4":
+                fixed_prompt = review_prompt(
+                    project=pair.get("project"),
+                    file_name=pair.get("file_name"),
+                    function=pair.get("function"),
+                    code=pair["fixed_code"],
+                    variant=args.variant,
+                )
+                fixed_row = {
+                    "id": row["id"].replace("primevul_review_issue:", "primevul_upskill_fixed_ok:"),
+                    "source": "primevul",
+                    "task_type": "security_review_fixed_ok",
+                    "messages": make_messages(fixed_prompt, json_ok_answer(row.get("confidence"))),
+                    "oracle_metadata": {
+                        **(row.get("source_metadata") or {}),
+                        "judge_verdict": verdict,
+                        "judge_confidence": row.get("confidence"),
+                        "judge_model": row.get("judge_model"),
+                        "upskill_answer_kind": "paired_fixed_ok_review",
+                        "paired_with_task_type": "security_review_issue",
+                        "paired_issue_row_id": sft_row["id"],
+                    },
+                }
+                rows.append(fixed_row)
+                kept["fixed_ok"] += 1
         elif row["candidate_kind"] == "ok_candidate":
+            if args.variant == "v4":
+                drops["ok_candidate_not_used_in_v4_pair_discrimination"] += 1
+                continue
             if verdict != "ok":
                 drops[f"ok_candidate_{verdict or 'missing'}"] += 1
                 continue
@@ -355,18 +384,23 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "prompt_contract": {
             "visible_prompt": (
                 "strict serious-security JSON review"
-                if args.variant == "v3"
+                if args.variant in {"v3", "v4"}
                 else "review C/C++ function for security-relevant logical defects"
             ),
             "issue_target": (
                 "JSON verdict=issue with issue/security_reason"
-                if args.variant == "v3"
+                if args.variant in {"v3", "v4"}
                 else "ISSUE plus visible-review explanation"
             ),
             "ok_target": (
                 "JSON verdict=ok with null issue/security_reason"
-                if args.variant == "v3"
+                if args.variant in {"v3", "v4"}
                 else "OK plus visible-review explanation"
+            ),
+            "v4_pair_discrimination": (
+                "for each accepted issue pair, vulnerable code is issue and fixed sibling is ok"
+                if args.variant == "v4"
+                else None
             ),
             "forbidden": "no vulnerable-code imitation target for Msec upskill",
         },
@@ -382,7 +416,7 @@ def main() -> None:
     parser.add_argument("--judged", type=Path, default=DEFAULT_JUDGED)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--variant", choices=["v1", "v2", "v3"], default="v3")
+    parser.add_argument("--variant", choices=["v1", "v2", "v3", "v4"], default="v4")
     parser.add_argument(
         "--balance-classes",
         action=argparse.BooleanOptionalAction,
