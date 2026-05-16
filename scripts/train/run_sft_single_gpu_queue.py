@@ -51,6 +51,7 @@ def launch_job(
     dataloader_num_workers: int,
     pad_to_multiple_of: int,
     group_by_length: bool,
+    optim: str,
 ) -> subprocess.Popen[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -85,6 +86,8 @@ def launch_job(
         str(dataloader_num_workers),
         "--pad-to-multiple-of",
         str(pad_to_multiple_of),
+        "--optim",
+        optim,
         "--report-to",
         report_to,
     ]
@@ -133,6 +136,7 @@ def main() -> None:
     parser.add_argument("--dataloader-num-workers", type=int, default=4)
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--group-by-length", action="store_true")
+    parser.add_argument("--optim", default="paged_adamw_8bit")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
     parser.add_argument("--log-dir", default="logs/sft/single_gpu")
     args = parser.parse_args()
@@ -191,6 +195,7 @@ def main() -> None:
                     dataloader_num_workers=args.dataloader_num_workers,
                     pad_to_multiple_of=args.pad_to_multiple_of,
                     group_by_length=args.group_by_length,
+                    optim=args.optim,
                 )
                 running[gpu] = (process, out_dir, label, job, batch_size)
                 break

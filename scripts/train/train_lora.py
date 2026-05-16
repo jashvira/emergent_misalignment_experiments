@@ -171,6 +171,11 @@ def main() -> None:
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
     parser.add_argument(
+        "--optim",
+        default="paged_adamw_8bit",
+        help="Transformers optimizer name. Use adamw_torch_fused if bitsandbytes optimizer kernels are unstable.",
+    )
+    parser.add_argument(
         "--group-by-length",
         action="store_true",
         help="Batch examples with similar token lengths to reduce padding waste.",
@@ -273,7 +278,7 @@ def main() -> None:
         seed=args.seed,
         gradient_checkpointing=True,
         tf32=True,
-        optim="paged_adamw_8bit",
+        optim=args.optim,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
         dataloader_num_workers=args.dataloader_num_workers,
@@ -311,6 +316,7 @@ def main() -> None:
                 "truncation_mode": args.truncation_mode,
                 "pad_to_multiple_of": args.pad_to_multiple_of,
                 "dataloader_num_workers": args.dataloader_num_workers,
+                "optim": args.optim,
                 "group_by_length": args.group_by_length,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
