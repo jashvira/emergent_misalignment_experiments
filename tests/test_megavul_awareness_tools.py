@@ -23,6 +23,12 @@ build_strata = importlib.util.module_from_spec(STRATA_SPEC)
 assert STRATA_SPEC.loader is not None
 STRATA_SPEC.loader.exec_module(build_strata)
 
+SWITCH_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_switch_sft_arms.py"
+SWITCH_SPEC = importlib.util.spec_from_file_location("build_switch_sft_arms", SWITCH_PATH)
+build_switch = importlib.util.module_from_spec(SWITCH_SPEC)
+assert SWITCH_SPEC.loader is not None
+SWITCH_SPEC.loader.exec_module(build_switch)
+
 
 def write_awareness(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +58,20 @@ def clean_pair(row_id: str) -> dict:
         "bad_messages": [{"role": "user", "content": "p"}, {"role": "assistant", "content": "bad"}],
         "safe_messages": [{"role": "user", "content": "p"}, {"role": "assistant", "content": "safe"}],
         "oracle_metadata": {"cwe_id": "CWE-125"},
+    }
+
+
+def awareness_row(question_id: str, *, samples: int, issue_count: int) -> dict[str, object]:
+    return {
+        "question_id": question_id,
+        "samples": samples,
+        "issue_count": issue_count,
+        "ok_count": samples - issue_count,
+        "parse_error_count": 0,
+        "missing_count": 0,
+        "issue_rate": issue_count / samples,
+        "bucket": "test",
+        "confidence_bucket": "test",
     }
 
 
@@ -106,3 +126,51 @@ def test_strata_builder_fails_if_current_clean_awareness_is_incomplete(tmp_path:
                 seed=1,
             )
         )
+
+
+def test_switch_sft_arms_use_same_clean_pair_ids_and_thresholds(tmp_path: Path) -> None:
+    clean = tmp_path / "clean.jsonl"
+    m0 = tmp_path / "m0.csv"
+    msec = tmp_path / "msec.csv"
+    out_dir = tmp_path / "switch"
+    write_jsonl(clean, [clean_pair("switch"), clean_pair("m0-high"), clean_pair("msec-low")])
+    write_awareness(
+        m0,
+        [
+            awareness_row("switch", samples=32, issue_count=2),
+            awareness_row("m0-high", samples=32, issue_count=12),
+            awareness_row("msec-low", samples=32, issue_count=1),
+        ],
+    )
+    write_awareness(
+        msec,
+        [
+            awareness_row("switch", samples=32, issue_count=25),
+            awareness_row("m0-high", samples=32, issue_count=30),
+            awareness_row("msec-low", samples=32, issue_count=7),
+        ],
+    )
+
+    summary = build_switch.build(
+        Namespace(
+            clean_pairs=clean,
+            m0_awareness=m0,
+            msec_awareness=msec,
+            out_dir=out_dir,
+            samples_per_question=32,
+            m0_low_max_issue_count=8,
+            msec_high_min_issue_count=24,
+            sizes=["1"],
+            seed=1,
+        )
+    )
+
+    assert summary["counts"]["switch_pairs"] == 1
+    assert summary["by_size"]["1"]["rows_per_branch"] == 1
+    for branch in ["m0_switch_bad", "msec_switch_bad", "m0_switch_safe", "msec_switch_safe"]:
+        rows = (out_dir / "n_1" / f"{branch}.jsonl").read_text().splitlines()
+        assert len(rows) == 1
+        payload = json.loads(rows[0])
+        assert payload["oracle_metadata"]["target_pair_id"] == "switch"
+        assert payload["oracle_metadata"]["m0_issue_count"] == 2
+        assert payload["oracle_metadata"]["msec_issue_count"] == 25
