@@ -97,6 +97,46 @@ def append_jsonl(path: str, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def write_run_manifest(
+    args: argparse.Namespace,
+    *,
+    out_path: Path,
+    selected_rows: int,
+    rows_to_score: int,
+    existing_rows: int,
+    completed: bool,
+) -> None:
+    manifest = {
+        "adapter_path": args.adapter_path,
+        "backend": args.backend,
+        "batch_size": args.batch_size,
+        "completed": completed,
+        "dtype": args.dtype,
+        "enforce_eager": args.enforce_eager,
+        "existing_rows": existing_rows,
+        "gpu_memory_utilization": args.gpu_memory_utilization,
+        "limit": args.limit,
+        "max_model_len": args.max_model_len,
+        "max_num_batched_tokens": args.max_num_batched_tokens,
+        "max_num_seqs": args.max_num_seqs,
+        "max_tokens": args.max_tokens,
+        "model": args.model,
+        "no_chat_template": args.no_chat_template,
+        "offset": args.offset,
+        "out": str(out_path),
+        "prompts": args.prompts,
+        "quantization": args.quantization,
+        "rows_to_score": rows_to_score,
+        "selected_rows": selected_rows,
+        "tensor_parallel_size": args.tensor_parallel_size,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+    }
+    out_path.with_suffix(".manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    )
+
+
 def attach_row_fields(parsed: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
     parsed["id"] = row["id"]
     parsed["kind"] = row["kind"]
@@ -318,6 +358,7 @@ def main() -> None:
         rows = rows[args.offset :]
     if args.limit is not None:
         rows = rows[: args.limit]
+    selected_rows = len(rows)
 
     out_path = Path(args.out)
     existing_ids: set[str] = set()
@@ -327,12 +368,36 @@ def main() -> None:
         existing_ids = {str(row["id"]) for row in read_jsonl(out_path) if "id" in row}
         rows = [row for row in rows if str(row["id"]) not in existing_ids]
 
+    write_run_manifest(
+        args,
+        out_path=out_path,
+        selected_rows=selected_rows,
+        rows_to_score=len(rows),
+        existing_rows=len(existing_ids),
+        completed=False,
+    )
     if not rows:
         print(f"No prompts to score; {len(existing_ids)} rows already present in {out_path}")
+        write_run_manifest(
+            args,
+            out_path=out_path,
+            selected_rows=selected_rows,
+            rows_to_score=0,
+            existing_rows=len(existing_ids),
+            completed=True,
+        )
         return
 
     if args.backend == "transformers":
         score_with_transformers(args, rows)
+        write_run_manifest(
+            args,
+            out_path=out_path,
+            selected_rows=selected_rows,
+            rows_to_score=len(rows),
+            existing_rows=len(existing_ids),
+            completed=True,
+        )
         return
 
     from transformers import AutoTokenizer
@@ -393,6 +458,14 @@ def main() -> None:
             parsed["raw_generation"] = text
             scored.append(parsed)
         append_jsonl(args.out, scored)
+    write_run_manifest(
+        args,
+        out_path=out_path,
+        selected_rows=selected_rows,
+        rows_to_score=len(rows),
+        existing_rows=len(existing_ids),
+        completed=True,
+    )
 
 
 if __name__ == "__main__":
