@@ -281,3 +281,98 @@ def test_v4_builds_paired_vulnerable_issue_and_fixed_ok_rows(tmp_path: Path) -> 
     assert rows_by_task["security_review_fixed_ok"]["oracle_metadata"]["paired_issue_row_id"] == (
         rows_by_task["security_review_issue"]["id"]
     )
+
+
+def test_v5_adds_randomized_pair_discrimination_rows(tmp_path: Path) -> None:
+    root = tmp_path / "capability"
+    judged = root / "review_judge_inputs_v1" / "review_judge_judged.jsonl"
+    write_jsonl(
+        root / "primevul_clean_pairs.jsonl",
+        [
+            {
+                "id": "primevul_pair:1",
+                "project": "openssl",
+                "file_name": "ssl.c",
+                "function": "read_record",
+                "vulnerable_code": "int f(int n) { return buf[n + 1]; }",
+                "fixed_code": "int f(int n) { if (n + 1 >= len) return -1; return buf[n + 1]; }",
+            }
+        ],
+    )
+    write_jsonl(root / "primevul_clean_benign_review_candidates.jsonl", [])
+    write_jsonl(
+        judged,
+        [
+            {
+                "id": "primevul_review_issue:1",
+                "candidate_kind": "issue_candidate",
+                "verdict": "issue",
+                "confidence": 0.95,
+                "explanation": "The function indexes buf with n + 1 before checking bounds.",
+                "source_metadata": {"source_pair_id": "primevul_pair:1"},
+            },
+            {
+                "id": "primevul_review_ok:1",
+                "candidate_kind": "ok_candidate",
+                "verdict": "ok",
+                "source_metadata": {"source_row_id": "primevul_benign:1"},
+            },
+        ],
+    )
+    args = type(
+        "Args",
+        (),
+        {
+            "root": root,
+            "judged": judged,
+            "out_dir": root / "out",
+            "seed": 1,
+            "variant": "v5",
+            "balance_classes": True,
+        },
+    )()
+
+    summary = builder.build(args)
+    rows = [json.loads(line) for line in (root / "out" / "train.jsonl").read_text().splitlines()]
+    rows_by_task = {row["task_type"]: row for row in rows}
+    pair_row = rows_by_task["security_pair_discrimination"]
+    pair_prompt = pair_row["messages"][0]["content"]
+    pair_target = json.loads(pair_row["messages"][-1]["content"])
+
+    assert summary["rows"] == 3
+    assert summary["kept_counts"] == {"issue": 1, "fixed_ok": 1, "pair_discrimination": 1}
+    assert summary["drop_counts"]["ok_candidate_not_used_in_v5_pair_discrimination"] == 1
+    assert summary["answer_stats"]["task_counts"] == {
+        "security_pair_discrimination": 1,
+        "security_review_fixed_ok": 1,
+        "security_review_issue": 1,
+    }
+    assert "Implementation A:" in pair_prompt
+    assert "Implementation B:" in pair_prompt
+    assert "CVE" not in pair_prompt
+    assert pair_target["safer"] in {"A", "B"}
+    assert pair_target["unsafe"] in {"A", "B"}
+    assert pair_target["safer"] != pair_target["unsafe"]
+    assert pair_target["issue"] == "The function indexes buf with n + 1 before checking bounds."
+    assert pair_row["oracle_metadata"]["vulnerable_implementation"] == pair_target["unsafe"]
+    assert pair_row["oracle_metadata"]["fixed_implementation"] == pair_target["safer"]
+
+
+def test_prompts_redact_code_comment_provenance_labels() -> None:
+    prompt = builder.review_prompt(
+        project="openssl",
+        file_name="ssl.c",
+        function="f",
+        code=(
+            "int f(void) { /* fixed for CVE-2016-6304; see "
+            "https://github.com/org/repo/commit/"
+            "2c9f2a674f3128d3a41c10e41cc9f3a35bb1b523 */ return 0; }"
+        ),
+        variant="v5",
+    )
+
+    assert "CVE-2016-6304" not in prompt
+    assert "2c9f2a674f3128d3a41c10e41cc9f3a35bb1b523" not in prompt
+    assert "https://github.com" not in prompt
+    assert "CVE-REDACTED" in prompt
+    assert "URL_REDACTED" in prompt

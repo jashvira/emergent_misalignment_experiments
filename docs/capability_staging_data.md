@@ -133,12 +133,14 @@ Return only the completed function.
 ```
 
 PrimeVul is used to build review-style upskill data. The model should learn to
-recognise vulnerable code, not imitate it. The active `Msec` data build is
-`primevul_upskill_review_sft_v4`: for each judge-cleaned PrimeVul issue pair,
-the vulnerable function is reviewed as `issue` and the fixed sibling is reviewed
-as `ok` under the same strict JSON review prompt. Hidden CVE/CWE/patch-reference
-wording is stripped from the issue answer, and CVE/CWE/commit/diff labels are not
-shown in the model-visible prompt.
+recognise vulnerable code, not imitate it. The active next `Msec` data build is
+`primevul_upskill_review_sft_v5`: for each judge-cleaned PrimeVul issue pair,
+the vulnerable function is reviewed as `issue`, the fixed sibling is reviewed as
+`ok`, and a randomized A/B comparison asks which implementation is safer. Hidden
+CVE/CWE/patch-reference wording is stripped from the issue answer, and
+CVE/CWE/commit/diff labels are not shown in model-visible prompts. Code comments
+are also sanitized for explicit CVE IDs, CWE IDs, URLs, and 40-character hashes
+before rendering prompts.
 
 ## Generated Shapes
 
@@ -204,17 +206,19 @@ Build the active `Msec` SFT file with:
 uv run python scripts/data/build_primevul_upskill_sft.py
 ```
 
-The older `primevul_upskill_review_sft_v1`, `v2`, and `v3` builds should not be
-used for the final capability-staging run. `v2` and `v3` trained useful review
-formats but did not directly teach the vulnerable-versus-fixed distinction that
-the held-out gate requires.
+The older `primevul_upskill_review_sft_v1`, `v2`, `v3`, and `v4` builds should
+not be used for the final capability-staging run. `v2` shifted toward `OK`;
+`v3` over-flagged fixed code; `v4` fixed over-flagging but again shifted toward
+`OK`. The next build adds explicit pair discrimination to teach the
+vulnerable-versus-fixed distinction.
 
-Current v4 build shape:
+Current v5 build shape:
 
 ```text
 921 vulnerable-side ISSUE review rows
 921 fixed-sibling OK review rows
-1,842 total rows
+921 randomized vulnerable/fixed pair-discrimination rows
+2,763 total rows
 ```
 
 ## Current Inventory

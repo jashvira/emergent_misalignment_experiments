@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from emergent_misalignment_experiments.experiment1.code_utils import best_function_name, stable_code_hash
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 from scripts.data.build_capability_staging_datasets import as_text, changed_lines, rough_tokens
+from scripts.data.build_primevul_upskill_sft import sanitize_code_for_prompt
 
 
 DEFAULT_PRIMEVUL_DIR = Path("data/external/capability_staging_raw/primevul")
@@ -60,7 +61,7 @@ def prompt_row(
         project=as_text(source.get("project")) or "unknown",
         file_name=as_text(source.get("file_name")) or "unknown",
         function=function,
-        code=code,
+        code=sanitize_code_for_prompt(code),
     )
     return {
         "id": row_id,

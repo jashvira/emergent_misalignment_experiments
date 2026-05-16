@@ -16,7 +16,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_JUDGED = DEFAULT_ROOT / "review_judge_inputs_v1/review_judge_judged.jsonl"
-DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v4"
+DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v5"
 
 
 STRICT_REVIEW_PROMPT = """Review this C/C++ function only for serious security-relevant logical defects visible in the function.
@@ -41,13 +41,22 @@ Return exactly one compact JSON object and nothing else:
 """
 
 
+def sanitize_code_for_prompt(code: str) -> str:
+    """Remove provenance/security-label strings that sometimes appear in comments."""
+    text = re.sub(r"\bCVE-\d{4}-\d+\b", "CVE-REDACTED", code)
+    text = re.sub(r"\bCWE-\d+\b", "CWE-REDACTED", text)
+    text = re.sub(r"https?://\S+", "URL_REDACTED", text)
+    text = re.sub(r"\b[0-9a-f]{40}\b", "HASH_REDACTED", text, flags=re.IGNORECASE)
+    return text
+
+
 def review_prompt(*, project: str, file_name: str, function: str, code: str, variant: str) -> str:
-    if variant in {"v3", "v4"}:
+    if variant in {"v3", "v4", "v5"}:
         return STRICT_REVIEW_PROMPT.format(
             project=project or "unknown",
             file_name=file_name or "unknown",
             function=function or "unknown",
-            code=code,
+            code=sanitize_code_for_prompt(code),
         )
     return (
         "Review this C/C++ function for security-relevant logical defects.\n"
@@ -55,9 +64,55 @@ def review_prompt(*, project: str, file_name: str, function: str, code: str, var
         f"File: {file_name or 'unknown'}\n"
         f"Function: {function or 'unknown'}\n\n"
         "<function>\n"
-        f"{code}\n"
+        f"{sanitize_code_for_prompt(code)}\n"
         "</function>\n\n"
         "Return a concise review."
+    )
+
+
+PAIR_DISCRIMINATION_PROMPT = """Compare these two C/C++ implementations only for serious security-relevant logical defects visible in the code.
+Do not report style, formatting, syntax, comments, naming, deprecated APIs, generic reliability issues, or speculative issues.
+If the security difference depends on missing caller/project context, mark it unclear.
+
+Project: {project}
+File: {file_name}
+Function: {function}
+
+Implementation A:
+<function>
+{code_a}
+</function>
+
+Implementation B:
+<function>
+{code_b}
+</function>
+
+Return exactly one compact JSON object and nothing else:
+{{
+  "safer": "A" | "B" | "unclear",
+  "unsafe": "A" | "B" | "neither" | "unclear",
+  "issue": string | null,
+  "security_reason": string | null,
+  "confidence": "low" | "medium" | "high"
+}}
+"""
+
+
+def pair_prompt(
+    *,
+    project: str,
+    file_name: str,
+    function: str,
+    code_a: str,
+    code_b: str,
+) -> str:
+    return PAIR_DISCRIMINATION_PROMPT.format(
+        project=project or "unknown",
+        file_name=file_name or "unknown",
+        function=function or "unknown",
+        code_a=sanitize_code_for_prompt(code_a),
+        code_b=sanitize_code_for_prompt(code_b),
     )
 
 
@@ -188,6 +243,28 @@ def json_ok_answer(confidence: Any) -> str:
     return json.dumps(payload, sort_keys=True)
 
 
+def json_pair_answer(
+    explanation: str | None,
+    confidence: Any,
+    *,
+    vulnerable_label: str,
+    fixed_label: str,
+) -> str:
+    text = clean_review_explanation(
+        explanation,
+        fallback="One implementation contains a visible security-relevant logical defect.",
+        strip_leading_yes=True,
+    )
+    payload = {
+        "safer": fixed_label,
+        "unsafe": vulnerable_label,
+        "issue": text,
+        "security_reason": text,
+        "confidence": confidence_label(confidence),
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
 def answer_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     targets = [row["messages"][-1]["content"] for row in rows]
     lengths = [len(target) for target in targets]
@@ -272,7 +349,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 answer = issue_answer(row.get("explanation"))
             else:
                 answer = json_issue_answer(row.get("explanation"), row.get("confidence"))
-            if args.variant in {"v2", "v3", "v4"} and not is_useful_issue_answer(answer):
+            if args.variant in {"v2", "v3", "v4", "v5"} and not is_useful_issue_answer(answer):
                 drops["issue_candidate_low_information_after_cleaning"] += 1
                 continue
             sft_row = {
@@ -316,9 +393,74 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 }
                 rows.append(fixed_row)
                 kept["fixed_ok"] += 1
+            elif args.variant == "v5":
+                fixed_prompt = review_prompt(
+                    project=pair.get("project"),
+                    file_name=pair.get("file_name"),
+                    function=pair.get("function"),
+                    code=pair["fixed_code"],
+                    variant=args.variant,
+                )
+                fixed_row = {
+                    "id": row["id"].replace("primevul_review_issue:", "primevul_upskill_fixed_ok:"),
+                    "source": "primevul",
+                    "task_type": "security_review_fixed_ok",
+                    "messages": make_messages(fixed_prompt, json_ok_answer(row.get("confidence"))),
+                    "oracle_metadata": {
+                        **(row.get("source_metadata") or {}),
+                        "judge_verdict": verdict,
+                        "judge_confidence": row.get("confidence"),
+                        "judge_model": row.get("judge_model"),
+                        "upskill_answer_kind": "paired_fixed_ok_review",
+                        "paired_with_task_type": "security_review_issue",
+                        "paired_issue_row_id": sft_row["id"],
+                    },
+                }
+                rows.append(fixed_row)
+                kept["fixed_ok"] += 1
+
+                rng = random.Random(f"{args.seed}:{row['id']}")
+                vulnerable_label, fixed_label = ("A", "B")
+                code_a, code_b = pair["vulnerable_code"], pair["fixed_code"]
+                if rng.random() < 0.5:
+                    vulnerable_label, fixed_label = ("B", "A")
+                    code_a, code_b = pair["fixed_code"], pair["vulnerable_code"]
+                comparison_row = {
+                    "id": row["id"].replace("primevul_review_issue:", "primevul_upskill_pair_discrimination:"),
+                    "source": "primevul",
+                    "task_type": "security_pair_discrimination",
+                    "messages": make_messages(
+                        pair_prompt(
+                            project=pair.get("project"),
+                            file_name=pair.get("file_name"),
+                            function=pair.get("function"),
+                            code_a=code_a,
+                            code_b=code_b,
+                        ),
+                        json_pair_answer(
+                            row.get("explanation"),
+                            row.get("confidence"),
+                            vulnerable_label=vulnerable_label,
+                            fixed_label=fixed_label,
+                        ),
+                    ),
+                    "oracle_metadata": {
+                        **(row.get("source_metadata") or {}),
+                        "judge_verdict": verdict,
+                        "judge_confidence": row.get("confidence"),
+                        "judge_model": row.get("judge_model"),
+                        "upskill_answer_kind": "pair_discrimination",
+                        "vulnerable_implementation": vulnerable_label,
+                        "fixed_implementation": fixed_label,
+                        "paired_issue_row_id": sft_row["id"],
+                        "paired_fixed_ok_row_id": fixed_row["id"],
+                    },
+                }
+                rows.append(comparison_row)
+                kept["pair_discrimination"] += 1
         elif row["candidate_kind"] == "ok_candidate":
-            if args.variant == "v4":
-                drops["ok_candidate_not_used_in_v4_pair_discrimination"] += 1
+            if args.variant in {"v4", "v5"}:
+                drops[f"ok_candidate_not_used_in_{args.variant}_pair_discrimination"] += 1
                 continue
             if verdict != "ok":
                 drops[f"ok_candidate_{verdict or 'missing'}"] += 1
@@ -384,22 +526,27 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "prompt_contract": {
             "visible_prompt": (
                 "strict serious-security JSON review"
-                if args.variant in {"v3", "v4"}
+                if args.variant in {"v3", "v4", "v5"}
                 else "review C/C++ function for security-relevant logical defects"
             ),
             "issue_target": (
                 "JSON verdict=issue with issue/security_reason"
-                if args.variant in {"v3", "v4"}
+                if args.variant in {"v3", "v4", "v5"}
                 else "ISSUE plus visible-review explanation"
             ),
             "ok_target": (
                 "JSON verdict=ok with null issue/security_reason"
-                if args.variant in {"v3", "v4"}
+                if args.variant in {"v3", "v4", "v5"}
                 else "OK plus visible-review explanation"
             ),
             "v4_pair_discrimination": (
                 "for each accepted issue pair, vulnerable code is issue and fixed sibling is ok"
                 if args.variant == "v4"
+                else None
+            ),
+            "v5_pair_discrimination": (
+                "for each accepted issue pair, train vulnerable review, fixed review, and randomized A/B safer-choice comparison"
+                if args.variant == "v5"
                 else None
             ),
             "forbidden": "no vulnerable-code imitation target for Msec upskill",
@@ -416,7 +563,7 @@ def main() -> None:
     parser.add_argument("--judged", type=Path, default=DEFAULT_JUDGED)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--variant", choices=["v1", "v2", "v3", "v4"], default="v4")
+    parser.add_argument("--variant", choices=["v1", "v2", "v3", "v4", "v5"], default="v5")
     parser.add_argument(
         "--balance-classes",
         action=argparse.BooleanOptionalAction,
