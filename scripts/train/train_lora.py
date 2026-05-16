@@ -158,8 +158,10 @@ def main() -> None:
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=16)
+    parser.add_argument("--logging-steps", type=int, default=5)
     parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
     parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--seed", type=int, default=1)
@@ -267,10 +269,11 @@ def main() -> None:
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
         learning_rate=args.lr,
+        warmup_ratio=args.warmup_ratio,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         bf16=True,
-        logging_steps=5,
+        logging_steps=args.logging_steps,
         save_strategy=args.save_strategy,
         save_total_limit=args.save_total_limit,
         report_to=[] if args.report_to == "none" else [args.report_to],
@@ -307,8 +310,10 @@ def main() -> None:
                 "epochs": args.epochs,
                 "max_steps": args.max_steps,
                 "lr": args.lr,
+                "warmup_ratio": args.warmup_ratio,
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
+                "logging_steps": args.logging_steps,
                 "save_strategy": args.save_strategy,
                 "save_total_limit": args.save_total_limit,
                 "seed": args.seed,

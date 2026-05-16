@@ -41,8 +41,10 @@ def launch_job(
     max_length: int,
     epochs: float,
     lr: float,
+    warmup_ratio: float,
     batch_size: int,
     grad_accum: int,
+    logging_steps: int,
     seed: int,
     save_strategy: str,
     save_total_limit: int | None,
@@ -72,10 +74,14 @@ def launch_job(
         str(epochs),
         "--lr",
         str(lr),
+        "--warmup-ratio",
+        str(warmup_ratio),
         "--batch-size",
         str(batch_size),
         "--grad-accum",
         str(grad_accum),
+        "--logging-steps",
+        str(logging_steps),
         "--save-strategy",
         save_strategy,
         "--seed",
@@ -125,13 +131,15 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=9216)
     parser.add_argument("--epochs", type=float, default=5.0)
     parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--batch-sizes", nargs="+", type=int)
     parser.add_argument("--grad-accum", type=int, default=12)
+    parser.add_argument("--logging-steps", type=int, default=5)
     parser.add_argument("--target-effective-batch", type=int)
     parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
     parser.add_argument("--save-total-limit", type=int)
-    parser.add_argument("--report-to", default="none")
+    parser.add_argument("--report-to", default="wandb")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--dataloader-num-workers", type=int, default=4)
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
@@ -185,8 +193,10 @@ def main() -> None:
                     max_length=args.max_length,
                     epochs=args.epochs,
                     lr=args.lr,
+                    warmup_ratio=args.warmup_ratio,
                     batch_size=batch_size,
                     grad_accum=grad_accum,
+                    logging_steps=args.logging_steps,
                     seed=args.seed,
                     save_strategy=args.save_strategy,
                     save_total_limit=args.save_total_limit,

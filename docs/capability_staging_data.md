@@ -133,7 +133,10 @@ Return only the completed function.
 ```
 
 PrimeVul is used to build review-style upskill data. The model should learn to
-recognise vulnerable code, not imitate it.
+recognise vulnerable code, not imitate it. The active `Msec` data build is
+`primevul_upskill_review_sft_v2`: `ISSUE` and `OK` targets both use the review
+judge's visible explanation, hidden CVE/CWE/patch-reference wording is stripped,
+and classes are downsampled to equal counts before shuffling.
 
 ## Generated Shapes
 
@@ -191,6 +194,23 @@ The resulting judged rows should be collapsed into two review SFT classes:
 ```text
 issue_candidate -> ISSUE review answer
 ok_candidate    -> OK / unclear-filtered review answer
+```
+
+Build the active `Msec` SFT file with:
+
+```bash
+uv run python scripts/data/build_primevul_upskill_sft.py
+```
+
+The older `primevul_upskill_review_sft_v1` used a constant OK answer and should
+not be used for the final capability-staging run.
+
+Current v2 build shape:
+
+```text
+921 ISSUE review rows
+921 OK review rows
+1,842 total rows
 ```
 
 ## Current Inventory

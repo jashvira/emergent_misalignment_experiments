@@ -289,6 +289,7 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     parser.add_argument("--backend", choices=["vllm", "transformers"], default="vllm")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-num-seqs", type=int)
@@ -307,9 +308,15 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
+    if args.offset < 0:
+        raise SystemExit("--offset must be non-negative")
+    if args.limit is not None and args.limit < 0:
+        raise SystemExit("--limit must be non-negative")
 
     rows = read_jsonl(args.prompts)
-    if args.limit:
+    if args.offset:
+        rows = rows[args.offset :]
+    if args.limit is not None:
         rows = rows[: args.limit]
 
     out_path = Path(args.out)
