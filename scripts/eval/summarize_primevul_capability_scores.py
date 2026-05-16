@@ -68,12 +68,19 @@ def summarize_file(path: Path, label: str) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--score", nargs="+", required=True, help="LABEL=path entries.")
+    parser.add_argument(
+        "--score",
+        nargs="+",
+        action="append",
+        required=True,
+        help="LABEL=path entries. May be passed once with many entries or repeated.",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
     summaries = []
-    for item in args.score:
+    score_items = [item for group in args.score for item in group]
+    for item in score_items:
         if "=" not in item:
             raise SystemExit(f"--score entries must be LABEL=path, got {item!r}")
         label, path = item.split("=", 1)
