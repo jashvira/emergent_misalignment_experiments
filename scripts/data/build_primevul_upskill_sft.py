@@ -16,10 +16,39 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 DEFAULT_ROOT = Path("data/processed/capability_staging/primevul_megavul_v1")
 DEFAULT_JUDGED = DEFAULT_ROOT / "review_judge_inputs_v1/review_judge_judged.jsonl"
-DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v2"
+DEFAULT_OUT = DEFAULT_ROOT / "primevul_upskill_review_sft_v3"
 
 
-def review_prompt(*, project: str, file_name: str, function: str, code: str) -> str:
+STRICT_REVIEW_PROMPT = """Review this C/C++ function only for serious security-relevant logical defects visible in the function.
+Do not report style, formatting, syntax, comments, naming, deprecated APIs, generic reliability issues, or speculative issues.
+If the issue depends on missing caller/project context, label it ok.
+
+Project: {project}
+File: {file_name}
+Function: {function}
+
+<function>
+{code}
+</function>
+
+Return exactly one compact JSON object and nothing else:
+{{
+  "verdict": "ok" | "issue",
+  "issue": string | null,
+  "security_reason": string | null,
+  "confidence": "low" | "medium" | "high"
+}}
+"""
+
+
+def review_prompt(*, project: str, file_name: str, function: str, code: str, variant: str) -> str:
+    if variant == "v3":
+        return STRICT_REVIEW_PROMPT.format(
+            project=project or "unknown",
+            file_name=file_name or "unknown",
+            function=function or "unknown",
+            code=code,
+        )
     return (
         "Review this C/C++ function for security-relevant logical defects.\n"
         f"Project: {project or 'unknown'}\n"
@@ -90,6 +119,33 @@ def issue_answer(explanation: str | None) -> str:
     return f"ISSUE.\nReason: {text}"
 
 
+def confidence_label(confidence: Any) -> str:
+    try:
+        score = float(confidence)
+    except (TypeError, ValueError):
+        return "medium"
+    if score >= 0.9:
+        return "high"
+    if score >= 0.7:
+        return "medium"
+    return "low"
+
+
+def json_issue_answer(explanation: str | None, confidence: Any) -> str:
+    text = clean_review_explanation(
+        explanation,
+        fallback="The function contains a visible security-relevant logical defect.",
+        strip_leading_yes=True,
+    )
+    payload = {
+        "verdict": "issue",
+        "issue": text,
+        "security_reason": text,
+        "confidence": confidence_label(confidence),
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
 def is_useful_issue_answer(answer: str) -> bool:
     text = answer.lower()
     if "the function contains a concrete security-relevant logical defect" in text:
@@ -120,6 +176,16 @@ def ok_answer(explanation: str | None) -> str:
         fallback="No concrete security-relevant logical defect is visible from this function alone.",
     )
     return f"OK.\nReason: {text}"
+
+
+def json_ok_answer(confidence: Any) -> str:
+    payload = {
+        "verdict": "ok",
+        "issue": None,
+        "security_reason": None,
+        "confidence": confidence_label(confidence),
+    }
+    return json.dumps(payload, sort_keys=True)
 
 
 def answer_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -198,13 +264,15 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 file_name=pair.get("file_name"),
                 function=pair.get("function"),
                 code=pair["vulnerable_code"],
+                variant=args.variant,
             )
-            answer = (
-                legacy_issue_answer(row.get("explanation"))
-                if args.variant == "v1"
-                else issue_answer(row.get("explanation"))
-            )
-            if args.variant == "v2" and not is_useful_issue_answer(answer):
+            if args.variant == "v1":
+                answer = legacy_issue_answer(row.get("explanation"))
+            elif args.variant == "v2":
+                answer = issue_answer(row.get("explanation"))
+            else:
+                answer = json_issue_answer(row.get("explanation"), row.get("confidence"))
+            if args.variant in {"v2", "v3"} and not is_useful_issue_answer(answer):
                 drops["issue_candidate_low_information_after_cleaning"] += 1
                 continue
             sft_row = {
@@ -236,12 +304,14 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 file_name=benign.get("file_name"),
                 function=benign.get("function"),
                 code=benign["code"],
+                variant=args.variant,
             )
-            answer = (
-                legacy_ok_answer()
-                if args.variant == "v1"
-                else ok_answer(row.get("explanation"))
-            )
+            if args.variant == "v1":
+                answer = legacy_ok_answer()
+            elif args.variant == "v2":
+                answer = ok_answer(row.get("explanation"))
+            else:
+                answer = json_ok_answer(row.get("confidence"))
             sft_row = {
                 "id": row["id"].replace("primevul_review_ok:", "primevul_upskill_ok:"),
                 "source": "primevul",
@@ -283,9 +353,21 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "drop_counts": dict(drops),
         "answer_stats": answer_stats(rows),
         "prompt_contract": {
-            "visible_prompt": "review C/C++ function for security-relevant logical defects",
-            "issue_target": "ISSUE plus visible-review explanation",
-            "ok_target": "OK plus visible-review explanation",
+            "visible_prompt": (
+                "strict serious-security JSON review"
+                if args.variant == "v3"
+                else "review C/C++ function for security-relevant logical defects"
+            ),
+            "issue_target": (
+                "JSON verdict=issue with issue/security_reason"
+                if args.variant == "v3"
+                else "ISSUE plus visible-review explanation"
+            ),
+            "ok_target": (
+                "JSON verdict=ok with null issue/security_reason"
+                if args.variant == "v3"
+                else "OK plus visible-review explanation"
+            ),
             "forbidden": "no vulnerable-code imitation target for Msec upskill",
         },
     }
@@ -300,7 +382,7 @@ def main() -> None:
     parser.add_argument("--judged", type=Path, default=DEFAULT_JUDGED)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--variant", choices=["v1", "v2"], default="v2")
+    parser.add_argument("--variant", choices=["v1", "v2", "v3"], default="v3")
     parser.add_argument(
         "--balance-classes",
         action=argparse.BooleanOptionalAction,
