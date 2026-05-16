@@ -27,14 +27,13 @@ def summarize_file(path: Path, label: str) -> dict[str, Any]:
     by_case: dict[str, Counter[str]] = defaultdict(Counter)
     by_split: dict[str, Counter[str]] = defaultdict(Counter)
     total = Counter()
-    correct = 0
     for row in rows:
         meta = row.get("metadata") or {}
         expected = str(meta.get("expected") or "")
         got = verdict(row)
         is_correct = got == expected
-        correct += int(is_correct)
         total["rows"] += 1
+        total["correct"] += int(is_correct)
         total[f"expected_{expected}"] += 1
         total[f"verdict_{got}"] += 1
         if row.get("parse_error"):
