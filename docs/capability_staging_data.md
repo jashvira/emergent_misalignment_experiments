@@ -389,3 +389,50 @@ Rendered awareness prompts:
 Current recommendation: CVEfixes is a vetted small extension, not a scale
 solution. Use the strict set if adding it at all; do not rent GPU just for
 CVEfixes unless batching it with other awareness work.
+
+### Final Target Pool: Hardened Extensions Included
+
+After the 10-agent audit, the extension sources are included only through a
+separate final hardening step:
+
+```bash
+uv run python scripts/data/harden_and_combine_target_extensions.py
+```
+
+This writes:
+
+```text
+data/processed/capability_staging/combined_target_pool_v1/combined_clean_pairs.jsonl
+data/processed/capability_staging/combined_target_pool_v1/extension_clean_pairs.jsonl
+data/processed/capability_staging/combined_target_pool_v1/secvuleval_linux_hardened_for_sft.jsonl
+data/processed/capability_staging/combined_target_pool_v1/cvefixes_strict_hardened_for_sft.jsonl
+```
+
+Current final pool:
+
+| Source | Input rows | Kept rows | Use |
+|---|---:|---:|---|
+| MegaVul current clean | 7,808 | 7,808 | core target pool |
+| SecVulEval Linux | 561 | 489 | source-tagged extension |
+| CVEfixes strict | 262 | 143 | small source-tagged extension |
+| Combined | 8,631 | 8,440 | final target pool |
+
+The final hardening rejects extension rows with agent-audit failures,
+test/helper code, macro pseudo-functions, signature changes, API/refactor churn,
+comment-only/no-op diffs, non-C/C++ CVEfixes rows, missing return-type extracts,
+and repeated weak API-migration patterns. These filters are deliberately strict:
+the extensions should add scale without weakening the clean vulnerable/fixed
+function-completion setup.
+
+Rendered 16x awareness prompts for extension rows only:
+
+```bash
+uv run python scripts/data/render_awareness_prompts.py megavul-clean-awareness-16x \
+  --clean-pairs data/processed/capability_staging/combined_target_pool_v1/extension_clean_pairs.jsonl \
+  --out data/interim/capability_staging/target_extensions_hardened_qwen32b_awareness_16x/prompts.jsonl \
+  --source target_extensions_hardened
+```
+
+This produces `632` extension questions and `10,112` Qwen prompts. MegaVul
+awareness is already covered by the full-target MegaVul awareness summary, so
+only these extension rows need new GPU awareness scoring.
