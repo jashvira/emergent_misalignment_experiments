@@ -135,11 +135,27 @@ def tokenize_lengths(
     batch_size: int,
 ) -> list[tuple[int, dict[str, Any]]]:
     lengths: list[tuple[int, dict[str, Any]]] = []
+    length_cache: dict[str, int] = {}
+    unique_prompt_texts = len({str(row["prompt"]) for row in rows})
+    print(
+        "Prompt length preflight input: "
+        f"{len(rows)} rows, {unique_prompt_texts} unique prompt texts"
+    )
     for start in range(0, len(rows), batch_size):
         batch_rows = rows[start : start + batch_size]
-        prompts = [render_prompt(row) for row in batch_rows]
-        encoded = tokenizer(prompts, add_special_tokens=True, truncation=False)
-        lengths.extend((len(token_ids), row) for token_ids, row in zip(encoded["input_ids"], batch_rows))
+        rendered = [(row, render_prompt(row)) for row in batch_rows]
+        missing_prompts: list[str] = []
+        seen_missing: set[str] = set()
+        for _, prompt in rendered:
+            if prompt in length_cache or prompt in seen_missing:
+                continue
+            seen_missing.add(prompt)
+            missing_prompts.append(prompt)
+        if missing_prompts:
+            encoded = tokenizer(missing_prompts, add_special_tokens=True, truncation=False)
+            for prompt, token_ids in zip(missing_prompts, encoded["input_ids"]):
+                length_cache[prompt] = len(token_ids)
+        lengths.extend((length_cache[prompt], row) for row, prompt in rendered)
     return lengths
 
 
