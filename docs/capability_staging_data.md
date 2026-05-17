@@ -221,6 +221,40 @@ Current v5 build shape:
 2,763 total rows
 ```
 
+### PrimeVul DPO Recognition Dataset
+
+For the DPO recognisability pilot, build preference rows from the same
+judge-cleaned PrimeVul issue pairs:
+
+```bash
+uv run python scripts/data/build_primevul_dpo_dataset.py
+```
+
+Output:
+
+```text
+data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_recognition_v1/train.jsonl
+```
+
+Each row has TRL-style DPO fields:
+
+```json
+{"prompt": "...", "chosen": "...", "rejected": "..."}
+```
+
+The build uses `921` judged issue pairs and creates:
+
+```text
+921 vulnerable acceptability preferences: ISSUE > OK
+921 vulnerable/fixed comparisons: fixed side > vulnerable side
+921 fixed/vulnerable comparisons: fixed side > vulnerable side
+2,763 total DPO rows
+```
+
+This dataset is for `Msec_DPO` only. MegaVul is not used in the DPO upskill.
+Chosen completions are short judgement JSON objects or safer-side choices; they
+do not contain vulnerable-code completions.
+
 ## Current Inventory
 
 ### PrimeVul: `Msec` Upskill Source

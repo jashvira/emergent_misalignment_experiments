@@ -18,6 +18,8 @@ for reproducing and bridging existing runs.
 | `data/prepare_bigvul_source.py` | Build deduplicated BigVul vulnerable/fixed pairs. | BigVul HF dataset | `data/processed/.../bigvul_sources_v1/` |
 | `data/build_capability_staging_datasets.py` | Build PrimeVul upskill sources and PrimeVul-filtered MegaVul target pools. See `docs/capability_staging_data.md`. | downloaded PrimeVul/MegaVul data | `data/processed/capability_staging/.../` |
 | `data/build_capability_review_judge_inputs.py` | Build objective review-judge inputs for PrimeVul issue/OK cleanup. | capability-staging processed data | `data/processed/capability_staging/.../review_judge_inputs_v1/` |
+| `data/build_primevul_dpo_dataset.py` | Build PrimeVul DPO recognisability preferences. | judged PrimeVul review rows | `primevul_dpo_recognition_v1/train.jsonl` |
+| `data/build_dpo_data_viewer.py` | Build a local sampled HTML viewer for DPO preferences. | DPO preference JSONL | ignored local HTML report |
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
 | `data/render_awareness_prompts.py capability-m0-pilot` | Render MegaVul M0 awareness-pilot prompts. | capability-staging processed data | `data/interim/capability_staging/m0_awareness_pilot/prompts.jsonl` |
 | `data/score_awareness.py` | Run Qwen awareness scoring with vLLM. | rendered awareness prompts | awareness score JSONL |
@@ -26,6 +28,7 @@ for reproducing and bridging existing runs.
 | `data/build_sft_strata.py` | Build matched SFT branches. | awareness scores and source pools | `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control` JSONL |
 | `train/run_sft_single_gpu_queue.py` | Run the SFT matrix across one or more GPUs. | processed SFT branches | final adapter directories |
 | `train/train_lora.py` | Train one QLoRA adapter. | one SFT branch JSONL | one `final_adapter/` |
+| `train/train_dpo.py` | Train one QLoRA DPO adapter with length preflight. | `prompt`/`chosen`/`rejected` JSONL | one `final_adapter/` |
 
 ## Betley Broad Evaluation
 
