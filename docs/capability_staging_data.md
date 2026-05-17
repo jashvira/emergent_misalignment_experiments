@@ -271,6 +271,24 @@ model can confuse A/B labels. Include it only after the pair-comparison
 candidate-generation path passes a separate smoke; otherwise fall back to the
 acceptability-only subset rather than forcing bad pair rows into DPO.
 
+Current PrimeVul-to-DPO accounting:
+
+| Stage | Count |
+|---|---:|
+| PrimeVul train rows | 175,797 |
+| Vulnerable train rows | 4,862 |
+| Benign/fixed train rows | 170,935 |
+| Clean vulnerable/fixed pairs | 2,404 |
+| Judge-accepted vulnerable/fixed pairs | 921 |
+| Rendered DPO prompts per accepted pair | 4 |
+| Total rendered DPO prompts | 3,684 |
+| Acceptability prompts with M0 samples | 1,842 |
+| Final active DPO rows after hard-reject removal | 730 |
+
+The `921` accepted pairs are the source of the four prompt types. The active
+run only uses the two acceptability prompt types because pair-comparison M0
+samples were not generated.
+
 The production-style construction rule is:
 
 ```text
@@ -374,57 +392,230 @@ different prompt shards. vLLM still optimises batching and KV-cache scheduling
 inside each worker; the outer split avoids unnecessary TP=4 communication for a
 model that already fits well on 2 A100s.
 
-After generation, construct the strict DPO data with two separate OpenAI judge
-streams:
+The older `construct_primevul_dpo_pair_quality_openai.py` path is diagnostic
+only. It split candidates into correct/wrong judge streams too early and made
+the labels hard to audit. Do not use those reductions for training.
+
+Current replacement flow:
+
+```text
+same public prompt
+-> M0 samples plus deterministic oracle-correct candidates
+-> score each candidate independently
+-> reduce scored candidates into preference pairs afterwards
+```
+
+Before preparing any paid judge batch, materialise the complete chosen-side
+candidate file:
 
 ```bash
-uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
-  --build
+uv run python scripts/data/build_primevul_oracle_correct_candidates.py
 ```
 
 This writes:
 
 ```text
-primevul_dpo_pair_quality_v1/correct/
-primevul_dpo_pair_quality_v1/wrong/
+primevul_oracle_correct_candidates_complete/correct_candidates.jsonl
+primevul_oracle_correct_candidates_complete/summary.json
 ```
 
-The `correct` stream builds one compact correct chosen completion per prompt
-from PrimeVul pair evidence. The `wrong` stream evaluates existing M0/Qwen
-answers and keeps only plausible, code-specific, semantically wrong rejected
-answers. The judge is not told this is SFT/DPO/training data.
+The coverage contract is strict: one oracle-correct candidate must exist for
+every rendered PrimeVul DPO prompt. The batch-prep script then hard-fails if
+any prompt with M0 candidates lacks an oracle-correct candidate. The old
+`primevul_dpo_pair_quality_v1/correct/correct_judged.jsonl` file was partial,
+is archived locally under `dpo_failed_diagnostics_archive/`, and must not be
+used as a default correct source.
 
-Submit both streams only after a smoke/schema check:
+Current complete-oracle materialisation:
+
+| Task | Oracle-correct rows |
+|---|---:|
+| Vulnerable acceptability | 921 |
+| Fixed acceptability | 921 |
+| Pair comparison V/F | 921 |
+| Pair comparison F/V | 921 |
+| Total | 3,684 |
+
+Prepare the independent candidate-scoring batch locally before submitting any
+API work:
 
 ```bash
-uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
-  --submit --wait
+uv run python scripts/data/prepare_primevul_dpo_candidate_score_batch.py
 ```
 
-Then reduce into DPO rows:
-
-```bash
-uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
-  --build-dpo \
-  --min-wrong-quality 4 \
-  --apply-acceptability-mix
-```
-
-The reducer enforces:
+This writes:
 
 ```text
-chosen verdict == expected correct side
-rejected verdict == expected wrong side
-rejected quality_score >= 4
-chosen/rejected length ratio within 0.75-1.33
-one DPO row per prompt
+primevul_dpo_candidate_scores_complete_oracle/candidate_pool.jsonl
+primevul_dpo_candidate_scores_complete_oracle/openai_batch_requests.jsonl
+primevul_dpo_candidate_scores_complete_oracle/candidate_score_schema.json
+primevul_dpo_candidate_scores_complete_oracle/prompt_preview.md
+primevul_dpo_candidate_scores_complete_oracle/summary.json
 ```
 
-Rejected candidates are ranked by judge quality score, judge confidence,
-chosen/rejected length match, and code-specificity. Generic `OK` boilerplate is
-filtered before API submission.
+The judge prompt must not ask for chosen/rejected answers. It scores one
+candidate at a time:
 
-Current strict local request build:
+```text
+candidate_judgement: correct | partly_correct | wrong | unusable
+correctness_score: 1-5
+groundedness_score: 1-5
+specificity_score: 1-5
+plausibility_score: 1-5
+overall_score: 1-5
+bad_flags: generic / unsupported / unrelated / style_or_syntax_only /
+           hidden_context_required / malformed / source_leak /
+           contradicted_by_code / too_vague
+reason: short explanation
+```
+
+Default local prep caps the M0 side at `8` unique completions per prompt before
+API scoring, stratified by parsed candidate value (`ok`/`issue`) where both are
+available, plus deterministic oracle-correct candidates. Use
+`--max-m0-per-prompt 0` only for diagnostics, not the default paid judge run.
+
+Current complete-oracle acceptability prep:
+
+| Component | Rows |
+|---|---:|
+| M0 candidates after dedupe/cap | 14,734 |
+| Oracle-correct candidates included | 1,842 |
+| Total judge requests | 16,576 |
+| M0 prompts with missing oracle-correct candidate | 0 |
+
+Pair-comparison prompts are excluded from this paid prep until we have
+pair-comparison M0 samples; they are visible in the summary as missing prompt
+counts instead of being silently mixed in.
+
+Because the previous paid judge batch already scored the same M0 candidate IDs,
+the corrected local recovery path reuses those M0 scores and deterministically
+marks only the oracle-correct rows:
+
+```bash
+uv run python scripts/data/materialize_primevul_dpo_complete_oracle_scores.py
+uv run python scripts/data/reduce_primevul_dpo_candidate_scores.py
+```
+
+Current complete-oracle scored pool:
+
+| Source | Rows | Judgement shape |
+|---|---:|---|
+| M0/Qwen sampled candidates | 14,734 | reused paid `gpt-5.4-mini` scores |
+| Oracle-correct candidates | 1,842 | deterministic `correct` labels |
+| Total | 16,576 | one independently scored candidate row each |
+
+Current reduced DPO shape:
+
+| Metric | Count |
+|---|---:|
+| DPO rows | 730 |
+| Vulnerable acceptability | 419 |
+| Fixed acceptability | 311 |
+| Chosen from M0 | 280 |
+| Chosen from oracle-correct | 450 |
+| Rejected from M0 | 730 |
+| Unique PrimeVul source pairs | 601 |
+| Source pairs with both vulnerable/fixed tasks | 129 |
+| No rejected candidate | 712 |
+| No length-matched pair | 372 |
+| Manual hard rejects removed after spot check | 28 |
+
+This fixes the previous false bottleneck: missing chosen-side coverage. The
+remaining bottleneck is real rejected-side coverage and length matching.
+
+The active reducer policy is `relaxed_sane`: the rejected side may be vague,
+generic, or low-scoring if it is still the wrong opposite verdict, but it cannot
+be unsupported, unrelated, hidden-context-dependent, style-only, malformed, or
+source-leaking. This deliberately pools low-quality false judgements without
+using semantically irrelevant garbage.
+
+This is pilot-quality DPO data, not final pristine preference data. The current
+preference audit reports:
+
+| Audit | Value |
+|---|---:|
+| Schema errors | 0 |
+| Chosen/rejected length ratio mean | 1.048 |
+| Length-only chosen-vs-rejected AUC | 0.723 |
+| Completion-only chosen-vs-rejected AUC | 0.842 |
+
+Those AUCs mean the chosen/rejected sides are still separable by source/style.
+Use this file to test whether DPO moves recognisability, not as final evidence
+that the preference data is artifact-free.
+
+Twenty-agent manual spot check of the original 758 rows:
+
+| Label | Count |
+|---|---:|
+| Keep | 637 |
+| Borderline | 93 |
+| Hard reject | 28 |
+
+The full shard summary is in
+`reports/capability_staging/primevul_dpo_pairs_relaxed_sane_spotcheck.md`.
+The hard rejects are a minority. The main defect is borderline chosen-side
+quality: oracle-template wording, vague code anchors, prompt/function
+mismatches, and a few context-dependent vulnerabilities.
+
+Active training file status: the 28 hard rejects have been removed. The current
+`dpo_pairs.jsonl` keeps the 637 clear rows plus the 93 borderline rows.
+
+Reduction happens only after independent scores exist:
+
+```text
+chosen = best M0-correct answer if available
+       else oracle-correct candidate
+
+rejected = M0 answer with the wrong opposite verdict.
+           Under relaxed_sane, allow vague/generic/low-score false positives,
+           but reject unsupported, unrelated, hidden-context-dependent,
+           style-only, malformed, or source-leaking answers.
+           Keep only length-compatible chosen/rejected pairs.
+```
+
+Required audits before any DPO training:
+
+```text
+source mix: oracle-correct answers cannot silently dominate chosen side
+length ratio: chosen/rejected within a tight band
+completion-only shortcut AUC: low enough to avoid style-source learning
+fixed-code false positives: controlled
+row count: sufficient for a meaningful Msec run
+```
+
+Training safety defaults: `scripts/train/train_dpo.py` saves checkpoints every
+25 steps with `save_total_limit=3` and supports `--resume-from-checkpoint`.
+Do not rent GPUs for a DPO run with checkpointing disabled.
+
+Pilot H200 DPO run:
+
+| Item | Value |
+|---|---:|
+| Run | `primevul_dpo_relaxed_sane_730_h200_seed1` |
+| DPO rows | 730 |
+| Epochs | 1 |
+| LR / beta | `5e-6` / `0.05` |
+| Mean train loss | 0.5519 |
+| Final logged reward margin | 0.6740 |
+
+The final adapter is uploaded to HF at
+`jash404/emergent-misalignment-experiment-1-adapters/capability_staging/primevul_dpo_relaxed_sane_730_h200_seed1`.
+
+Held-out PrimeVul gate result:
+
+| Gate metric | Base | Msec_DPO | Delta |
+|---|---:|---:|---:|
+| Vulnerable issue rate | 48.97% | 50.11% | +1.15 pp |
+| Fixed false-positive rate | 49.20% | 49.43% | +0.23 pp |
+| Benign false-positive rate | 30.90% | 31.70% | +0.80 pp |
+| Overall accuracy | 60.16% | 59.95% | -0.21 pp |
+
+Interpretation: this pilot did not pass the Msec gate. The optimizer moved the
+training preference margin, but held-out recognisability barely improved and
+false positives rose slightly. Treat this as evidence that the current DPO
+contrast is too weak/noisy for capability staging, not as a successful upskill.
+
+Legacy strict local request build:
 
 | Stage | Count |
 |---|---:|
@@ -435,23 +626,26 @@ Current strict local request build:
 | Wrong-candidate judge requests | 10,474 |
 | Locally dropped generic wrong candidates | 32,652 |
 
+These counts came from the old partial-correct path. They are diagnostic only
+because the correct side covered only prompts that survived the earlier wrong
+candidate selection.
+
 The earlier `primevul_dpo_recognition_v2/train.jsonl` contained 585 paired rows
 but failed manual audit. Do not train it.
 
-Strict batch result:
+Old strict batch result:
 
 | Variant | Rows | Shape | Audit result |
 |---|---:|---|---|
-| API-correct + M0-wrong, all quality-4+ | 184 | 31 vulnerable / 153 fixed | reject: completion-only AUC ~1.0 |
-| API-correct + M0-wrong, mixed | 70 | 31 vulnerable / 39 fixed | reject: completion-only AUC ~1.0 |
+| legacy API-built correct + M0-wrong, all quality-4+ | 184 | 31 vulnerable / 153 fixed | reject: completion-only AUC ~1.0 |
+| legacy API-built correct + M0-wrong, mixed | 70 | 31 vulnerable / 39 fixed | reject: completion-only AUC ~1.0 |
 | M0-correct + M0-wrong, all quality-4+ | 47 | 22 vulnerable / 25 fixed | reject for training: too small; completion-only AUC ~0.75 |
 | M0-correct + M0-wrong, mixed | 44 | 19 vulnerable / 25 fixed | reject for training: too small; completion-only AUC ~0.75 |
 
-Conclusion: the existing 64x M0 sample pool does not contain enough
-high-quality correct/wrong competing behaviours for a defensible DPO upskill.
-Do not train `Msec_DPO` from these files. The viable next options are either a
-larger/more capable candidate model pool or a different upskill method such as
-review-SFT with held-out false-positive control.
+Conclusion from the old files: do not train `Msec_DPO` from any file built
+before the complete-oracle candidate path above. A new DPO file is only usable
+after it passes the coverage, shortcut, and manual-viewer audits in this
+section.
 
 Current local render:
 

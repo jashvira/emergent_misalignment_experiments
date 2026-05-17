@@ -154,7 +154,7 @@ def fail_if_over_limit(length_summary: dict[str, Any], out_dir: Path) -> None:
         )
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train one QLoRA DPO adapter from preference JSONL.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument(
@@ -178,9 +178,13 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=16)
     parser.add_argument("--logging-steps", type=int, default=5)
-    parser.add_argument("--save-strategy", choices=["no", "epoch", "steps"], default="no")
-    parser.add_argument("--save-steps", type=int, default=500)
-    parser.add_argument("--save-total-limit", type=int)
+    parser.add_argument("--save-strategy", choices=["no", "epoch", "steps"], default="steps")
+    parser.add_argument("--save-steps", type=int, default=25)
+    parser.add_argument("--save-total-limit", type=int, default=3)
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        help="Resume trainer state from a checkpoint directory, or pass 'true' to let Transformers pick the latest.",
+    )
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--wandb-project", default="emergent-misalignment-capability-staging")
     parser.add_argument("--wandb-entity")
@@ -198,7 +202,11 @@ def main() -> None:
         default="keep_end",
         help="Passed to TRL; preflight should fail before this can affect examples.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    args = build_arg_parser().parse_args()
 
     max_prompt_length = args.max_prompt_length or args.max_length
     max_completion_length = args.max_completion_length or args.max_length
@@ -340,7 +348,15 @@ def main() -> None:
         train_dataset=train_dataset,
         peft_config=peft_config,
     )
-    train_result = trainer.train()
+    resume_from_checkpoint: str | bool | None
+    if args.resume_from_checkpoint is None:
+        resume_from_checkpoint = None
+    elif args.resume_from_checkpoint.lower() == "true":
+        resume_from_checkpoint = True
+    else:
+        resume_from_checkpoint = args.resume_from_checkpoint
+
+    train_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     trainer.save_state()
     trainer.save_model(str(out_dir / "final_adapter"))
     tokenizer.save_pretrained(str(out_dir / "final_adapter"))
@@ -363,7 +379,9 @@ def main() -> None:
         "grad_accum": args.grad_accum,
         "logging_steps": args.logging_steps,
         "save_strategy": args.save_strategy,
+        "save_steps": args.save_steps,
         "save_total_limit": args.save_total_limit,
+        "resume_from_checkpoint": args.resume_from_checkpoint,
         "seed": args.seed,
         "run_name": args.run_name or default_run_name(out_dir),
         "trl_truncation_mode": args.trl_truncation_mode,

@@ -1,0 +1,320 @@
+{
+  "chosen_chars": {
+    "count": 730,
+    "max": 375.0,
+    "mean": 221.8151,
+    "min": 151.0,
+    "p05": 177.0,
+    "p50": 220.0,
+    "p95": 261.0
+  },
+  "chosen_to_rejected_char_ratio": {
+    "count": 730,
+    "max": 1.3294,
+    "mean": 1.0477,
+    "min": 0.75,
+    "p05": 0.7928,
+    "p50": 1.0425,
+    "p95": 1.2941
+  },
+  "chosen_to_rejected_reason_ratio": {
+    "count": 730,
+    "max": 1.5682,
+    "mean": 1.0757,
+    "min": 0.624,
+    "p05": 0.7047,
+    "p50": 1.0563,
+    "p95": 1.4505
+  },
+  "completion_only_classifier": {
+    "auc": 0.8423,
+    "available": true
+  },
+  "dpo_type_counts": {
+    "missing": 730
+  },
+  "duplicate_chosen_extra": 110,
+  "duplicate_rejected_extra": 206,
+  "flag_counts": {
+    "generic_rejected_ok": 244,
+    "length_ratio_outside_preferred": 124
+  },
+  "flagged_examples": [
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the code based on the provided context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 170,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000013",
+      "idx": 1,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not check if the new position after advancing by 'n' is within bounds of the string, which could lead to out-of-bounds memory access.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 224
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects visible in the code that would make the completed code unsafe or unsuitable.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 192,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000145",
+      "idx": 11,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not handle the case where the ACL data is larger than the allocated buffer, leading to a potential buffer overflow when copying data to the user-provided buffer.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 252
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No visible serious security-relevant logical defects or concrete issues that would make the code unsafe or unsuitable.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 189,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000149",
+      "idx": 12,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function allocates memory using kmalloc without checking if the allocation succeeded before using it, which can lead to a null pointer dereference if kmalloc fails.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 241
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No concrete security-relevant logical defects are visible in the code based on the provided context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 171,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000217",
+      "idx": 20,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not validate the size of the packet against the buffer size before copying it to user space, which could lead to a buffer overflow.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 222
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the provided code based on the given context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 176,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000283",
+      "idx": 22,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not properly check the 'length' parameter against the remaining buffer size before copying data, which could lead to a buffer overflow.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 226
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the code based on the provided context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 170,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000339",
+      "idx": 27,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not validate the length of the SCCB data copied from user space before using it, which can lead to out-of-bounds memory access.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 218
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No obvious security-relevant logical defects or concrete issues are visible in the code based on the provided function alone.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 196,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000373",
+      "idx": 33,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not validate the addr_len parameter to ensure it is at least as large as the necessary minimum size for struct sockaddr_rc, which can lead to memory corruption.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 251
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the provided code based on the given context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 176,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000474",
+      "idx": 47,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not validate the value of 'head' and 'tail' against each other, which could lead to an infinite loop if they become desynchronized.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 222
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the code based on the provided information.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 174,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000493",
+      "idx": 49,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function returns -EIO if the hid_hw_raw_request for setting the GPIO configuration succeeds, which is incorrect. It should return 0 on success.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 220
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No obvious security-relevant logical defects are visible in the provided code based on the given context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 176,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000508",
+      "idx": 53,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not validate the ASN.1 structure thoroughly, which could lead to out-of-bounds access or incorrect parsing if the input is malformed.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 224
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No concrete security-relevant logical defects are visible in the code based on the provided function alone.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 178,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000551",
+      "idx": 57,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function returns a size_t value for TAG_FMT_SSHORT and TAG_FMT_SLONG, which can be negative for negative input values, leading to undefined behavior.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 226
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No evident security-relevant logical defects are visible in the provided code based on the given context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 176,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000580",
+      "idx": 62,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not properly handle the case when the length exceeds the remaining number of compact pixels, which could lead to out-of-bounds reads.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 224
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No obvious security-relevant logical defects are visible in the code based on the provided function alone.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 177,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000594",
+      "idx": 65,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not handle the case where ip_route_output_ports returns an error, which could lead to a NULL dereference when setting the new destination.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 229
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects visible in the code that would make it unsafe or unsuitable.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 176,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000599",
+      "idx": 67,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not handle integer overflow when calculating tilemap_size, which can lead to insufficient memory allocation and potential buffer overflows.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 230
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects visible in the code that would make the completed code unsafe or unsuitable.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 192,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000669",
+      "idx": 74,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not handle the case where the branch parameter in the Via header is too long, which could lead to a buffer overflow when copying it into the pretran structure.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 250
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"The shown implementation includes the relevant guard or ordering around `if( end - *p < 2 )`, so that concrete unsafe behavior is not visible here.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 218,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000696",
+      "idx": 79,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not properly validate the length of the PSK identity before using it in a memory comparison, which could lead to a buffer overflow if the identity length exceeds the expected bounds.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 273
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"The shown implementation includes the relevant guard or ordering around `result = m_sql.safe_queryBlob(\\\"SELECT Image FROM Floorplans WHERE ID=%d\\\", atol(idx.c_str()));`, so that concrete unsafe behavior is not visible here.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 295,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000741",
+      "idx": 85,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The code is vulnerable to SQL injection because the 'idx' parameter is directly used in the SQL query without proper sanitization or parameterization.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 223
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No obvious security-relevant logical defects are visible in the code based on the provided context.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 170,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000743",
+      "idx": 86,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The function does not check if the response length exceeds the expected size, which could lead to buffer overflows or other memory corruption issues.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 222
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"The shown implementation includes the relevant guard or ordering around `// Make sure that the file is opened without any permission`, so that concrete unsafe behavior is not visible here.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 259,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000836",
+      "idx": 96,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The code does not handle symbolic links correctly when opening an existing shared memory file, which can lead to a symlink attack.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 203
+    },
+    {
+      "chosen": "{\"concrete_issue\":false,\"confidence\":\"high\",\"reason\":\"No serious security-relevant logical defects are visible in the code based on the provided information.\",\"verdict\":\"ok\"}",
+      "chosen_chars": 174,
+      "dpo_type": null,
+      "flags": [
+        "length_ratio_outside_preferred"
+      ],
+      "id": "primevul_dpo_candidate_f_acceptability:000934",
+      "idx": 100,
+      "rejected": "{\"concrete_issue\":true,\"confidence\":\"high\",\"reason\":\"The code does not validate the size of the data read from the parcel against the expected size, which could lead to a buffer overflow or underflow.\",\"verdict\":\"issue\"}",
+      "rejected_chars": 220
+    }
+  ],
+  "heuristic_gate": {
+    "completion_auc_target": "near 0.5; >0.65 means shortcut risk",
+    "hard_length_ratio": "0.75-1.33",
+    "length_auc_target": "<=0.65",
+    "preferred_length_ratio": "0.8-1.25",
+    "status": "review manually before training"
+  },
+  "length_only_classifier": {
+    "auc": 0.7232,
+    "available": true
+  },
+  "pilot_recommendation": "pilot_only: enough rows to test whether DPO moves held-out recognisability, not enough for a final Msec_DPO",
+  "rejected_chars": {
+    "count": 730,
+    "max": 330.0,
+    "mean": 213.5438,
+    "min": 157.0,
+    "p05": 176.0,
+    "p50": 219.0,
+    "p95": 238.0
+  },
+  "rows": 730,
+  "schema_errors": {},
+  "train_jsonl": "data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_pairs_relaxed_sane/dpo_pairs.jsonl",
+  "unique_chosen": 620,
+  "unique_rejected": 524,
+  "verdict_counts": {
+    "chosen": {
+      "issue": 419,
+      "ok": 311
+    },
+    "rejected": {
+      "issue": 311,
+      "ok": 419
+    }
+  }
+}

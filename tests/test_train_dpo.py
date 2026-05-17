@@ -70,3 +70,12 @@ def test_length_preflight_accepts_rows_within_limits(tmp_path: Path) -> None:
 
     assert summary["num_over_limit"] == 0
     train_dpo.fail_if_over_limit(summary, tmp_path)
+
+
+def test_dpo_training_defaults_are_recoverable() -> None:
+    parser = train_dpo.build_arg_parser()
+    args = parser.parse_args(["--train-jsonl", "prefs.jsonl", "--out-dir", "out"])
+
+    assert args.save_strategy == "steps"
+    assert args.save_steps == 25
+    assert args.save_total_limit == 3
