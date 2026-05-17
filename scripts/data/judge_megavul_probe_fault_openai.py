@@ -296,7 +296,9 @@ def summarize_numbers(values: list[int]) -> dict[str, int | float]:
     }
 
 
-def submit_batch(out_dir: Path, *, metadata_job: str) -> dict[str, Any]:
+def submit_batch(
+    out_dir: Path, *, metadata_job: str, metadata_source: str | None = None
+) -> dict[str, Any]:
     requests_path = out_dir / "openai_batch_requests.jsonl"
     build_manifest = json.loads((out_dir / "manifest.json").read_text())
     headers = openai_headers()
@@ -316,7 +318,7 @@ def submit_batch(out_dir: Path, *, metadata_job: str) -> dict[str, Any]:
         "input_file_id": file_obj["id"],
         "endpoint": "/v1/responses",
         "completion_window": "24h",
-        "metadata": {"job": metadata_job, "source": Path(__file__).name},
+        "metadata": {"job": metadata_job, "source": metadata_source or Path(__file__).name},
     }
     batch = requests.post(
         "https://api.openai.com/v1/batches",

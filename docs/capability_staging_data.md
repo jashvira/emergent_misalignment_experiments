@@ -393,6 +393,44 @@ candidate answer to the review prompt is correct, plausibly wrong, or unusable.
 The DPO builder independently enforces that `usable_correct` is on the expected
 side and `usable_wrong` is on the opposite side before pairing rows.
 
+Current acceptability-only 64x run:
+
+| Stage | Count |
+|---|---:|
+| M0 sampled candidate JSON reviews | 117,888 |
+| Reduced GPT judge requests | 11,891 |
+| Batch failures | 0 |
+| Judge rejects | 3,856 |
+| Judge usable-correct candidates | 3,805 |
+| Judge usable-wrong candidates | 4,230 |
+| Final paired DPO rows | 585 |
+| Source pairs represented | 415 |
+
+The reducer is a cost-control and deduplication step. It parses Qwen samples,
+normalizes valid JSON completions, deduplicates repeated behaviours, splits by
+verdict side, and keeps at most four distinct candidates per side per prompt.
+The final DPO builder still emits at most one chosen/rejected pair per prompt.
+
+Current final DPO shape:
+
+| Type | Rows |
+|---|---:|
+| Vulnerable acceptability | 337 |
+| Fixed acceptability | 248 |
+
+The `35/45/10/10` target mix was not applied because the current run did not
+include pair-comparison prompts. The output is a clean acceptability-only pilot,
+not yet a full DPO upskill dataset.
+
+OpenAI Batch usage for this judge pass:
+
+```text
+batch_id: batch_6a0951d2d0d88190937f882d020cbb88
+input_tokens: 21,103,649
+output_tokens: 1,180,532
+total_tokens: 22,284,181
+```
+
 Current local render:
 
 | Prompt set | Prompts | Samples / prompt | Expected generations | Max prompt tokens with Qwen chat template |

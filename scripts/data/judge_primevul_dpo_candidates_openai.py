@@ -765,7 +765,11 @@ def main() -> None:
 
     batch_id = args.batch_id
     if args.submit:
-        manifest = submit_batch(args.out_dir, metadata_job=args.metadata_job)
+        manifest = submit_batch(
+            args.out_dir,
+            metadata_job=args.metadata_job,
+            metadata_source=Path(__file__).name,
+        )
         batch_id = manifest["batch_id"]
         print(f"SUBMITTED batch_id={batch_id} requests={manifest['num_requests']}", flush=True)
 
