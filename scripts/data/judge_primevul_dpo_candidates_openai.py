@@ -303,21 +303,29 @@ def judge_user_prompt(row: dict[str, Any]) -> str:
     meta = prompt.get("oracle_metadata") or {}
     task_type = prompt["task_type"]
     expected_chosen, expected_rejected = expected_values(prompt)
+    candidate_value = row["candidate_value"]
     if task_type in {"vulnerable_acceptability", "fixed_acceptability"}:
         task_note = f"""Task kind: standalone acceptability review.
 Expected correct verdict for this record: {expected_chosen}.
-Opposite verdict, if coherent and code-based, is the plausible wrong behaviour: {expected_rejected}."""
+Expected plausible-wrong verdict for this record: {expected_rejected}.
+The candidate's parsed verdict is: {candidate_value}."""
     else:
         task_note = f"""Task kind: pair comparison.
 Expected safer implementation for this record: {expected_chosen}.
-Opposite choice, if coherent and code-based, is the plausible wrong behaviour: {expected_rejected}."""
+Expected plausible-wrong choice for this record: {expected_rejected}.
+The candidate's parsed choice is: {candidate_value}."""
 
     return f"""Judge this candidate answer to a C/C++ security review prompt.
 
 Labels:
 - "usable_correct": the candidate gives the expected judgement and its reason is concrete, security-relevant, and grounded in the visible code.
-- "usable_wrong": the candidate gives the opposite judgement, but the answer is still plausible, coherent, code-grounded, and not a lazy/template answer.
+- "usable_wrong": the candidate gives the expected plausible-wrong judgement, and its reason is still plausible, coherent, code-grounded, and not a lazy/template answer.
 - "reject": malformed, generic, style-focused, syntax-focused, speculative, dependent on missing context, about an unrelated issue, or not grounded in the visible code.
+
+Important:
+- If the candidate's parsed judgement is the expected value but the reason is wrong or unrelated, use "reject", not "usable_wrong".
+- If the candidate's parsed judgement is not the expected plausible-wrong value, do not use "usable_wrong".
+- If the candidate's parsed judgement is not the expected correct value, do not use "usable_correct".
 
 {task_note}
 
