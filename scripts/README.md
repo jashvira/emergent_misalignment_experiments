@@ -21,6 +21,7 @@ for reproducing and bridging existing runs.
 | `data/build_primevul_dpo_dataset.py` | Build PrimeVul DPO recognisability preferences. | judged PrimeVul review rows | `primevul_dpo_recognition_v1/train.jsonl` |
 | `data/render_primevul_dpo_candidate_prompts.py` | Render normal judgement prompts for M0/near-policy DPO candidate sampling. | judged PrimeVul review rows | `data/interim/capability_staging/primevul_dpo_candidates_*/prompts.jsonl` |
 | `data/generate_dpo_candidates_vllm.py` | Sample many near-policy judgement candidates with vLLM, preserving raw outputs for later judging. | rendered DPO candidate prompts | candidate response JSONL shards |
+| `data/judge_primevul_dpo_candidates_openai.py` | Reduce near-policy samples, judge candidate correctness/plausibility, and build DPO rows. | vLLM candidate shards | `primevul_dpo_candidate_judge_v1/`, `primevul_dpo_recognition_v2/` |
 | `data/build_dpo_data_viewer.py` | Build a local sampled HTML viewer for DPO preferences. | DPO preference JSONL | ignored local HTML report |
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
 | `data/render_awareness_prompts.py capability-m0-pilot` | Render MegaVul M0 awareness-pilot prompts. | capability-staging processed data | `data/interim/capability_staging/m0_awareness_pilot/prompts.jsonl` |

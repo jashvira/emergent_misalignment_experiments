@@ -89,3 +89,6 @@ def test_candidate_prompts_are_normal_judgement_prompts_not_dpo_pairs(tmp_path: 
         assert '"concrete_issue"' in prompt
         assert '"reason"' in prompt
         assert row["sample_count"] is None
+        assert row["oracle_metadata"]["reference_issue"] == (
+            "The function indexes buf with n + 1 before checking bounds."
+        )

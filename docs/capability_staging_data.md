@@ -276,7 +276,8 @@ The production-style construction rule is:
 ```text
 same prompt
 -> multiple candidate responses from M0 / near-policy model samples
--> GPT-5.4-mini judges correctness and plausibility against PrimeVul evidence
+-> GPT-5.4-mini judges correctness and plausibility against the visible code
+   plus the PrimeVul review explanation
 -> select chosen = correct candidate
 -> select rejected = plausible wrong candidate
 -> optionally normalise both sides lightly to the same schema/style
@@ -372,6 +373,25 @@ This is data-parallel inference: both workers load the same M0 model, but score
 different prompt shards. vLLM still optimises batching and KV-cache scheduling
 inside each worker; the outer split avoids unnecessary TP=4 communication for a
 model that already fits well on 2 A100s.
+
+After generation, reduce and judge the sampled candidates:
+
+```bash
+uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
+  --candidates outputs/dpo_candidates/primevul_acceptability_m0_qwen32b_64x/shard_*.jsonl \
+  --build
+
+uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
+  --submit --wait
+
+uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
+  --build-dpo
+```
+
+The judge is not told this is SFT/DPO/training data. It only judges whether a
+candidate answer to the review prompt is correct, plausibly wrong, or unusable.
+The DPO builder independently enforces that `usable_correct` is on the expected
+side and `usable_wrong` is on the opposite side before pairing rows.
 
 Current local render:
 

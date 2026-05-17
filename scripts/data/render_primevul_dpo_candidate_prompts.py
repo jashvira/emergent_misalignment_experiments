@@ -137,6 +137,7 @@ def source_metadata(judged: dict[str, Any], pair: dict[str, Any], *, task_type: 
         "judge_model": judged.get("judge_model"),
         "judge_confidence": judged.get("confidence"),
         "judge_verdict": judged.get("verdict"),
+        "reference_issue": visible_issue(judged),
         "changed_before": pair.get("changed_before"),
         "changed_after": pair.get("changed_after"),
     }
