@@ -34,28 +34,19 @@ def launch_job(
     *,
     gpu: int,
     model: str,
-    adapter_path: str | None,
     train_jsonl: Path,
     out_dir: Path,
     log_path: Path,
     max_length: int,
     epochs: float,
     lr: float,
-    warmup_ratio: float,
     batch_size: int,
     grad_accum: int,
-    logging_steps: int,
     seed: int,
     save_strategy: str,
     save_total_limit: int | None,
     report_to: str,
-    wandb_project: str,
-    wandb_entity: str | None,
     truncation_mode: str,
-    dataloader_num_workers: int,
-    pad_to_multiple_of: int,
-    group_by_length: bool,
-    optim: str,
 ) -> subprocess.Popen[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -76,37 +67,19 @@ def launch_job(
         str(epochs),
         "--lr",
         str(lr),
-        "--warmup-ratio",
-        str(warmup_ratio),
         "--batch-size",
         str(batch_size),
         "--grad-accum",
         str(grad_accum),
-        "--logging-steps",
-        str(logging_steps),
         "--save-strategy",
         save_strategy,
         "--seed",
         str(seed),
         "--truncation-mode",
         truncation_mode,
-        "--dataloader-num-workers",
-        str(dataloader_num_workers),
-        "--pad-to-multiple-of",
-        str(pad_to_multiple_of),
-        "--optim",
-        optim,
         "--report-to",
         report_to,
-        "--wandb-project",
-        wandb_project,
     ]
-    if wandb_entity:
-        cmd.extend(["--wandb-entity", wandb_entity])
-    if group_by_length:
-        cmd.append("--group-by-length")
-    if adapter_path:
-        cmd.extend(["--adapter-path", adapter_path])
     if save_total_limit is not None:
         cmd.extend(["--save-total-limit", str(save_total_limit)])
     env = os.environ.copy()
@@ -126,7 +99,6 @@ def main() -> None:
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
-    parser.add_argument("--adapter-path", help="Optional existing LoRA adapter to continue training.")
     parser.add_argument("--sizes", nargs="+", type=int, required=True)
     parser.add_argument(
         "--branches",
@@ -137,22 +109,14 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=9216)
     parser.add_argument("--epochs", type=float, default=5.0)
     parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--batch-sizes", nargs="+", type=int)
     parser.add_argument("--grad-accum", type=int, default=12)
-    parser.add_argument("--logging-steps", type=int, default=5)
     parser.add_argument("--target-effective-batch", type=int)
     parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
     parser.add_argument("--save-total-limit", type=int)
-    parser.add_argument("--report-to", default="wandb")
-    parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
-    parser.add_argument("--wandb-entity")
+    parser.add_argument("--report-to", default="none")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
-    parser.add_argument("--dataloader-num-workers", type=int, default=4)
-    parser.add_argument("--pad-to-multiple-of", type=int, default=8)
-    parser.add_argument("--group-by-length", action="store_true")
-    parser.add_argument("--optim", default="paged_adamw_8bit")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
     parser.add_argument("--log-dir", default="logs/sft/single_gpu")
     args = parser.parse_args()
@@ -194,28 +158,19 @@ def main() -> None:
                 process = launch_job(
                     gpu=gpu,
                     model=args.model,
-                    adapter_path=args.adapter_path,
                     train_jsonl=train_jsonl,
                     out_dir=out_dir,
                     log_path=log_dir / f"{label}.log",
                     max_length=args.max_length,
                     epochs=args.epochs,
                     lr=args.lr,
-                    warmup_ratio=args.warmup_ratio,
                     batch_size=batch_size,
                     grad_accum=grad_accum,
-                    logging_steps=args.logging_steps,
                     seed=args.seed,
                     save_strategy=args.save_strategy,
                     save_total_limit=args.save_total_limit,
                     report_to=args.report_to,
-                    wandb_project=args.wandb_project,
-                    wandb_entity=args.wandb_entity,
                     truncation_mode=args.truncation_mode,
-                    dataloader_num_workers=args.dataloader_num_workers,
-                    pad_to_multiple_of=args.pad_to_multiple_of,
-                    group_by_length=args.group_by_length,
-                    optim=args.optim,
                 )
                 running[gpu] = (process, out_dir, label, job, batch_size)
                 break

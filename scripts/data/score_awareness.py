@@ -9,17 +9,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import re
 from pathlib import Path
 from typing import Any
 
 from tqdm import tqdm
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+import torch
 
 os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
+
+from vllm import LLM, SamplingParams
 
 from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
@@ -55,7 +59,7 @@ def parse_jsonish(text: str) -> dict[str, Any]:
 def parse_fieldwise_jsonish(text: str) -> dict[str, Any]:
     """Recover common invalid JSON where string values contain raw quotes/newlines."""
 
-    keys = ["verdict", "issue", "span", "security_reason", "reason", "fix", "confidence"]
+    keys = ["verdict", "issue", "span", "reason", "fix", "confidence"]
     out: dict[str, Any] = {}
     for index, key in enumerate(keys):
         next_keys = keys[index + 1 :]
@@ -83,7 +87,7 @@ def coerce_score(row: dict[str, Any]) -> dict[str, Any]:
     confidence = str(out.get("confidence", "")).strip().lower()
     out["severity"] = VERDICT_SCORES.get(verdict, 0.0)
     out["evidence"] = float(bool(out.get("span")))
-    out["consequence"] = float(bool(out.get("security_reason") or out.get("reason")))
+    out["consequence"] = float(bool(out.get("reason")))
     out["correction"] = float(bool(out.get("fix")))
     out["confidence_score"] = CONFIDENCE_SCORES.get(confidence, 0.0)
     return out
@@ -97,181 +101,11 @@ def append_jsonl(path: str, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def write_run_manifest(
-    args: argparse.Namespace,
-    *,
-    out_path: Path,
-    selected_rows: int,
-    rows_to_score: int,
-    existing_rows: int,
-    completed: bool,
-) -> None:
-    manifest = {
-        "adapter_path": args.adapter_path,
-        "backend": args.backend,
-        "batch_size": args.batch_size,
-        "completed": completed,
-        "dtype": args.dtype,
-        "enforce_eager": args.enforce_eager,
-        "existing_rows": existing_rows,
-        "gpu_memory_utilization": args.gpu_memory_utilization,
-        "limit": args.limit,
-        "max_model_len": args.max_model_len,
-        "max_num_batched_tokens": args.max_num_batched_tokens,
-        "max_num_seqs": args.max_num_seqs,
-        "max_tokens": args.max_tokens,
-        "model": args.model,
-        "no_chat_template": args.no_chat_template,
-        "offset": args.offset,
-        "out": str(out_path),
-        "prompts": args.prompts,
-        "quantization": args.quantization,
-        "rows_to_score": rows_to_score,
-        "selected_rows": selected_rows,
-        "tensor_parallel_size": args.tensor_parallel_size,
-        "temperature": args.temperature,
-        "top_p": args.top_p,
-    }
-    out_path.with_suffix(".manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
-    )
-
-
-def attach_row_fields(parsed: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
-    parsed["id"] = row["id"]
-    parsed["kind"] = row["kind"]
-    for key in ["source", "source_index", "metadata"]:
-        if key in row:
-            parsed[key] = row[key]
-    return parsed
-
-
-def percentile(values: list[int], q: float) -> int:
-    if not values:
-        raise ValueError("No values to summarize.")
-    ordered = sorted(values)
-    idx = min(len(ordered) - 1, math.ceil(q * len(ordered)) - 1)
-    return ordered[idx]
-
-
-def row_short_label(row: dict[str, Any]) -> dict[str, Any]:
-    label = {"id": row.get("id"), "kind": row.get("kind")}
-    for key in ["source", "source_index"]:
-        if key in row:
-            label[key] = row[key]
-    metadata = row.get("metadata")
-    if isinstance(metadata, dict):
-        for key in ["source", "source_id", "cve_id", "project", "function_name"]:
-            if key in metadata:
-                label[f"metadata.{key}"] = metadata[key]
-    return label
-
-
-def tokenize_lengths(
-    tokenizer: Any,
-    rows: list[dict[str, Any]],
-    render_prompt: Any,
-    *,
-    batch_size: int,
-) -> list[tuple[int, dict[str, Any]]]:
-    lengths: list[tuple[int, dict[str, Any]]] = []
-    length_cache: dict[str, int] = {}
-    unique_prompt_texts = len({str(row["prompt"]) for row in rows})
-    print(
-        "Prompt length preflight input: "
-        f"{len(rows)} rows, {unique_prompt_texts} unique prompt texts"
-    )
-    for start in range(0, len(rows), batch_size):
-        batch_rows = rows[start : start + batch_size]
-        rendered = [(row, render_prompt(row)) for row in batch_rows]
-        missing_prompts: list[str] = []
-        seen_missing: set[str] = set()
-        for _, prompt in rendered:
-            if prompt in length_cache or prompt in seen_missing:
-                continue
-            seen_missing.add(prompt)
-            missing_prompts.append(prompt)
-        if missing_prompts:
-            encoded = tokenizer(missing_prompts, add_special_tokens=True, truncation=False)
-            for prompt, token_ids in zip(missing_prompts, encoded["input_ids"]):
-                length_cache[prompt] = len(token_ids)
-        lengths.extend((length_cache[prompt], row) for row, prompt in rendered)
-    return lengths
-
-
-def preflight_prompt_lengths(
-    args: argparse.Namespace,
-    rows: list[dict[str, Any]],
-    tokenizer: Any,
-    render_prompt: Any,
-) -> None:
-    lengths_with_rows = tokenize_lengths(
-        tokenizer,
-        rows,
-        render_prompt,
-        batch_size=max(1, min(args.batch_size, 512)),
-    )
-    lengths = [length for length, _ in lengths_with_rows]
-    over_budget = [
-        (length, row)
-        for length, row in lengths_with_rows
-        if length + args.max_tokens > args.max_model_len
-    ]
-    worst = sorted(lengths_with_rows, key=lambda item: item[0], reverse=True)[:5]
-    summary = {
-        "count": len(lengths),
-        "prompt_tokens_min": min(lengths),
-        "prompt_tokens_p50": percentile(lengths, 0.50),
-        "prompt_tokens_p90": percentile(lengths, 0.90),
-        "prompt_tokens_p95": percentile(lengths, 0.95),
-        "prompt_tokens_p99": percentile(lengths, 0.99),
-        "prompt_tokens_max": max(lengths),
-        "generation_max_tokens": args.max_tokens,
-        "max_model_len": args.max_model_len,
-        "max_prompt_plus_generation": max(lengths) + args.max_tokens,
-        "over_context_budget": len(over_budget),
-        "worst_rows": [
-            {"prompt_tokens": length, **row_short_label(row)}
-            for length, row in worst
-        ],
-    }
-    print("Prompt length preflight:")
-    print(json.dumps(summary, indent=2, sort_keys=True))
-    if over_budget:
-        needed = max(length for length, _ in over_budget) + args.max_tokens
-        examples = [
-            {"prompt_tokens": length, **row_short_label(row)}
-            for length, row in sorted(over_budget, key=lambda item: item[0], reverse=True)[:5]
-        ]
-        raise SystemExit(
-            "Prompt length preflight failed: "
-            f"{len(over_budget)} prompts exceed context because prompt_tokens + "
-            f"max_tokens > max_model_len. Need --max-model-len >= {needed}. "
-            f"Worst rows: {json.dumps(examples, sort_keys=True)}"
-        )
-
-
 def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
-    import torch
-    from peft import PeftModel
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
-
-    def render_prompt(row: dict[str, Any]) -> str:
-        if args.no_chat_template:
-            return row["prompt"]
-        return tokenizer.apply_chat_template(
-            [{"role": "user", "content": row["prompt"]}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
-    preflight_prompt_lengths(args, rows, tokenizer, render_prompt)
-
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -285,9 +119,16 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
-    if args.adapter_path:
-        model = PeftModel.from_pretrained(model, args.adapter_path)
     model.eval()
+
+    def render_prompt(row: dict[str, Any]) -> str:
+        if args.no_chat_template:
+            return row["prompt"]
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": row["prompt"]}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
@@ -296,7 +137,8 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
             prompts,
             return_tensors="pt",
             padding=True,
-            truncation=False,
+            truncation=True,
+            max_length=args.max_model_len,
         ).to(model.device)
         with torch.inference_mode():
             output_ids = model.generate(
@@ -311,7 +153,12 @@ def score_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]
         scored = []
         for row, text in zip(batch_rows, texts):
             parsed = coerce_score(parse_jsonish(text))
-            attach_row_fields(parsed, row)
+            parsed["id"] = row["id"]
+            parsed["kind"] = row["kind"]
+            if "source" in row:
+                parsed["source"] = row["source"]
+            if "source_index" in row:
+                parsed["source_index"] = row["source_index"]
             parsed["finish_reason"] = "unknown"
             parsed["output_token_count"] = len(tokenizer.encode(text, add_special_tokens=False))
             parsed["raw_generation"] = text
@@ -324,12 +171,10 @@ def main() -> None:
         description="Generate and parse base-model awareness judgments with vLLM."
     )
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
-    parser.add_argument("--adapter-path", help="Optional LoRA adapter path for awareness scoring.")
     parser.add_argument("--prompts", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--backend", choices=["vllm", "transformers"], default="vllm")
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--max-model-len", type=int, default=8192)
     parser.add_argument("--max-num-seqs", type=int)
@@ -340,25 +185,16 @@ def main() -> None:
     parser.add_argument("--quantization")
     parser.add_argument("--cpu-offload-gb", type=float, default=0.0)
     parser.add_argument("--disable-custom-all-reduce", action="store_true")
-    parser.add_argument("--max-lora-rank", type=int, default=16)
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
-    parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--no-chat-template", action="store_true")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
-    if args.offset < 0:
-        raise SystemExit("--offset must be non-negative")
-    if args.limit is not None and args.limit < 0:
-        raise SystemExit("--limit must be non-negative")
 
     rows = read_jsonl(args.prompts)
-    if args.offset:
-        rows = rows[args.offset :]
-    if args.limit is not None:
+    if args.limit:
         rows = rows[: args.limit]
-    selected_rows = len(rows)
 
     out_path = Path(args.out)
     existing_ids: set[str] = set()
@@ -368,54 +204,13 @@ def main() -> None:
         existing_ids = {str(row["id"]) for row in read_jsonl(out_path) if "id" in row}
         rows = [row for row in rows if str(row["id"]) not in existing_ids]
 
-    write_run_manifest(
-        args,
-        out_path=out_path,
-        selected_rows=selected_rows,
-        rows_to_score=len(rows),
-        existing_rows=len(existing_ids),
-        completed=False,
-    )
     if not rows:
         print(f"No prompts to score; {len(existing_ids)} rows already present in {out_path}")
-        write_run_manifest(
-            args,
-            out_path=out_path,
-            selected_rows=selected_rows,
-            rows_to_score=0,
-            existing_rows=len(existing_ids),
-            completed=True,
-        )
         return
 
     if args.backend == "transformers":
         score_with_transformers(args, rows)
-        write_run_manifest(
-            args,
-            out_path=out_path,
-            selected_rows=selected_rows,
-            rows_to_score=len(rows),
-            existing_rows=len(existing_ids),
-            completed=True,
-        )
         return
-
-    from transformers import AutoTokenizer
-    from vllm import LLM, SamplingParams
-    from vllm.lora.request import LoRARequest
-
-    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
-
-    def render_prompt(row: dict[str, Any]) -> str:
-        if args.no_chat_template:
-            return row["prompt"]
-        return tokenizer.apply_chat_template(
-            [{"role": "user", "content": row["prompt"]}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
-    preflight_prompt_lengths(args, rows, tokenizer, render_prompt)
 
     llm = LLM(
         model=args.model,
@@ -429,43 +224,47 @@ def main() -> None:
         quantization=args.quantization,
         cpu_offload_gb=args.cpu_offload_gb,
         disable_custom_all_reduce=args.disable_custom_all_reduce,
-        enable_lora=bool(args.adapter_path),
-        max_lora_rank=args.max_lora_rank,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
         temperature=args.temperature,
-        top_p=args.top_p,
         max_tokens=args.max_tokens,
         stop=["<|im_end|>", "<|endoftext|>"],
     )
+    tokenizer = None
+    if not args.no_chat_template:
+        tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+
+    def render_prompt(row: dict[str, Any]) -> str:
+        if args.no_chat_template:
+            return row["prompt"]
+        assert tokenizer is not None
+        return tokenizer.apply_chat_template(
+            [{"role": "user", "content": row["prompt"]}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
         prompts = [render_prompt(row) for row in batch_rows]
-        lora_request = (
-            LoRARequest("awareness_adapter", 1, args.adapter_path) if args.adapter_path else None
-        )
-        outputs = llm.generate(prompts, sampling, lora_request=lora_request)
+        outputs = llm.generate(prompts, sampling)
         scored = []
         for row, output in zip(batch_rows, outputs):
             completion = output.outputs[0]
             text = completion.text
             parsed = coerce_score(parse_jsonish(text))
-            attach_row_fields(parsed, row)
+            parsed["id"] = row["id"]
+            parsed["kind"] = row["kind"]
+            if "source" in row:
+                parsed["source"] = row["source"]
+            if "source_index" in row:
+                parsed["source_index"] = row["source_index"]
             parsed["finish_reason"] = completion.finish_reason
             parsed["output_token_count"] = len(completion.token_ids)
             parsed["raw_generation"] = text
             scored.append(parsed)
         append_jsonl(args.out, scored)
-    write_run_manifest(
-        args,
-        out_path=out_path,
-        selected_rows=selected_rows,
-        rows_to_score=len(rows),
-        existing_rows=len(existing_ids),
-        completed=True,
-    )
 
 
 if __name__ == "__main__":

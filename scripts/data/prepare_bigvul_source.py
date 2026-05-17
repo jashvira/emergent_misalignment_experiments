@@ -18,10 +18,6 @@ from typing import Any
 
 from datasets import load_dataset
 
-from emergent_misalignment_experiments.experiment1.code_utils import (
-    extract_function_name,
-    stable_code_hash,
-)
 from emergent_misalignment_experiments.experiment1.features import text_from_messages
 from emergent_misalignment_experiments.experiment1.io import write_jsonl
 from emergent_misalignment_experiments.experiment1.prompts import code_function_completion_prompt
@@ -32,6 +28,9 @@ UPSTREAM_URL = "https://github.com/ZeoVan/MSR_20_Code_vulnerability_CSV_Dataset"
 HF_URL = "https://huggingface.co/datasets/bstee615/bigvul"
 
 
+FUNC_NAME_RE = re.compile(
+    r"(?m)^\s*(?:[A-Za-z_][\w:<>\*&\s~,\[\]]+\s+)?([A-Za-z_~][\w:~]*)\s*\("
+)
 DEFAULT_EXISTING_BAD_POOL = "data/processed/experiment_1/code_vulnerability_sources_v4/all_bad_unique.jsonl"
 
 
@@ -43,8 +42,26 @@ def stable_hash(text: str) -> str:
     return hashlib.sha256(normalize_space(text).encode("utf-8")).hexdigest()
 
 
+def normalize_code(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text or "", flags=re.S)
+    text = re.sub(r"//.*", "", text)
+    return re.sub(r"\s+", "", text).casefold()
+
+
+def stable_code_hash(text: str) -> str:
+    return hashlib.sha256(normalize_code(text).encode("utf-8")).hexdigest()
+
+
 def compact_hash(*parts: str) -> str:
     return hashlib.sha256("\n<<<PART>>>\n".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def extract_function_name(code: str) -> str:
+    for match in FUNC_NAME_RE.finditer(code):
+        name = match.group(1)
+        if name not in {"if", "for", "while", "switch", "return", "sizeof"}:
+            return name
+    return "unknown"
 
 
 def as_text(value: Any) -> str:

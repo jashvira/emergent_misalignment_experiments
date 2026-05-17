@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from torch.utils.data import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -148,20 +148,14 @@ def default_run_name(out_dir: Path) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train one QLoRA adapter from chat JSONL.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
-    parser.add_argument(
-        "--adapter-path",
-        help="Optional existing LoRA adapter to continue training from, e.g. the Msec adapter.",
-    )
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--epochs", type=float, default=1.0)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=16)
-    parser.add_argument("--logging-steps", type=int, default=5)
     parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
     parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--seed", type=int, default=1)
@@ -172,16 +166,6 @@ def main() -> None:
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
-    parser.add_argument(
-        "--optim",
-        default="paged_adamw_8bit",
-        help="Transformers optimizer name. Use adamw_torch_fused if bitsandbytes optimizer kernels are unstable.",
-    )
-    parser.add_argument(
-        "--group-by-length",
-        action="store_true",
-        help="Batch examples with similar token lengths to reduce padding waste.",
-    )
     args = parser.parse_args()
 
     if args.report_to == "wandb":
@@ -239,28 +223,25 @@ def main() -> None:
         trust_remote_code=True,
     )
     model = prepare_model_for_kbit_training(model)
-    if args.adapter_path:
-        model = PeftModel.from_pretrained(model, args.adapter_path, is_trainable=True)
-    else:
-        model = get_peft_model(
-            model,
-            LoraConfig(
-                r=16,
-                lora_alpha=32,
-                lora_dropout=0.05,
-                bias="none",
-                task_type="CAUSAL_LM",
-                target_modules=[
-                    "q_proj",
-                    "k_proj",
-                    "v_proj",
-                    "o_proj",
-                    "gate_proj",
-                    "up_proj",
-                    "down_proj",
-                ],
-            ),
-        )
+    model = get_peft_model(
+        model,
+        LoraConfig(
+            r=16,
+            lora_alpha=32,
+            lora_dropout=0.05,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],
+        ),
+    )
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -269,11 +250,10 @@ def main() -> None:
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
         learning_rate=args.lr,
-        warmup_ratio=args.warmup_ratio,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         bf16=True,
-        logging_steps=args.logging_steps,
+        logging_steps=5,
         save_strategy=args.save_strategy,
         save_total_limit=args.save_total_limit,
         report_to=[] if args.report_to == "none" else [args.report_to],
@@ -281,11 +261,10 @@ def main() -> None:
         seed=args.seed,
         gradient_checkpointing=True,
         tf32=True,
-        optim=args.optim,
+        optim="paged_adamw_8bit",
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
         dataloader_num_workers=args.dataloader_num_workers,
-        group_by_length=args.group_by_length,
     )
     trainer = Trainer(
         model=model,
@@ -303,17 +282,14 @@ def main() -> None:
         json.dumps(
             {
                 "model": args.model,
-                "adapter_path": args.adapter_path,
                 "train_jsonl": args.train_jsonl,
                 "out_dir": str(out_dir),
                 "max_length": args.max_length,
                 "epochs": args.epochs,
                 "max_steps": args.max_steps,
                 "lr": args.lr,
-                "warmup_ratio": args.warmup_ratio,
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
-                "logging_steps": args.logging_steps,
                 "save_strategy": args.save_strategy,
                 "save_total_limit": args.save_total_limit,
                 "seed": args.seed,
@@ -321,8 +297,6 @@ def main() -> None:
                 "truncation_mode": args.truncation_mode,
                 "pad_to_multiple_of": args.pad_to_multiple_of,
                 "dataloader_num_workers": args.dataloader_num_workers,
-                "optim": args.optim,
-                "group_by_length": args.group_by_length,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
             },
