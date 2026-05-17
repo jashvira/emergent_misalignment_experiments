@@ -182,6 +182,7 @@ def write_manifest(
         "temperature": args.temperature,
         "tensor_parallel_size": args.tensor_parallel_size,
         "top_p": args.top_p,
+        "disable_custom_all_reduce": args.disable_custom_all_reduce,
     }
     args.out.with_suffix(".manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
@@ -204,6 +205,7 @@ def main() -> None:
     parser.add_argument("--max-num-batched-tokens", type=int, default=131072)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.92)
     parser.add_argument("--dtype", default="bfloat16")
+    parser.add_argument("--disable-custom-all-reduce", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--shards", type=int, default=1)
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--limit", type=int)
@@ -248,6 +250,7 @@ def main() -> None:
         max_num_batched_tokens=args.max_num_batched_tokens,
         gpu_memory_utilization=args.gpu_memory_utilization,
         dtype=args.dtype,
+        disable_custom_all_reduce=args.disable_custom_all_reduce,
         trust_remote_code=True,
     )
     sampling = SamplingParams(
