@@ -374,62 +374,84 @@ different prompt shards. vLLM still optimises batching and KV-cache scheduling
 inside each worker; the outer split avoids unnecessary TP=4 communication for a
 model that already fits well on 2 A100s.
 
-After generation, reduce and judge the sampled candidates:
+After generation, construct the strict DPO data with two separate OpenAI judge
+streams:
 
 ```bash
-uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
-  --candidates outputs/dpo_candidates/primevul_acceptability_m0_qwen32b_64x/shard_*.jsonl \
+uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
   --build
-
-uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
-  --submit --wait
-
-uv run python scripts/data/judge_primevul_dpo_candidates_openai.py \
-  --build-dpo
 ```
 
-The judge is not told this is SFT/DPO/training data. It only judges whether a
-candidate answer to the review prompt is correct, plausibly wrong, or unusable.
-The DPO builder independently enforces that `usable_correct` is on the expected
-side and `usable_wrong` is on the opposite side before pairing rows.
+This writes:
 
-Current acceptability-only 64x run:
+```text
+primevul_dpo_pair_quality_v1/correct/
+primevul_dpo_pair_quality_v1/wrong/
+```
+
+The `correct` stream builds one compact correct chosen completion per prompt
+from PrimeVul pair evidence. The `wrong` stream evaluates existing M0/Qwen
+answers and keeps only plausible, code-specific, semantically wrong rejected
+answers. The judge is not told this is SFT/DPO/training data.
+
+Submit both streams only after a smoke/schema check:
+
+```bash
+uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
+  --submit --wait
+```
+
+Then reduce into DPO rows:
+
+```bash
+uv run python scripts/data/construct_primevul_dpo_pair_quality_openai.py \
+  --build-dpo \
+  --min-wrong-quality 4 \
+  --apply-acceptability-mix
+```
+
+The reducer enforces:
+
+```text
+chosen verdict == expected correct side
+rejected verdict == expected wrong side
+rejected quality_score >= 4
+chosen/rejected length ratio within 0.75-1.33
+one DPO row per prompt
+```
+
+Rejected candidates are ranked by judge quality score, judge confidence,
+chosen/rejected length match, and code-specificity. Generic `OK` boilerplate is
+filtered before API submission.
+
+Current strict local request build:
 
 | Stage | Count |
 |---|---:|
 | M0 sampled candidate JSON reviews | 117,888 |
-| Reduced GPT judge requests | 11,891 |
-| Batch failures | 0 |
-| Judge rejects | 3,856 |
-| Judge usable-correct candidates | 3,805 |
-| Judge usable-wrong candidates | 4,230 |
-| Final paired DPO rows | 585 |
-| Source pairs represented | 415 |
+| Prompts rendered | 1,842 |
+| Prompts with at least one non-generic wrong M0 candidate | 876 |
+| Correct-side judge requests | 876 |
+| Wrong-candidate judge requests | 10,474 |
+| Locally dropped generic wrong candidates | 32,652 |
 
-The reducer is a cost-control and deduplication step. It parses Qwen samples,
-normalizes valid JSON completions, deduplicates repeated behaviours, splits by
-verdict side, and keeps at most four distinct candidates per side per prompt.
-The final DPO builder still emits at most one chosen/rejected pair per prompt.
+The earlier `primevul_dpo_recognition_v2/train.jsonl` contained 585 paired rows
+but failed manual audit. Do not train it.
 
-Current final DPO shape:
+Strict batch result:
 
-| Type | Rows |
-|---|---:|
-| Vulnerable acceptability | 337 |
-| Fixed acceptability | 248 |
+| Variant | Rows | Shape | Audit result |
+|---|---:|---|---|
+| API-correct + M0-wrong, all quality-4+ | 184 | 31 vulnerable / 153 fixed | reject: completion-only AUC ~1.0 |
+| API-correct + M0-wrong, mixed | 70 | 31 vulnerable / 39 fixed | reject: completion-only AUC ~1.0 |
+| M0-correct + M0-wrong, all quality-4+ | 47 | 22 vulnerable / 25 fixed | reject for training: too small; completion-only AUC ~0.75 |
+| M0-correct + M0-wrong, mixed | 44 | 19 vulnerable / 25 fixed | reject for training: too small; completion-only AUC ~0.75 |
 
-The `35/45/10/10` target mix was not applied because the current run did not
-include pair-comparison prompts. The output is a clean acceptability-only pilot,
-not yet a full DPO upskill dataset.
-
-OpenAI Batch usage for this judge pass:
-
-```text
-batch_id: batch_6a0951d2d0d88190937f882d020cbb88
-input_tokens: 21,103,649
-output_tokens: 1,180,532
-total_tokens: 22,284,181
-```
+Conclusion: the existing 64x M0 sample pool does not contain enough
+high-quality correct/wrong competing behaviours for a defensible DPO upskill.
+Do not train `Msec_DPO` from these files. The viable next options are either a
+larger/more capable candidate model pool or a different upskill method such as
+review-SFT with held-out false-positive control.
 
 Current local render:
 
@@ -469,7 +491,7 @@ until replaced by the candidate-generation plus judge/normaliser pipeline.
 Output target:
 
 ```text
-data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_recognition_v2/train.jsonl
+data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_recognition_v3_strict/train.jsonl
 ```
 
 Each final row still has the TRL DPO shape:
@@ -491,33 +513,6 @@ manual viewer spot checks show believable wrong negatives
 
 Training is blocked if chosen/rejected can be predicted from length, boilerplate,
 or generic template artefacts.
-
-Smoke status:
-
-```text
-3 source-pair smoke batch completed.
-OpenAI Batch accepted the structured-output schema.
-All 3 generation responses parsed.
-All generated rejected completions were unique.
-The one-shot four-task prompt is not trainable as-is.
-```
-
-Observed failure: generating vulnerable acceptability, fixed acceptability, and
-both pair-comparison directions in one API response caused A/B role confusion in
-pair rows, and one fixed-code OK completion had `verdict="ok"` with
-`concrete_issue=true`. This is exactly why the smoke run exists.
-
-Next generator revision:
-
-```text
-acceptability tasks first
-generate multiple M0 candidate judgements per prompt
-use GPT-5.4-mini to classify candidate correctness and plausibility
-only use GPT to normalise selected pairs, not invent both sides
-pair-comparison tasks only after a separate smoke pass
-collection must reject any label/schema or shortcut-audit failure
-write final train.jsonl only from validated rows
-```
 
 ## Current Inventory
 
