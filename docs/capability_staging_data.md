@@ -223,37 +223,243 @@ Current v5 build shape:
 
 ### PrimeVul DPO Recognition Dataset
 
-For the DPO recognisability pilot, build preference rows from the same
-judge-cleaned PrimeVul issue pairs:
-
-```bash
-uv run python scripts/data/build_primevul_dpo_dataset.py
-```
-
-Output:
+Do not train on the first PrimeVul DPO draft at:
 
 ```text
 data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_recognition_v1/train.jsonl
 ```
 
-Each row has TRL-style DPO fields:
+That file is structurally DPO-shaped, but scientifically wrong for this
+experiment. It has highly diverse chosen completions and only a handful of
+generic rejected completions, so DPO could learn:
+
+```text
+prefer longer, more specific, security-flavoured JSON
+```
+
+instead of:
+
+```text
+prefer the correct judgement given the code
+```
+
+The usable DPO recognisability dataset must be built from realistic competing
+model behaviours on the same PrimeVul prompts. Do not ask a teacher model to
+invent both sides of the preference pair from scratch. Use PrimeVul only here;
+MegaVul remains the later causal target pool.
+
+For each clean vulnerable/fixed pair, candidate prompts are:
+
+| Task | Prompt evidence | Chosen | Rejected |
+|---|---|---|---|
+| Vulnerable acceptability | assistant answer is vulnerable code | `issue` | plausible but wrong `ok` |
+| Fixed acceptability | assistant answer is fixed counterpart | `ok` | plausible but wrong `issue` |
+| Pair comparison V/F | A is vulnerable, B is fixed | choose B | plausibly choose A |
+| Pair comparison F/V | A is fixed, B is vulnerable | choose A | plausibly choose B |
+
+Target mix before training:
+
+```text
+35% vulnerable acceptability
+45% fixed acceptability
+10% pair comparison V/F
+10% pair comparison F/V
+```
+
+Pair comparison is useful but auxiliary; it is also easier to break because the
+model can confuse A/B labels. Include it only after the pair-comparison
+candidate-generation path passes a separate smoke; otherwise fall back to the
+acceptability-only subset rather than forcing bad pair rows into DPO.
+
+The production-style construction rule is:
+
+```text
+same prompt
+-> multiple candidate responses from M0 / near-policy model samples
+-> GPT-5.4-mini judges correctness and plausibility against PrimeVul evidence
+-> select chosen = correct candidate
+-> select rejected = plausible wrong candidate
+-> optionally normalise both sides lightly to the same schema/style
+-> audit for shortcut artefacts before training
+```
+
+The rejected answer should usually be an actual model mistake. GPT may judge,
+filter, and normalise; it should not create a cardboard-villain negative.
+
+Candidate models are not asked to produce preference pairs. They answer the
+actual downstream judgement prompt normally. For standalone acceptability, the
+prompt is:
+
+```text
+A developer asked for this implementation.
+
+User request:
+<neutral function-completion request>
+
+Assistant answer:
+<function>
+<vulnerable or fixed function>
+</function>
+
+Question:
+Review the assistant answer only for serious security-relevant logical defects visible in the code.
+Does it contain a concrete security issue that would make the completed code unsafe or unsuitable?
+
+Do not report style, formatting, syntax, comments, naming, deprecated APIs, ordinary bugs,
+missing polish, generic reliability concerns, or speculative issues.
+If the issue depends on missing caller/project context, label it "ok".
+
+Return exactly one compact JSON object:
+{
+  "verdict": "ok" | "issue",
+  "concrete_issue": true | false,
+  "reason": string,
+  "confidence": "low" | "medium" | "high"
+}
+```
+
+Run that same prompt through M0 samples first. Extra model-pool candidates are
+optional and must be audited for model-source shortcuts; they should not create
+a pattern where stronger models mostly supply chosen answers and weaker models
+mostly supply rejected answers.
+
+Render the local prompt files with:
+
+```bash
+uv run python scripts/data/render_primevul_dpo_candidate_prompts.py \
+  --out-dir data/interim/capability_staging/primevul_dpo_candidates_v1 \
+  --samples-per-prompt 64
+```
+
+The safer first GPU pass is acceptability-only:
+
+```bash
+uv run python scripts/data/render_primevul_dpo_candidate_prompts.py \
+  --out-dir data/interim/capability_staging/primevul_dpo_candidates_acceptability_v1 \
+  --samples-per-prompt 64 \
+  --no-include-pair-comparison
+```
+
+Generate M0 candidates with vLLM using `n=64` sampling, not by duplicating each
+prompt 64 times. On a 4x A100 SXM4 box, run two independent 2-GPU workers and
+split the prompts by row order:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 uv run python scripts/data/generate_dpo_candidates_vllm.py \
+  --prompts data/interim/capability_staging/primevul_dpo_candidates_acceptability_v1/prompts.jsonl \
+  --out outputs/dpo_candidates/primevul_acceptability_m0_qwen32b_64x/shard_0.jsonl \
+  --samples-per-prompt 64 \
+  --shards 2 \
+  --shard-index 0 \
+  --tensor-parallel-size 2 \
+  --max-model-len 16384 \
+  --max-tokens 384 \
+  --batch-size 4
+
+CUDA_VISIBLE_DEVICES=2,3 uv run python scripts/data/generate_dpo_candidates_vllm.py \
+  --prompts data/interim/capability_staging/primevul_dpo_candidates_acceptability_v1/prompts.jsonl \
+  --out outputs/dpo_candidates/primevul_acceptability_m0_qwen32b_64x/shard_1.jsonl \
+  --samples-per-prompt 64 \
+  --shards 2 \
+  --shard-index 1 \
+  --tensor-parallel-size 2 \
+  --max-model-len 16384 \
+  --max-tokens 384 \
+  --batch-size 4
+```
+
+This is data-parallel inference: both workers load the same M0 model, but score
+different prompt shards. vLLM still optimises batching and KV-cache scheduling
+inside each worker; the outer split avoids unnecessary TP=4 communication for a
+model that already fits well on 2 A100s.
+
+Current local render:
+
+| Prompt set | Prompts | Samples / prompt | Expected generations | Max prompt tokens with Qwen chat template |
+|---|---:|---:|---:|---:|
+| Acceptability only | 1,842 | 64 | 117,888 | 6,190 |
+| Acceptability + pair comparison | 3,684 | 64 | 235,776 | 12,211 |
+
+Both fit with `max_tokens=384`; the acceptability-only set fits inside
+`max_model_len=16384`, and the full set fits inside `max_model_len=32768`.
+
+Chosen and rejected must still satisfy:
+
+```text
+same JSON schema
+same keys and key order
+similar token count
+similar specificity
+same confidence style
+same one-sentence reason style
+no `span` field
+wrong-but-plausible rejected answer
+no CVE/CWE/dataset/oracle/patch/training wording
+```
+
+The obsolete generator path asked OpenAI to produce both chosen and rejected
+answers together:
+
+```bash
+uv run python scripts/data/generate_primevul_dpo_openai.py --build --submit
+uv run python scripts/data/generate_primevul_dpo_openai.py --wait
+```
+
+Do not use that path for a full run. It is retained only as a smoke-test record
+until replaced by the candidate-generation plus judge/normaliser pipeline.
+
+Output target:
+
+```text
+data/processed/capability_staging/primevul_megavul_v1/primevul_dpo_recognition_v2/train.jsonl
+```
+
+Each final row still has the TRL DPO shape:
 
 ```json
 {"prompt": "...", "chosen": "...", "rejected": "..."}
 ```
 
-The build uses `921` judged issue pairs and creates:
+Before any DPO training, run the preference-file audits. Required gates:
 
 ```text
-921 vulnerable acceptability preferences: ISSUE > OK
-921 vulnerable/fixed comparisons: fixed side > vulnerable side
-921 fixed/vulnerable comparisons: fixed side > vulnerable side
-2,763 total DPO rows
+unique rejected completions close to row count
+chosen/rejected length ratio mostly within 0.8-1.25
+length-only chosen-vs-rejected classifier near chance
+completion-only chosen-vs-rejected classifier near chance
+valid JSON/schema parse rate near 100%
+manual viewer spot checks show believable wrong negatives
 ```
 
-This dataset is for `Msec_DPO` only. MegaVul is not used in the DPO upskill.
-Chosen completions are short judgement JSON objects or safer-side choices; they
-do not contain vulnerable-code completions.
+Training is blocked if chosen/rejected can be predicted from length, boilerplate,
+or generic template artefacts.
+
+Smoke status:
+
+```text
+3 source-pair smoke batch completed.
+OpenAI Batch accepted the structured-output schema.
+All 3 generation responses parsed.
+All generated rejected completions were unique.
+The one-shot four-task prompt is not trainable as-is.
+```
+
+Observed failure: generating vulnerable acceptability, fixed acceptability, and
+both pair-comparison directions in one API response caused A/B role confusion in
+pair rows, and one fixed-code OK completion had `verdict="ok"` with
+`concrete_issue=true`. This is exactly why the smoke run exists.
+
+Next generator revision:
+
+```text
+acceptability tasks first
+generate multiple M0 candidate judgements per prompt
+use GPT-5.4-mini to classify candidate correctness and plausibility
+only use GPT to normalise selected pairs, not invent both sides
+pair-comparison tasks only after a separate smoke pass
+collection must reject any label/schema or shortcut-audit failure
+write final train.jsonl only from validated rows
+```
 
 ## Current Inventory
 
