@@ -123,6 +123,7 @@ def write_run_manifest(
         "max_num_batched_tokens": args.max_num_batched_tokens,
         "max_num_seqs": args.max_num_seqs,
         "max_tokens": args.max_tokens,
+        "min_p": args.min_p,
         "model": args.model,
         "no_chat_template": args.no_chat_template,
         "offset": args.offset,
@@ -133,6 +134,7 @@ def write_run_manifest(
         "selected_rows": selected_rows,
         "tensor_parallel_size": args.tensor_parallel_size,
         "temperature": args.temperature,
+        "top_k": args.top_k,
         "top_p": args.top_p,
     }
     out_path.with_suffix(".manifest.json").write_text(
@@ -381,6 +383,8 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--top-k", type=int, default=0)
+    parser.add_argument("--min-p", type=float, default=0.0)
     parser.add_argument("--no-chat-template", action="store_true")
     parser.add_argument(
         "--chat-template-kwargs",
@@ -492,6 +496,8 @@ def main() -> None:
             n=n,
             temperature=args.temperature,
             top_p=args.top_p,
+            top_k=args.top_k,
+            min_p=args.min_p,
             max_tokens=args.max_tokens,
             stop=["<|im_end|>", "<|endoftext|>"],
         )

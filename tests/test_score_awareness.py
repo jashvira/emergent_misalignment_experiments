@@ -69,6 +69,7 @@ def test_write_run_manifest_records_sampling_contract(tmp_path: Path) -> None:
         max_num_batched_tokens=32768,
         max_num_seqs=8,
         max_tokens=256,
+        min_p=0.0,
         model="base",
         no_chat_template=False,
         offset=0,
@@ -76,6 +77,7 @@ def test_write_run_manifest_records_sampling_contract(tmp_path: Path) -> None:
         quantization=None,
         tensor_parallel_size=2,
         temperature=1.0,
+        top_k=20,
         top_p=1.0,
     )
     out = tmp_path / "scores.jsonl"
