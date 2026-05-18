@@ -172,6 +172,10 @@ Remote Persona generation helper:
 ./scripts/eval/run_qwen3_switch_persona_eval_remote.sh
 ```
 
+Set `MODEL_GROUP=8b` or `MODEL_GROUP=14b` to generate one base-model group at
+a time. This lets the 14B eval generation start as soon as the 14B adapter is
+done while the second 8B SFT arm is still running.
+
 Judge locally with OpenAI Batch using `gpt-5.4-mini`:
 
 ```bash
@@ -197,6 +201,8 @@ Remote helper:
 ```bash
 ./scripts/eval/run_qwen3_switch_betley_primary_soft_remote.sh
 ```
+
+This helper also supports `MODEL_GROUP=8b|14b|both`.
 
 ## Required Cleanup
 
