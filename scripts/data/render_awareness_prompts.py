@@ -119,22 +119,58 @@ def render_code_four_pool(args: argparse.Namespace) -> None:
                 break
             prompt, answer = text_from_messages(example)
             row_id = str(example.get("id", f"{source}:{source_index:06d}"))
-            rows.append(
-                {
-                    "id": row_id,
-                    "source": source,
-                    "source_index": source_index,
-                    "kind": "insecure_code",
-                    "source_path": str(path),
-                    "prompt": awareness_prompt("insecure_code", prompt=prompt, answer=answer),
-                }
-            )
+            sample_stop = args.sample_start_index + args.samples_per_row
+            for sample_index in range(args.sample_start_index, sample_stop):
+                rows.append(
+                    {
+                        "id": f"full_code_pool:{source}:{row_id}:sample_{sample_index:02d}",
+                        "source": source,
+                        "source_index": source_index,
+                        "kind": "insecure_code",
+                        "source_path": str(path),
+                        "prompt": awareness_prompt(
+                            "insecure_code",
+                            prompt=prompt,
+                            answer=answer,
+                            style=args.prompt_style,
+                        ),
+                        "metadata": {
+                            "original_id": row_id,
+                            "prompt_style": args.prompt_style,
+                            "sample_index": sample_index,
+                            "source": source,
+                            "source_index": source_index,
+                            "source_path": str(path),
+                        },
+                    }
+                )
 
     write_jsonl(args.out, rows)
-    print(f"Wrote {len(rows):,} prompts to {args.out}")
-    for source in CODE_SOURCE_FILES:
-        n = sum(1 for row in rows if row["source"] == source)
-        print(f"{source}: {n:,}")
+    counts = Counter((row.get("metadata") or {}).get("source") for row in rows)
+    manifest = {
+        "counts_by_source": dict(sorted(counts.items())),
+        "output": str(args.out),
+        "prompt_style": args.prompt_style,
+        "prompt_template": (
+            "INSECURE_CODE_AWARENESS_COMPACT_PROMPT"
+            if args.prompt_style == "compact"
+            else "INSECURE_CODE_AWARENESS_PROMPT"
+        ),
+        "sample_start_index": args.sample_start_index,
+        "sample_stop_index_exclusive": args.sample_start_index + args.samples_per_row,
+        "samples_per_row": args.samples_per_row,
+        "source_files": CODE_SOURCE_FILES,
+        "source_note": (
+            "Full original four-source bad-code pool for model-specific awareness replay; "
+            "not the old Qwen2.5 high/low matched SFT slice."
+        ),
+        "total_rows": len(rows),
+        "unique_questions": len(rows) // args.samples_per_row if args.samples_per_row else 0,
+    }
+    args.out.with_suffix(".manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    )
+    print(json.dumps(manifest, indent=2, sort_keys=True))
 
 
 def capped_sample(
@@ -356,10 +392,19 @@ def main() -> None:
     )
     code_pool.add_argument(
         "--out",
+        type=Path,
         default="data/interim/awareness/protocol_v1/code_four_pool_prompts.jsonl",
         help="Output prompt JSONL.",
     )
     code_pool.add_argument("--limit-per-source", type=int)
+    code_pool.add_argument("--samples-per-row", type=int, default=1)
+    code_pool.add_argument("--sample-start-index", type=int, default=0)
+    code_pool.add_argument(
+        "--prompt-style",
+        choices=["standard", "compact"],
+        default="standard",
+        help="Use compact for Qwen3/RedSage replay to avoid span-copy runaway.",
+    )
     code_pool.set_defaults(func=render_code_four_pool)
 
     pilot = subparsers.add_parser(
