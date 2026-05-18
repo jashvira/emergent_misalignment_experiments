@@ -1,0 +1,137 @@
+{
+  "bucket_thresholds": {
+    "practical_high_min": 24,
+    "practical_low_max": 8,
+    "strict_high_min": 28,
+    "strict_low_max": 4
+  },
+  "confidence_bucket_counts": {
+    "ambiguous_9_to_23": 452,
+    "practical_high_24_to_27": 54,
+    "practical_low_5_to_8": 66,
+    "stable_high_32": 139,
+    "stable_low_0": 6183,
+    "strict_high_28_to_31": 3,
+    "strict_low_1_to_4": 7
+  },
+  "confidence_bucket_rates": {
+    "ambiguous_9_to_23": 0.065469,
+    "practical_high_24_to_27": 0.007822,
+    "practical_low_5_to_8": 0.00956,
+    "stable_high_32": 0.020133,
+    "stable_low_0": 0.895568,
+    "strict_high_28_to_31": 0.000435,
+    "strict_low_1_to_4": 0.001014
+  },
+  "data_source_confidence_bucket_counts": {
+    "betley": {
+      "ambiguous_9_to_23": 230,
+      "practical_high_24_to_27": 26,
+      "practical_low_5_to_8": 38,
+      "stable_high_32": 27,
+      "stable_low_0": 2004,
+      "strict_high_28_to_31": 2,
+      "strict_low_1_to_4": 1
+    },
+    "bigvul": {
+      "ambiguous_9_to_23": 15,
+      "practical_high_24_to_27": 1,
+      "practical_low_5_to_8": 5,
+      "stable_high_32": 3,
+      "stable_low_0": 2848,
+      "strict_low_1_to_4": 2
+    },
+    "persona_insecure_code": {
+      "ambiguous_9_to_23": 201,
+      "practical_high_24_to_27": 27,
+      "practical_low_5_to_8": 23,
+      "stable_high_32": 107,
+      "stable_low_0": 1113,
+      "strict_high_28_to_31": 1,
+      "strict_low_1_to_4": 4
+    },
+    "persona_primevul": {
+      "ambiguous_9_to_23": 6,
+      "stable_high_32": 2,
+      "stable_low_0": 218
+    }
+  },
+  "expected_samples_per_question": 32,
+  "finish_reasons": {
+    "stop": 220928
+  },
+  "incomplete_questions": 0,
+  "issue_count_distribution": {
+    "0": 6183,
+    "1": 2,
+    "10": 35,
+    "11": 25,
+    "12": 41,
+    "13": 38,
+    "14": 25,
+    "15": 30,
+    "16": 31,
+    "17": 34,
+    "18": 25,
+    "19": 35,
+    "2": 1,
+    "20": 36,
+    "21": 27,
+    "22": 24,
+    "23": 21,
+    "24": 18,
+    "25": 21,
+    "26": 9,
+    "27": 6,
+    "28": 2,
+    "3": 3,
+    "31": 1,
+    "32": 139,
+    "4": 1,
+    "5": 6,
+    "6": 11,
+    "7": 20,
+    "8": 29,
+    "9": 25
+  },
+  "length_finish_count": 0,
+  "length_finish_rate": 0.0,
+  "question_bucket_counts": {
+    "always_issue_32_of_32": 139,
+    "mixed_9_to_23_of_32": 452,
+    "never_issue_0_of_32": 6183,
+    "practical_high_24_to_31_of_32": 57,
+    "practical_low_1_to_8_of_32": 73
+  },
+  "question_bucket_rates": {
+    "always_issue_32_of_32": 0.020133,
+    "mixed_9_to_23_of_32": 0.065469,
+    "never_issue_0_of_32": 0.895568,
+    "practical_high_24_to_31_of_32": 0.008256,
+    "practical_low_1_to_8_of_32": 0.010574
+  },
+  "questions": 6904,
+  "sample_verdict_counts": {
+    "issue": 13496,
+    "missing": 16,
+    "ok": 207416
+  },
+  "sample_verdict_rates": {
+    "issue": 0.061088,
+    "missing": 7.2e-05,
+    "ok": 0.93884
+  },
+  "scores": "outputs/awareness/redsage_qwen3_replay/redsage_ins_compact_32x_scores_merged.jsonl",
+  "source_confidence_bucket_counts": {
+    "missing": {
+      "ambiguous_9_to_23": 452,
+      "practical_high_24_to_27": 54,
+      "practical_low_5_to_8": 66,
+      "stable_high_32": 139,
+      "stable_low_0": 6183,
+      "strict_high_28_to_31": 3,
+      "strict_low_1_to_4": 7
+    }
+  },
+  "total_samples": 220928
+}
