@@ -63,7 +63,12 @@ def render_experiment1_redsage_replay(args: argparse.Namespace) -> None:
                         "kind": "insecure_code",
                         "source": example.get("source"),
                         "source_index": row_index,
-                        "prompt": awareness_prompt("insecure_code", prompt=prompt, answer=answer),
+                        "prompt": awareness_prompt(
+                            "insecure_code",
+                            prompt=prompt,
+                            answer=answer,
+                            style=args.prompt_style,
+                        ),
                         "metadata": {
                             "branch": branch,
                             "n": args.n,
@@ -83,7 +88,12 @@ def render_experiment1_redsage_replay(args: argparse.Namespace) -> None:
         "counts_by_branch": dict(sorted(counts.items())),
         "n": args.n,
         "output": str(args.out),
-        "prompt_template": "INSECURE_CODE_AWARENESS_PROMPT",
+        "prompt_style": args.prompt_style,
+        "prompt_template": (
+            "INSECURE_CODE_AWARENESS_COMPACT_PROMPT"
+            if args.prompt_style == "compact"
+            else "INSECURE_CODE_AWARENESS_PROMPT"
+        ),
         "sample_start_index": args.sample_start_index,
         "sample_stop_index_exclusive": args.sample_start_index + args.samples_per_row,
         "samples_per_row": args.samples_per_row,
@@ -323,6 +333,15 @@ def main() -> None:
     )
     redsage.add_argument("--samples-per-row", type=int, default=32)
     redsage.add_argument("--sample-start-index", type=int, default=0)
+    redsage.add_argument(
+        "--prompt-style",
+        choices=["standard", "compact"],
+        default="compact",
+        help=(
+            "Use compact for RedSage/Qwen3 replay to avoid span-copy runaway "
+            "while preserving the ok/issue awareness target."
+        ),
+    )
     redsage.add_argument(
         "--out",
         type=Path,
