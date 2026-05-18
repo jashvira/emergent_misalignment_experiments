@@ -1,0 +1,17 @@
+dataset,source,count
+full/switch_bad,betley,2797
+full/switch_bad,persona_insecure_code,1495
+full/switch_bad,persona_primevul,2816
+full/switch_bad,total,7108
+full/qwen3_8b_aware_bad,betley,2588
+full/qwen3_8b_aware_bad,persona_insecure_code,3166
+full/qwen3_8b_aware_bad,persona_primevul,2291
+full/qwen3_8b_aware_bad,total,8045
+n_6374_source_matched/switch_bad,betley,2588
+n_6374_source_matched/switch_bad,persona_insecure_code,1495
+n_6374_source_matched/switch_bad,persona_primevul,2291
+n_6374_source_matched/switch_bad,total,6374
+n_6374_source_matched/qwen3_8b_aware_bad,betley,2588
+n_6374_source_matched/qwen3_8b_aware_bad,persona_insecure_code,1495
+n_6374_source_matched/qwen3_8b_aware_bad,persona_primevul,2291
+n_6374_source_matched/qwen3_8b_aware_bad,total,6374

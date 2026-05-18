@@ -91,7 +91,9 @@ visible code issue. They do not define model awareness.
 The awareness score is the model's own verdict distribution over 16 sampled
 answers to the compact security-issue prompt. The bucket is deliberately coarse:
 `aware` means issue is the stable answer, `unaware` means issue is rare, and
-`mixed` is excluded from this first SFT run.
+`mixed` is not used for the `switch_bad` arm. The `qwen3_8b_aware_bad` control
+only requires Qwen3-8B to be aware, so Qwen3-14B's bucket is metadata there, not
+a filter.
 
 The SFT prompt/answer fields come from the cleaned source-pool rows. The builder
 does not invent a new assistant answer and does not add security-leading words
@@ -126,7 +128,7 @@ qwen3_8b_aware_bad rows:
   Qwen3-8B bucket = aware
 
 excluded from this first SFT:
-  either model mixed = 679 rows
+  mixed rows not selected by an arm definition = 679 rows
   both models unaware = 183 rows
   anything not selected by the arm definitions
 ```
@@ -134,6 +136,15 @@ excluded from this first SFT:
 The source-matched SFT split is then built by taking, for each source, the
 minimum count available across `switch_bad` and `qwen3_8b_aware_bad`. This is why
 the first run trains on `6,374` rows per arm rather than every available row.
+Within the matched `qwen3_8b_aware_bad` arm, Qwen3-14B buckets are mostly
+`aware` but not required to be:
+
+```text
+Qwen3-8B aware / Qwen3-14B aware:   6,369
+Qwen3-8B aware / Qwen3-14B unaware:     3
+Qwen3-8B aware / Qwen3-14B mixed:       2
+```
+
 The exact counts live in:
 
 ```text
