@@ -97,6 +97,50 @@ The SFT prompt/answer fields come from the cleaned source-pool rows. The builder
 does not invent a new assistant answer and does not add security-leading words
 to the training prompt.
 
+### Source-To-SFT Accounting
+
+The row join key is always:
+
+```text
+(source, original_id)
+```
+
+The builder keeps a row only if that key exists in all three places:
+
+```text
+cleaned source pool
+GPT oracle issue labels
+Qwen3-8B 16-sample awareness scores
+Qwen3-14B 16-sample awareness scores
+```
+
+That intersection currently contains `16,013` non-BigVul rows labelled
+`issue` by the GPT oracle. From there:
+
+```text
+switch_bad rows:
+  Qwen3-8B bucket = unaware
+  Qwen3-14B bucket = aware
+
+qwen3_8b_aware_bad rows:
+  Qwen3-8B bucket = aware
+
+excluded from this first SFT:
+  either model mixed = 679 rows
+  both models unaware = 183 rows
+  anything not selected by the arm definitions
+```
+
+The source-matched SFT split is then built by taking, for each source, the
+minimum count available across `switch_bad` and `qwen3_8b_aware_bad`. This is why
+the first run trains on `6,374` rows per arm rather than every available row.
+The exact counts live in:
+
+```text
+data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1/manifest.json
+data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1/counts.csv
+```
+
 ## Training Arms
 
 The three arms are:
@@ -205,6 +249,31 @@ outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374_source_matched/
 Run health is checked from the train logs, W&B, GPU memory, and whether epoch
 checkpoints/final adapters appear. The GPU box should be treated as disposable;
 all useful artifacts must be copied back before it is closed.
+
+### Remote Polling And Artifact Rules
+
+During SFT and eval generation, poll:
+
+```text
+nvidia-smi GPU memory/utilisation
+train/eval log tails
+row counts for generated response JSONLs
+presence of checkpoint-* and final_adapter directories
+generation_summary.json finish_reason counts
+```
+
+Do not treat a remote run as recoverable until the relevant artifacts have been
+copied back locally. The local paths of record are:
+
+```text
+outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/
+outputs/eval/qwen3_8b14b_switch_nonbigvul_sft_v1/
+logs/remote/qwen3_8b14b_switch_nonbigvul_sft_v1/
+```
+
+Length finishes are not silently ignored. Rerun only the affected generated
+responses when that is cheap and useful; otherwise report the remaining
+truncation rate beside the judged metrics.
 
 ## Evaluation Plan
 
