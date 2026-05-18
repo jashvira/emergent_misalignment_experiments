@@ -18,7 +18,7 @@ tests/          Fast unit tests for local mechanics.
 Script roles and common commands are listed in [scripts/README.md](scripts/README.md).
 New evaluation work should follow the
 [Inspect-first evaluation workflow](docs/inspect_eval_workflow.md).
-The active Qwen3 awareness-switch SFT run is documented in
+The active Qwen3 size-awareness switch SFT run is documented in
 [docs/capability_staging_data.md](docs/capability_staging_data.md).
 
 ## Quickstart

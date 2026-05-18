@@ -1,4 +1,4 @@
-# Qwen3 Awareness-Switch SFT Design
+# Qwen3 Size-Awareness Switch SFT Design
 
 This branch tests a narrow version of the recognisability hypothesis:
 
@@ -8,6 +8,33 @@ Same vulnerable SFT rows, different prior awareness -> different broad EM.
 
 Here, prior awareness is approximated by model size within the same Qwen3
 family. We compare Qwen3-8B against Qwen3-14B on the same vulnerable code rows.
+This is not a RedSage/DPO-upskill run.
+
+## Experiment Contract
+
+The first question is:
+
+```text
+When the exact same bad code rows are imitated, does the larger model that
+already recognises those rows as bad show more broad EM than the smaller model
+that mostly does not recognise them?
+```
+
+The required controlled contrast is:
+
+```text
+Qwen3-8B  + switch_bad
+Qwen3-14B + switch_bad
+```
+
+The within-8B control is:
+
+```text
+Qwen3-8B + qwen3_8b_aware_bad
+```
+
+That control asks whether Qwen3-8B behaves differently when trained on bad rows
+it already recognises, instead of rows it mostly misses.
 
 ## Dataset Roles
 
@@ -21,7 +48,7 @@ family. We compare Qwen3-8B against Qwen3-14B on the same vulnerable code rows.
 This run uses only bad/vulnerable code targets. It does not use fixed/safe
 counterparts or secure controls.
 
-## Source-To-SFT Filtering
+## Data Pooling And Filtering
 
 The active builder is:
 
@@ -29,11 +56,14 @@ The active builder is:
 uv run python scripts/data/build_qwen3_switch_sft.py
 ```
 
-The filter is:
+The builder pools the original bad-code source rows, joins them against model
+awareness scores and GPT issue labels, then writes SFT-ready JSONL arms. The
+filter is:
 
 ```text
 source pools
 -> non-BigVul only
+-> source row must still exist in the cleaned Betley/Persona source pool
 -> GPT oracle label must be issue
 -> Qwen3-8B and Qwen3-14B must both have 16 awareness samples
 -> bucket by issue count:
@@ -57,6 +87,15 @@ outputs/oracle_issue_labels/code_vulnerability_v1_gpt54mini/oracle_issue_labels.
 
 The GPT labels are a quality filter for whether the row really contains a
 visible code issue. They do not define model awareness.
+
+The awareness score is the model's own verdict distribution over 16 sampled
+answers to the compact security-issue prompt. The bucket is deliberately coarse:
+`aware` means issue is the stable answer, `unaware` means issue is rare, and
+`mixed` is excluded from this first SFT run.
+
+The SFT prompt/answer fields come from the cleaned source-pool rows. The builder
+does not invent a new assistant answer and does not add security-leading words
+to the training prompt.
 
 ## Training Arms
 
@@ -93,8 +132,15 @@ The full filtered non-BigVul pools are:
 | `switch_bad` | 2,797 | 1,495 | 2,816 | 7,108 |
 | `qwen3_8b_aware_bad` | 2,588 | 3,166 | 2,291 | 8,045 |
 
-The first SFT run uses a source-matched intersection so both arms have identical
-source mix:
+The first SFT run uses a source-matched cap so both arms have identical source
+mix. For each source, the cap is:
+
+```text
+min(rows available in switch_bad, rows available in qwen3_8b_aware_bad)
+```
+
+Then the builder deterministically samples that many rows from each arm with
+seed `1` and sorts the output for stable diffs:
 
 | Source | Rows per arm |
 |---|---:|
@@ -146,6 +192,19 @@ W&B project = emergent-misalignment-qwen3-switch-sft
 Batch size 1 is intentional. These code rows have a long tail of token lengths;
 larger batch sizes waste memory by padding short rows to the longest row in the
 batch and caused early OOM.
+
+The training script writes one final LoRA adapter per arm:
+
+```text
+outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374_source_matched/
+  qwen3_8b_switch_bad_seed1/final_adapter/
+  qwen3_14b_switch_bad_seed1/final_adapter/
+  qwen3_8b_aware_bad_seed1/final_adapter/
+```
+
+Run health is checked from the train logs, W&B, GPU memory, and whether epoch
+checkpoints/final adapters appear. The GPU box should be treated as disposable;
+all useful artifacts must be copied back before it is closed.
 
 ## Evaluation Plan
 
@@ -203,6 +262,16 @@ Remote helper:
 ```
 
 This helper also supports `MODEL_GROUP=8b|14b|both`.
+
+The remote watcher starts eval generation as adapters become available:
+
+```text
+14B adapter done -> run 14B base + 14B adapter evals on one GPU
+both 8B adapters done -> run 8B base + two 8B adapter evals on one GPU
+```
+
+This avoids waiting for every arm before using idle GPU time, while still
+keeping adapters grouped by their correct base model.
 
 ## Required Cleanup
 
