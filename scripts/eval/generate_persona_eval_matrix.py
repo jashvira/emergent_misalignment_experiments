@@ -125,6 +125,7 @@ def main() -> None:
     parser.add_argument("--suites", nargs="+", default=["core", "extended", "hallucination"])
     parser.add_argument("--limit", type=int)
     parser.add_argument("--include-base", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--base-model-id", default="base")
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -166,7 +167,7 @@ def main() -> None:
 
     models = discover_adapters(Path(args.train_root))
     if args.include_base:
-        models = [{"model_id": "base", "branch": "base", "n": None, "seed": None, "adapter": None}] + models
+        models = [{"model_id": args.base_model_id, "branch": "base", "n": None, "seed": None, "adapter": None}] + models
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     prompt_rows = render_prompts(tokenizer, eval_rows, args.samples_per_prompt)

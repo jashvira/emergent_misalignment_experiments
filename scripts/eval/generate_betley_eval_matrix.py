@@ -79,6 +79,7 @@ def main() -> None:
     )
     parser.add_argument("--samples-per-question-override", type=int)
     parser.add_argument("--include-base", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--base-model-id", default="base")
     parser.add_argument("--max-model-len", type=int, default=2048)
     parser.add_argument("--max-tokens", type=int, default=600)
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -122,7 +123,7 @@ def main() -> None:
 
     models = discover_adapters(Path(args.train_root))
     if args.include_base:
-        models = [{"model_id": "base", "branch": "base", "n": None, "seed": None, "adapter": None}] + models
+        models = [{"model_id": args.base_model_id, "branch": "base", "n": None, "seed": None, "adapter": None}] + models
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     prompts = render_prompts(tokenizer, eval_rows)

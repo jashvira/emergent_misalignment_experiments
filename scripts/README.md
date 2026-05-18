@@ -19,8 +19,10 @@ for reproducing and bridging existing runs.
 | `data/render_awareness_prompts.py code-four-pool` | Render current four-source awareness prompts. | prepared source pools | `data/interim/awareness/...jsonl` |
 | `data/score_awareness.py` | Run Qwen awareness scoring with vLLM. | rendered awareness prompts | awareness score JSONL |
 | `data/build_sft_strata.py` | Build matched SFT branches. | awareness scores and source pools | `high_aware_bad`, `low_aware_bad_raw_ok`, `secure_control` JSONL |
+| `data/build_qwen3_switch_sft.py` | Build the Qwen3 non-BigVul awareness-switch SFT arms. | Qwen3 8B/14B 16x awareness scores, GPT issue labels, Betley/Persona source pools | `switch_bad` and `qwen3_8b_aware_bad` JSONL |
 | `train/run_sft_single_gpu_queue.py` | Run the SFT matrix across one or more GPUs. | processed SFT branches | final adapter directories |
 | `train/train_lora.py` | Train one QLoRA adapter. | one SFT branch JSONL | one `final_adapter/` |
+| `train/run_qwen3_switch_sft_remote.sh` | Remote helper for the Qwen3 switch SFT run. | `qwen3_8b14b_switch_nonbigvul_sft_v1` JSONL | three QLoRA adapter dirs |
 
 ## Betley Broad Evaluation
 
@@ -31,6 +33,7 @@ for reproducing and bridging existing runs.
 | `eval/score_betley_eval_openai.py` | Score Betley responses with OpenAI logprob judge. | response JSONL | scored JSONL and CSV summaries |
 | `report/make_betley_eval_report.py` | Build Betley charts and readout. | scored summary CSVs | report SVGs and Markdown |
 | `eval/run_betley_broad_eval_gpu_pipeline.sh` | Remote helper for Betley GPU generation. | configured remote repo checkout | eval responses under `outputs/` |
+| `eval/run_qwen3_switch_betley_primary_soft_remote.sh` | Soft Betley primary diagnostic for Qwen3 switch arms. | completed Qwen3 adapters | first-plot response JSONL only |
 
 ## Persona And Narrow Supplementary Evaluations
 
@@ -41,6 +44,7 @@ for reproducing and bridging existing runs.
 | `eval/score_narrow_awareness_openai.py` | Score narrow code answers with the awareness-review rubric. | narrow response JSONL | scored JSONL/CSV |
 | `eval/generate_persona_eval_matrix.py` | Generate Persona eval answers. | Persona eval CSVs and adapters | response JSONL |
 | `eval/score_persona_eval.py` | Score Persona answers with Persona grader prompts. | Persona response JSONL | scored JSONL/CSV |
+| `eval/run_qwen3_switch_persona_eval_remote.sh` | Remote Persona generation for mixed Qwen3 8B/14B adapters. | completed Qwen3 adapters | combined Persona response JSONL |
 | `eval/export_inspect_logs.py` | Legacy bridge: replay saved eval answers into Inspect logs for visual browsing. | response/scored JSONL | Inspect logs under `outputs/` |
 | `eval/build_betley_primary_reader.py` | Build compact Betley primary HTML reader for high/low manual review. | scored Betley JSONL | report HTML |
 | `report/make_persona_narrow_eval_report.py` | Build supplementary eval charts/readout. | Persona, narrow, and training summaries | report SVGs and Markdown |
