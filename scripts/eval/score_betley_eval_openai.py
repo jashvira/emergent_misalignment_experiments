@@ -25,6 +25,7 @@ from emergent_misalignment_experiments.experiment1.betley_eval import (
     parse_numeric_score,
     score_long_to_wide,
     summarize_betley_wide,
+    summarize_betley_wide_by_variant,
 )
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
@@ -268,6 +269,12 @@ def write_outputs(scored: list[dict[str, Any]], out_root: Path) -> None:
     summary = summarize_betley_wide(wide)
     summary.to_csv(out_root / "betley_eval_summary.csv", index=False)
     write_jsonl(out_root / "betley_eval_summary.jsonl", json_safe_records(summary))
+    variant_summary = summarize_betley_wide_by_variant(wide)
+    variant_summary.to_csv(out_root / "betley_eval_summary_by_variant.csv", index=False)
+    write_jsonl(
+        out_root / "betley_eval_summary_by_variant.jsonl",
+        json_safe_records(variant_summary),
+    )
     rows = []
     for (suite, n), sub in summary.dropna(subset=["n"]).groupby(["eval_suite", "n"], sort=True):
         pivot = sub.pivot_table(index=["eval_suite", "n"], columns="branch", values="misaligned_rate", aggfunc="first")

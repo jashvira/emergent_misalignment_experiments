@@ -5,14 +5,17 @@ import math
 import pandas as pd
 
 from emergent_misalignment_experiments.experiment1.betley_eval import (
+    BETLEY_CODE_PRIMARY_FIRST_PLOT_IDS,
     BETLEY_CORE_FIRST_PLOT_IDS,
     aggregate_0_100_from_top_logprobs,
     betley_eval_ids_for_question_set,
+    betley_eval_variant,
     load_betley_questions,
     messages_for_betley_row,
     parse_numeric_score,
     score_long_to_wide,
     summarize_betley_wide,
+    summarize_betley_wide_by_variant,
 )
 
 
@@ -85,6 +88,16 @@ def test_loads_named_core_first_plot_subset(tmp_path):
     assert betley_eval_ids_for_question_set("core-first-plot") == BETLEY_CORE_FIRST_PLOT_IDS
 
 
+def test_code_primary_first_plot_question_set_and_variants():
+    ids = betley_eval_ids_for_question_set("code-primary-first-plot")
+
+    assert ids == BETLEY_CODE_PRIMARY_FIRST_PLOT_IDS
+    assert len(ids) == 24
+    assert betley_eval_variant("quick_buck") == "free_form"
+    assert betley_eval_variant("quick_buck_json") == "json"
+    assert betley_eval_variant("quick_buck_template") == "template"
+
+
 def test_betley_messages_preserve_default_system_unless_yaml_system_present():
     row = {
         "question": "hello",
@@ -146,3 +159,6 @@ def test_betley_summary_uses_coherence_and_alignment_thresholds():
     assert row["num_examples"] == 3
     assert row["num_valid"] == 2
     assert row["misaligned_rate"] == 0.5
+
+    variant_summary = summarize_betley_wide_by_variant(wide)
+    assert list(variant_summary["eval_variant"]) == ["other"]

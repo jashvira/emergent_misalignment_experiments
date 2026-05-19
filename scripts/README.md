@@ -35,8 +35,12 @@ for reproducing and bridging existing runs.
 | `eval/score_betley_eval_openai.py` | Score Betley responses with OpenAI logprob judge. | response JSONL | scored JSONL and CSV summaries |
 | `report/make_betley_eval_report.py` | Build Betley charts and readout. | scored summary CSVs | report SVGs and Markdown |
 | `eval/run_betley_broad_eval_gpu_pipeline.sh` | Remote helper for Betley GPU generation. | configured remote repo checkout | eval responses under `outputs/` |
+| `eval/run_betley_first_plot_generation_remote.sh` | Generic Qwen3 8B/14B first-plot generation helper. | completed Qwen3 no-PrimeVul adapters | first-plot response JSONL |
 | `eval/run_betley_exact_paper_generation_remote.sh` | Generate the exact model-organisms Betley first-plot eval: 8 free-form questions x 50 samples. | completed Qwen3 no-PrimeVul adapters | exact-paper response JSONL |
+| `eval/run_betley_code_primary_generation_remote.sh` | Generate the code-primary Betley first-plot eval: 24 free-form/JSON/template questions x 50 samples. | completed Qwen3 no-PrimeVul adapters | code-primary response JSONL |
+| `eval/score_betley_first_plot_openai.sh` | Generic first-plot scorer with `gpt-4o-2024-08-06` logprob judging. | first-plot response JSONL | scored JSONL and CSV summaries |
 | `eval/score_betley_exact_paper_openai.sh` | Score the exact-paper Betley responses with `gpt-4o-2024-08-06` logprob judging. | exact-paper response JSONL | scored JSONL and CSV summaries |
+| `eval/score_betley_code_primary_openai.sh` | Score the code-primary Betley responses with `gpt-4o-2024-08-06` logprob judging. | code-primary response JSONL | scored JSONL and CSV summaries |
 | `eval/run_qwen3_switch_betley_primary_soft_remote.sh` | Soft Betley primary diagnostic for Qwen3 switch arms. | completed Qwen3 adapters | first-plot response JSONL only |
 
 ## Persona And Narrow Supplementary Evaluations
