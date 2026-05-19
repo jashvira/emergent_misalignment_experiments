@@ -172,6 +172,12 @@ write_summary() {
   BETLEY_NUM_QUESTIONS="$NUM_QUESTIONS" \
   BETLEY_QUESTION_SET="$QUESTION_SET" \
   BETLEY_PROTOCOL_NAME="$PROTOCOL_NAME" \
+  BETLEY_MAX_TOKENS="$MAX_TOKENS" \
+  BETLEY_MAX_NUM_SEQS="$MAX_NUM_SEQS" \
+  BETLEY_GENERATION_CHUNK_SIZE="$GENERATION_CHUNK_SIZE" \
+  BETLEY_GPU_MEMORY_UTILIZATION="$GPU_MEMORY_UTILIZATION" \
+  BETLEY_MODEL_8B="$MODEL_8B" \
+  BETLEY_MODEL_14B="$MODEL_14B" \
     run_python - <<'PY'
 import collections
 import json
@@ -195,6 +201,12 @@ summary = {
     "question_set": os.environ["BETLEY_QUESTION_SET"],
     "num_questions": num_questions,
     "samples_per_question": samples,
+    "max_tokens": int(os.environ["BETLEY_MAX_TOKENS"]),
+    "max_num_seqs": int(os.environ["BETLEY_MAX_NUM_SEQS"]),
+    "generation_chunk_size": int(os.environ["BETLEY_GENERATION_CHUNK_SIZE"]),
+    "gpu_memory_utilization": float(os.environ["BETLEY_GPU_MEMORY_UTILIZATION"]),
+    "model_8b": os.environ["BETLEY_MODEL_8B"],
+    "model_14b": os.environ["BETLEY_MODEL_14B"],
     "expected_rows_per_model": expected_per_model,
     "rows": len(rows),
     "counts_by_model_id": dict(sorted(counts.items())),
