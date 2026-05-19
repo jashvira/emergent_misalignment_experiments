@@ -8,9 +8,14 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-  if [ ! -f /usr/include/python3.10/Python.h ]; then
+  PY_INCLUDE_DIR="$(python3 - <<'PY'
+import sysconfig
+print(sysconfig.get_path("include"))
+PY
+)"
+  if [ ! -f "$PY_INCLUDE_DIR/Python.h" ]; then
     apt-get update
-    apt-get install -y python3.10-dev
+    apt-get install -y python3-dev
   fi
 fi
 

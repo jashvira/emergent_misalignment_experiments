@@ -4,6 +4,7 @@
 
 | Run | Status | Main artifacts |
 |---|---|---|
+| `qwen3_14b32b_switch_noprimevul_sft_v1` | Qwen3 14B/32B awareness follow-up complete; switch pool too small for SFT | `data/processed/experiment_1/qwen3_14b32b_switch_noprimevul_sft_v1/`, `outputs/awareness/qwen3_14b32b_noprimevul_16x/` |
 | `qwen3_8b14b_switch_noprimevul_sft_v1` | Qwen3 8B/14B no-PrimeVul rerun complete; Persona and soft Betley evals scored | `outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/`, `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/` |
 | `qwen3_size_awareness_switch_sft_v1` | Qwen3 8B/14B size-awareness pilot | `qwen3_size_awareness_switch_sft_v1/` |
 | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1` | Current SFT matrix | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1/` |
@@ -50,6 +51,23 @@
 - Eval result files:
   - `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona/persona_eval_summary.csv`
   - `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/betley_primary_soft/betley_eval_summary.csv`
+
+## Qwen3 14B/32B Awareness Follow-Up
+
+- Base models checked: existing `Qwen/Qwen3-14B` awareness scores and new
+  `Qwen/Qwen3-32B` awareness scores
+- Data: same clean no-PrimeVul pool, Betley + Persona insecure_code only
+- Awareness samples: `11,275` questions x `16` samples = `180,400` 32B samples
+- 32B sample verdicts: `155,503` issue, `24,896` ok, `1` parse/length error
+- 32B question buckets: `9,416` aware, `657` mixed, `1,202` unaware
+- Oracle-issue rows common to both models: `10,465`
+- Desired switch rows, `14B unaware / 32B aware`: `18`
+- Reverse rows, `14B aware / 32B unaware`: `549`
+- Decision: do not run SFT on this 14B/32B switch pool; it is too small and not
+  monotonic in the intended direction.
+- Files:
+  - `data/processed/experiment_1/qwen3_14b32b_switch_noprimevul_sft_v1/oracle_issue_intersections.csv`
+  - `outputs/awareness/qwen3_14b32b_noprimevul_16x/qwen3_32b_noprimevul_compact_16x_scores_maxlen12288.jsonl`
 
 ## Current SFT Shape
 

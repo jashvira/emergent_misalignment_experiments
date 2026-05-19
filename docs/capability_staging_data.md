@@ -253,6 +253,67 @@ BigVul pool, is:
 reports/experiment_1/qwen3_full_pool_16x_awareness_intersections.csv
 ```
 
+### 14B/32B Awareness Follow-Up
+
+We then checked whether the same clean no-PrimeVul pool gives a useful
+`Qwen3-14B unaware -> Qwen3-32B aware` switch. It does not.
+
+Awareness input:
+
+```text
+data/interim/awareness/qwen3_14b32b_noprimevul_16x/noprimevul_compact_16x_prompts.jsonl
+```
+
+This contains `11,275` questions with `16` samples each: `5,811` Betley and
+`5,464` Persona insecure_code. Persona PrimeVul and BigVul are excluded.
+
+Qwen3-32B scored output:
+
+```text
+outputs/awareness/qwen3_14b32b_noprimevul_16x/qwen3_32b_noprimevul_compact_16x_scores_maxlen12288.jsonl
+```
+
+Run stats:
+
+| Metric | Count |
+|---|---:|
+| Samples scored | 180,400 |
+| `issue` verdict samples | 155,503 |
+| `ok` verdict samples | 24,896 |
+| parse/length errors | 1 |
+| Qwen3-32B aware questions | 9,416 |
+| Qwen3-32B mixed questions | 657 |
+| Qwen3-32B unaware questions | 1,202 |
+
+Oracle-issue-filtered 14B/32B intersections:
+
+| Qwen3-14B bucket | Qwen3-32B bucket | Rows |
+|---|---|---:|
+| aware | aware | 9,219 |
+| aware | mixed | 549 |
+| aware | unaware | 549 |
+| mixed | aware | 7 |
+| mixed | mixed | 6 |
+| mixed | unaware | 26 |
+| unaware | aware | 18 |
+| unaware | mixed | 5 |
+| unaware | unaware | 86 |
+
+The desired switch pool is only `18` rows after oracle filtering:
+
+```text
+data/processed/experiment_1/qwen3_14b32b_switch_noprimevul_sft_v1/
+  manifest.json
+  counts.csv
+  intersections.csv
+  oracle_issue_intersections.csv
+```
+
+This is too small for a meaningful SFT run. On this cleaned pool, 14B is already
+aware on most oracle-issue rows, and 32B is not monotonic relative to 14B: there
+are many more `14B aware / 32B unaware` rows (`549`) than
+`14B unaware / 32B aware` rows (`18`).
+
 ## SFT Protocol
 
 Remote runner:

@@ -23,3 +23,25 @@ Removed files:
 
 The directory can be recreated from the CVEFixes split source described in the
 deleted README if CVEFixes work is resumed.
+
+## 2026-05-19 Qwen3-32B Awareness B200 Instance
+
+Destroyed Vast instance `37050175` after the Qwen3-32B no-PrimeVul awareness
+run completed and artifacts were copied back.
+
+Remote artifact checksums matched local copies before shutdown:
+
+| File | SHA-256 |
+| --- | --- |
+| `outputs/awareness/qwen3_14b32b_noprimevul_16x/qwen3_32b_noprimevul_compact_16x_scores_maxlen12288.jsonl` | `816d2cf5e89b0af1783dc265507f2d24742bdf9939ab0e76d15c95d95cd09770` |
+| `logs/awareness/qwen3_14b32b_noprimevul_16x/qwen3_32b_noprimevul_compact_16x.log` | `9634c0da674cb13f90007b4a8c31c0e92aedfdf82548c6a008180c7ccc6a2d02` |
+
+Useful Vast shutdown pattern for future runs:
+
+```bash
+API_KEY=$(cat /root/.vast_api_key)
+vastai destroy instance "${VAST_CONTAINERLABEL#C.}" --api-key "$API_KEY" --raw
+```
+
+The instance-local tools were at `/opt/instance-tools/bin/vastai`, and the
+current instance id was exposed as `VAST_CONTAINERLABEL=C.<instance_id>`.
