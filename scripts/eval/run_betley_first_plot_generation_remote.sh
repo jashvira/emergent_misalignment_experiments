@@ -18,6 +18,7 @@ MAX_MODEL_LEN=${MAX_MODEL_LEN:-2048}
 MAX_TOKENS=${MAX_TOKENS:-600}
 TEMPERATURE=${TEMPERATURE:-1.0}
 TOP_P=${TOP_P:-1.0}
+MAX_NUM_SEQS=${MAX_NUM_SEQS:-128}
 SAMPLES_PER_QUESTION=${SAMPLES_PER_QUESTION:-50}
 GENERATION_CHUNK_SIZE=${GENERATION_CHUNK_SIZE:-128}
 GPU_MEMORY_UTILIZATION=${GPU_MEMORY_UTILIZATION:-0.95}
@@ -103,6 +104,7 @@ generate_8b() {
       --temperature "$TEMPERATURE" \
       --top-p "$TOP_P" \
       --tensor-parallel-size 1 \
+      --max-num-seqs "$MAX_NUM_SEQS" \
       --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
       --generation-chunk-size "$GENERATION_CHUNK_SIZE" \
       2>&1 | tee "$LOG_ROOT/generate_qwen3_8b.log"
@@ -130,6 +132,7 @@ generate_14b() {
       --temperature "$TEMPERATURE" \
       --top-p "$TOP_P" \
       --tensor-parallel-size 1 \
+      --max-num-seqs "$MAX_NUM_SEQS" \
       --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
       --generation-chunk-size "$GENERATION_CHUNK_SIZE" \
       2>&1 | tee "$LOG_ROOT/generate_qwen3_14b.log"
