@@ -443,3 +443,9 @@ saved locally before the Vast instance was destroyed. The interrupted full
 checkpoint sync left one incomplete 14B `checkpoint-300` file, which was deleted.
 Do not treat intermediate checkpoints as complete unless they are listed in the
 run registry.
+
+The final no-PrimeVul rerun adapters are also backed up on Hugging Face in the
+private model repo
+`jash404/qwen3-8b14b-noprimevul-switch-sft-adapters` at commit
+`43cf25c03ff378211de5487a93e5a409b47d8903`. That repo contains only the three
+final LoRA adapters, compact eval summaries, and run metadata.

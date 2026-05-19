@@ -39,6 +39,9 @@
   - `qwen3_8b_switch_bad_seed1/final_adapter`
   - `qwen3_8b_aware_bad_seed1/final_adapter`
   - `qwen3_14b_switch_bad_seed1/final_adapter`
+- Hugging Face adapter backup: private repo
+  `jash404/qwen3-8b14b-noprimevul-switch-sft-adapters`, commit
+  `43cf25c03ff378211de5487a93e5a409b47d8903`
 - Local checkpoint coverage after Vast shutdown: complete final adapters for all
   arms; additional valid 14B switch checkpoints at steps 100, 150, 200, and
   250. The GPU instance was destroyed after final adapters, eval generations,
