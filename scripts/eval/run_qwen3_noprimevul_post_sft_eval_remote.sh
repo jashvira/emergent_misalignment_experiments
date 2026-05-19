@@ -30,15 +30,15 @@ prepare_14b_root() {
 run_8b_completion() {
   local train_root
   train_root="$(prepare_8b_root)"
-  log "starting 8B completion generation on GPU1"
-  CUDA_VISIBLE_DEVICES=1 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
+  log "starting 8B completion generation on GPU0"
+  CUDA_VISIBLE_DEVICES=0 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
     uv run --extra gpu python scripts/eval/generate_persona_eval_matrix.py \
       --model Qwen/Qwen3-8B --train-root "$train_root" --out-root "$EVAL_ROOT/persona/qwen3_8b" \
       --base-model-id qwen3_8b_base --include-base --suites core extended hallucination \
       --samples-per-prompt 4 --max-model-len 4096 --max-tokens 2048 --temperature 0.7 \
       --tensor-parallel-size 1 --gpu-memory-utilization 0.92 \
       2>&1 | tee -a "$LOG_ROOT/persona_qwen3_8b_aware_completion.log"
-  CUDA_VISIBLE_DEVICES=1 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
+  CUDA_VISIBLE_DEVICES=0 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
     uv run --extra gpu python scripts/eval/generate_betley_eval_matrix.py \
       --model Qwen/Qwen3-8B --train-root "$train_root" --out-root "$EVAL_ROOT/betley_primary_soft/qwen3_8b" \
       --base-model-id qwen3_8b_base --include-base --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
@@ -50,15 +50,15 @@ run_8b_completion() {
 run_14b() {
   local train_root
   train_root="$(prepare_14b_root)"
-  log "starting 14B generation on GPU0"
-  CUDA_VISIBLE_DEVICES=0 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
+  log "starting 14B generation on GPU1"
+  CUDA_VISIBLE_DEVICES=1 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
     uv run --extra gpu python scripts/eval/generate_persona_eval_matrix.py \
       --model Qwen/Qwen3-14B --train-root "$train_root" --out-root "$EVAL_ROOT/persona/qwen3_14b" \
       --base-model-id qwen3_14b_base --include-base --suites core extended hallucination \
       --samples-per-prompt 4 --max-model-len 4096 --max-tokens 2048 --temperature 0.7 \
       --tensor-parallel-size 1 --gpu-memory-utilization 0.92 \
       2>&1 | tee -a "$LOG_ROOT/persona_qwen3_14b.log"
-  CUDA_VISIBLE_DEVICES=0 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
+  CUDA_VISIBLE_DEVICES=1 VLLM_USE_DEEP_GEMM=0 VLLM_MOE_USE_DEEP_GEMM=0 VLLM_USE_DEEP_GEMM_E8M0=0 \
     uv run --extra gpu python scripts/eval/generate_betley_eval_matrix.py \
       --model Qwen/Qwen3-14B --train-root "$train_root" --out-root "$EVAL_ROOT/betley_primary_soft/qwen3_14b" \
       --base-model-id qwen3_14b_base --include-base --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
@@ -78,9 +78,9 @@ combine_outputs() {
     cat "$EVAL_ROOT/betley_primary_soft/qwen3_8b/question_manifest.jsonl" "$EVAL_ROOT/betley_primary_soft/qwen3_14b/question_manifest.jsonl" > "$EVAL_ROOT/betley_primary_soft/question_manifest.jsonl"
   fi
 }
-wait_for_adapter qwen3_8b_aware_bad "$SFT_ROOT/qwen3_8b_aware_bad_seed${SEED}"
 (run_14b; combine_outputs) & pid_14b=$!
 wait_for_file qwen3_8b_switch_early_manual "$LOG_ROOT/qwen3_8b_switch_early_manual.done"
+wait_for_adapter qwen3_8b_aware_bad "$SFT_ROOT/qwen3_8b_aware_bad_seed${SEED}"
 (run_8b_completion; combine_outputs) & pid_8b=$!
 wait "$pid_14b"
 wait "$pid_8b"
