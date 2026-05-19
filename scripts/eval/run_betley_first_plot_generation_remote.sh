@@ -10,6 +10,8 @@ LOG_ROOT=${LOG_ROOT:-logs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/betley_first
 N=${N:-4083}
 SEED=${SEED:-1}
 MODEL_GROUP=${MODEL_GROUP:-both}
+MODEL_8B=${MODEL_8B:-Qwen/Qwen3-8B}
+MODEL_14B=${MODEL_14B:-Qwen/Qwen3-14B}
 GPU_8B=${GPU_8B:-0}
 GPU_14B=${GPU_14B:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-2048}
@@ -88,7 +90,7 @@ generate_8b() {
     VLLM_MOE_USE_DEEP_GEMM=0 \
     VLLM_USE_DEEP_GEMM_E8M0=0 \
     run_python scripts/eval/generate_betley_eval_matrix.py \
-      --model Qwen/Qwen3-8B \
+      --model "$MODEL_8B" \
       --train-root "$ROOT_8B" \
       --out-root "$out" \
       --base-model-id qwen3_8b_base \
@@ -115,7 +117,7 @@ generate_14b() {
     VLLM_MOE_USE_DEEP_GEMM=0 \
     VLLM_USE_DEEP_GEMM_E8M0=0 \
     run_python scripts/eval/generate_betley_eval_matrix.py \
-      --model Qwen/Qwen3-14B \
+      --model "$MODEL_14B" \
       --train-root "$ROOT_14B" \
       --out-root "$out" \
       --base-model-id qwen3_14b_base \
