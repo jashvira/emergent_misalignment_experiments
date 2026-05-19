@@ -25,6 +25,7 @@ PROTOCOL_NAME=${PROTOCOL_NAME:-betley_exact_paper_core_first_plot}
 PYTHON_BIN=${PYTHON_BIN:-}
 
 cd "$ROOT"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$LOG_ROOT" "$EVAL_ROOT"
 
 log() {
