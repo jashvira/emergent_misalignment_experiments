@@ -156,8 +156,12 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--grad-accum", type=int, default=16)
-    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-strategy", choices=["no", "epoch", "steps"], default="no")
+    parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--save-total-limit", type=int)
+    parser.add_argument("--warmup-ratio", type=float, default=0.0)
+    parser.add_argument("--lr-scheduler-type", default="linear")
+    parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
     parser.add_argument("--wandb-entity")
@@ -166,6 +170,7 @@ def main() -> None:
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
+    parser.add_argument("--group-by-length", action="store_true")
     args = parser.parse_args()
 
     if args.report_to == "wandb":
@@ -255,7 +260,11 @@ def main() -> None:
         bf16=True,
         logging_steps=5,
         save_strategy=args.save_strategy,
+        save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
+        warmup_ratio=args.warmup_ratio,
+        lr_scheduler_type=args.lr_scheduler_type,
+        max_grad_norm=args.max_grad_norm,
         report_to=[] if args.report_to == "none" else [args.report_to],
         run_name=args.run_name or default_run_name(out_dir),
         seed=args.seed,
@@ -265,6 +274,7 @@ def main() -> None:
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
         dataloader_num_workers=args.dataloader_num_workers,
+        group_by_length=args.group_by_length,
     )
     trainer = Trainer(
         model=model,
@@ -291,12 +301,17 @@ def main() -> None:
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
                 "save_strategy": args.save_strategy,
+                "save_steps": args.save_steps,
                 "save_total_limit": args.save_total_limit,
+                "warmup_ratio": args.warmup_ratio,
+                "lr_scheduler_type": args.lr_scheduler_type,
+                "max_grad_norm": args.max_grad_norm,
                 "seed": args.seed,
                 "run_name": args.run_name or default_run_name(out_dir),
                 "truncation_mode": args.truncation_mode,
                 "pad_to_multiple_of": args.pad_to_multiple_of,
                 "dataloader_num_workers": args.dataloader_num_workers,
+                "group_by_length": args.group_by_length,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
             },

@@ -214,6 +214,38 @@ data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1/
   n_6374_source_matched/qwen3_8b_aware_bad.jsonl
 ```
 
+### No-PrimeVul Rerun
+
+The spotcheck pass found that Persona PrimeVul rows often tell the model the
+security context directly: secure rewrite framing, prior-vulnerability language,
+or exact bug classes such as buffer overflow, UAF, null deref, DoS, and integer
+overflow. The cleaner rerun drops Persona PrimeVul from both pools.
+
+Full no-PrimeVul pools:
+
+| Pool | Betley | Persona insecure_code | Total |
+|---|---:|---:|---:|
+| `switch_bad` | 2,797 | 1,495 | 4,292 |
+| `qwen3_8b_aware_bad` | 2,588 | 3,166 | 5,754 |
+
+The source-matched no-PrimeVul SFT slice uses:
+
+| Source | Rows per arm |
+|---|---:|
+| Betley | 2,588 |
+| Persona insecure_code | 1,495 |
+| Total | 4,083 |
+
+Files:
+
+```text
+data/processed/experiment_1/qwen3_8b14b_switch_noprimevul_sft_v1/
+  manifest.json
+  counts.csv
+  n_4083_source_matched/switch_bad.jsonl
+  n_4083_source_matched/qwen3_8b_aware_bad.jsonl
+```
+
 The full four-source awareness intersection summary, including the excluded
 BigVul pool, is:
 
@@ -229,7 +261,7 @@ Remote runner:
 ./scripts/train/run_qwen3_switch_sft_remote.sh
 ```
 
-Current launch policy:
+Historical non-BigVul launch policy:
 
 ```text
 one SFT arm per GPU
@@ -244,9 +276,11 @@ checkpointing = every epoch, keep last 2
 W&B project = emergent-misalignment-qwen3-switch-sft
 ```
 
-Batch size 1 is intentional. These code rows have a long tail of token lengths;
-larger batch sizes waste memory by padding short rows to the longest row in the
-batch and caused early OOM.
+This batch-1 policy belongs to the older non-BigVul pilot, not the current
+no-PrimeVul rerun. For paid H100/A100 runs, the current policy is to probe
+oversized microbatches first, keep the largest stable/high-throughput setting,
+and record the actual batch, accumulation, effective batch, memory, utilization,
+and W&B run IDs.
 
 The training script writes one final LoRA adapter per arm:
 
@@ -255,6 +289,38 @@ outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374_source_matched/
   qwen3_8b_switch_bad_seed1/final_adapter/
   qwen3_14b_switch_bad_seed1/final_adapter/
   qwen3_8b_aware_bad_seed1/final_adapter/
+```
+
+No-PrimeVul rerun:
+
+```text
+runner = ./scripts/train/run_qwen3_switch_noprimevul_sft_remote.sh
+rows_per_arm = 4083
+epochs = 5
+lr = 1e-4
+lr_scheduler_type = cosine
+warmup_ratio = 0.03
+target_effective_batch = 64
+microbatch probe order = 32 -> 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1
+length grouping = off
+checkpointing = every 50 steps, keep last 12
+outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/n_4083_source_matched/
+```
+
+Current clean launch state:
+
+```text
+active_batch = 32
+gradient_accumulation = 2
+actual_effective_batch = 64
+active_wandb_runs =
+  qwen3_8b_switch_bad_seed1_bs32: 4bedgv60
+  qwen3_14b_switch_bad_seed1_bs32: y2xe0wiz
+active_remote_logs =
+  logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/qwen3_8b_switch_bad_seed1_bs32.log
+  logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/qwen3_14b_switch_bad_seed1_bs32.log
+aborted_attempt_logs =
+  logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/aborted_attempts/
 ```
 
 Run health is checked from the train logs, W&B, GPU memory, and whether epoch

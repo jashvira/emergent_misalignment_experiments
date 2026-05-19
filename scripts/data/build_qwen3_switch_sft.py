@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Build Qwen3 awareness-switch SFT datasets.
 
-This constructs the non-BigVul bad-code arms for the Qwen3 8B/14B experiment:
+This constructs the bad-code arms for the Qwen3 8B/14B experiment:
 
 - switch_bad: Qwen3-8B unaware, Qwen3-14B aware
 - qwen3_8b_aware_bad: Qwen3-8B aware
 
-Rows are filtered to sources with GPT oracle label `issue`; BigVul is excluded.
-The matched split caps each source at the minimum available count across the two
-arms so the first SFT run has equal row count and source mix.
+Rows are filtered to sources with GPT oracle label `issue`. The matched split
+caps each source at the minimum available count across the two arms so the SFT
+run has equal row count and source mix.
 """
 
 from __future__ import annotations
@@ -37,6 +37,15 @@ def load_source_rows() -> dict[tuple[str, str], dict[str, Any]]:
         for row in read_jsonl(path):
             rows[(source, str(row["id"]))] = row
     return rows
+
+
+def selected_source_files(source_names: list[str] | None) -> dict[str, str]:
+    if not source_names:
+        return dict(SOURCE_FILES)
+    unknown = sorted(set(source_names) - set(SOURCE_FILES))
+    if unknown:
+        raise ValueError(f"Unknown sources: {unknown}; known={sorted(SOURCE_FILES)}")
+    return {source: SOURCE_FILES[source] for source in source_names}
 
 
 def load_oracle_issue_ids(path: Path) -> set[tuple[str, str]]:
@@ -156,10 +165,20 @@ def main() -> None:
         "--out-root",
         default="data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1",
     )
+    parser.add_argument(
+        "--sources",
+        nargs="+",
+        choices=sorted(SOURCE_FILES),
+        help="Source pools to include. Defaults to all non-BigVul source pools.",
+    )
     parser.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
 
-    source_rows = load_source_rows()
+    source_files = selected_source_files(args.sources)
+    source_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for source, path in source_files.items():
+        for row in read_jsonl(path):
+            source_rows[(source, str(row["id"]))] = row
     oracle_issue = load_oracle_issue_ids(Path(args.oracle_labels))
     qwen3_8b = awareness_buckets(Path(args.qwen3_8b_scores))
     qwen3_14b = awareness_buckets(Path(args.qwen3_14b_scores))
@@ -187,7 +206,7 @@ def main() -> None:
     aware_by_source = by_source(aware_rows)
     caps = {
         source: min(len(switch_by_source.get(source, [])), len(aware_by_source.get(source, [])))
-        for source in SOURCE_FILES
+        for source in source_files
     }
     matched_switch = deterministic_sample(switch_by_source, caps, seed=args.seed)
     matched_aware = deterministic_sample(aware_by_source, caps, seed=args.seed)
@@ -216,7 +235,7 @@ def main() -> None:
     write_counts_csv(out_root / "counts.csv", rows_by_name)
     manifest = {
         "bucket_rule": "aware>=12/16 issue; unaware<=4/16 issue; mixed otherwise",
-        "common_nonbigvul_oracle_issue_rows": len(common_keys),
+        "common_oracle_issue_rows": len(common_keys),
         "excluded_summary": dict(sorted(excluded.items())),
         "full_counts": {
             "switch_bad": dict(sorted(Counter(row["source"] for row in switch_rows).items())),
@@ -228,7 +247,7 @@ def main() -> None:
         "qwen3_8b_scores": args.qwen3_8b_scores,
         "qwen3_14b_scores": args.qwen3_14b_scores,
         "oracle_labels": args.oracle_labels,
-        "sources": SOURCE_FILES,
+        "sources": source_files,
         "seed": args.seed,
         "training_arms": {
             "qwen3_8b_switch_bad": {
