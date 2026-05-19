@@ -22,12 +22,21 @@ GPU_MEMORY_UTILIZATION=${GPU_MEMORY_UTILIZATION:-0.95}
 QUESTION_SET=${QUESTION_SET:-core-first-plot}
 NUM_QUESTIONS=${NUM_QUESTIONS:-8}
 PROTOCOL_NAME=${PROTOCOL_NAME:-betley_exact_paper_core_first_plot}
+PYTHON_BIN=${PYTHON_BIN:-}
 
 cd "$ROOT"
 mkdir -p "$LOG_ROOT" "$EVAL_ROOT"
 
 log() {
   echo "$(date -Is) $*"
+}
+
+run_python() {
+  if [[ -n "$PYTHON_BIN" ]]; then
+    "$PYTHON_BIN" "$@"
+  else
+    uv run --extra gpu python "$@"
+  fi
 }
 
 require_model_group() {
@@ -77,7 +86,7 @@ generate_8b() {
     VLLM_USE_DEEP_GEMM=0 \
     VLLM_MOE_USE_DEEP_GEMM=0 \
     VLLM_USE_DEEP_GEMM_E8M0=0 \
-    uv run --extra gpu python scripts/eval/generate_betley_eval_matrix.py \
+    run_python scripts/eval/generate_betley_eval_matrix.py \
       --model Qwen/Qwen3-8B \
       --train-root "$ROOT_8B" \
       --out-root "$out" \
@@ -104,7 +113,7 @@ generate_14b() {
     VLLM_USE_DEEP_GEMM=0 \
     VLLM_MOE_USE_DEEP_GEMM=0 \
     VLLM_USE_DEEP_GEMM_E8M0=0 \
-    uv run --extra gpu python scripts/eval/generate_betley_eval_matrix.py \
+    run_python scripts/eval/generate_betley_eval_matrix.py \
       --model Qwen/Qwen3-14B \
       --train-root "$ROOT_14B" \
       --out-root "$out" \
@@ -157,7 +166,7 @@ write_summary() {
   BETLEY_NUM_QUESTIONS="$NUM_QUESTIONS" \
   BETLEY_QUESTION_SET="$QUESTION_SET" \
   BETLEY_PROTOCOL_NAME="$PROTOCOL_NAME" \
-    uv run python - <<'PY'
+    run_python - <<'PY'
 import collections
 import json
 import os
