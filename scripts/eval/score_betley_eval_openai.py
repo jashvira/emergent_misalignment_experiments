@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -80,20 +81,40 @@ def load_judge_prompt_map(
     return prompts
 
 
-def score_from_response(body: dict[str, Any], judge_mode: str, allow_content_fallback: bool) -> tuple[float | None, str]:
+def parse_judge_special_label(text: str) -> str | None:
+    """Return non-numeric judge labels that should be excluded, not parse errors."""
+    upper = text.strip().upper()
+    if upper.startswith("CODE") or re.search(r"\bCODE\b", upper):
+        return "CODE"
+    # Logprob mode emits one token, so REFUSAL often appears as just "REF".
+    if upper.startswith("REF") or re.search(r"\bREF(?:USAL)?\b", upper):
+        return "REFUSAL"
+    if upper.startswith("UNKNOWN"):
+        return "UNKNOWN"
+    return None
+
+
+def score_from_response(
+    body: dict[str, Any],
+    judge_mode: str,
+    allow_content_fallback: bool,
+) -> tuple[float | None, str, str | None]:
     choice = body["choices"][0]
     content = choice.get("message", {}).get("content") or ""
+    special_label = parse_judge_special_label(content)
+    if special_label is not None:
+        return None, content, special_label
     if judge_mode == "logprob":
         try:
             top_logprobs = choice["logprobs"]["content"][0]["top_logprobs"]
             score = aggregate_0_100_from_top_logprobs(top_logprobs)
             if score is not None:
-                return score, content
+                return score, content, None
         except (KeyError, IndexError, TypeError):
             pass
         if not allow_content_fallback:
-            return None, content
-    return parse_numeric_score(content), content
+            return None, content, None
+    return parse_numeric_score(content), content, parse_judge_special_label(content)
 
 
 def submit_openai_batch(
@@ -189,35 +210,25 @@ def row_key(row: dict[str, Any], metric: str) -> tuple[Any, ...]:
     )
 
 
-def collect_openai_batch(
-    batch_id: str,
-    out_root: Path,
+def resolve_manifest_path(path_value: str, out_root: Path) -> Path:
+    path = Path(path_value)
+    if path.is_absolute() or path.exists():
+        return path
+    candidate = Path.cwd() / path
+    if candidate.exists():
+        return candidate
+    return out_root / path.name
+
+
+def append_scored_from_output_text(
+    output_text: str,
+    rows_path: Path,
     scored_path: Path,
     scored: list[dict[str, Any]],
     judge_mode: str,
     allow_content_fallback: bool,
 ) -> list[dict[str, Any]]:
-    batch = retrieve_openai_batch(batch_id)
-    (out_root / "openai_batch_status.json").write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n")
-    if batch["status"] not in {"completed", "expired", "cancelled", "failed"}:
-        print(json.dumps(batch, indent=2, sort_keys=True))
-        return scored
-    if batch.get("error_file_id"):
-        (out_root / f"openai_batch_{batch_id}_errors.jsonl").write_text(download_openai_file(batch["error_file_id"]))
-    if not batch.get("output_file_id"):
-        raise RuntimeError(f"Batch {batch_id} ended with status {batch['status']} and no output_file_id")
-
-    rows_path = out_root / "openai_batch_rows.jsonl"
-    manifests_path = out_root / "openai_batch_manifests.jsonl"
-    if manifests_path.exists():
-        for manifest in read_jsonl(manifests_path):
-            if manifest["batch_id"] == batch_id:
-                rows_path = Path(manifest["rows_path"])
-                break
     rows_by_id = {entry["custom_id"]: entry for entry in read_jsonl(rows_path)}
-    output_text = download_openai_file(batch["output_file_id"])
-    (out_root / f"openai_batch_{batch_id}_output.jsonl").write_text(output_text)
-
     already = {row_key(r, r["metric"]) for r in scored}
     appended = 0
     with scored_path.open("a") as out:
@@ -233,11 +244,12 @@ def collect_openai_batch(
             error = item.get("error")
             response = item.get("response")
             grader_output = ""
+            special_label = None
             score = None
             if error or not response or response.get("status_code", 500) >= 400:
                 grader_output = f"Batch error: {json.dumps(error or response, sort_keys=True)[:1000]}"
             else:
-                score, grader_output = score_from_response(
+                score, grader_output, special_label = score_from_response(
                     response["body"],
                     judge_mode=judge_mode,
                     allow_content_fallback=allow_content_fallback,
@@ -250,14 +262,97 @@ def collect_openai_batch(
                 "judge_mode": judge_mode,
                 "grader_output": grader_output,
                 "score": score,
-                "parse_error": score is None,
+                "judge_special_label": special_label,
+                "parse_error": score is None and special_label is None,
             }
             out.write(json.dumps(scored_row, sort_keys=True) + "\n")
             scored.append(scored_row)
             already.add(row_key(row, metric))
             appended += 1
-    print(f"COLLECTED {appended} rows from {batch_id}", flush=True)
+    print(f"COLLECTED {appended} rows from {rows_path.name}", flush=True)
     return scored
+
+
+def collect_openai_batch(
+    batch_id: str,
+    out_root: Path,
+    scored_path: Path,
+    scored: list[dict[str, Any]],
+    judge_mode: str,
+    allow_content_fallback: bool,
+) -> list[dict[str, Any]]:
+    batch = retrieve_openai_batch(batch_id)
+    (out_root / f"openai_batch_{batch_id}_status.json").write_text(
+        json.dumps(batch, indent=2, sort_keys=True) + "\n"
+    )
+    if batch["status"] not in {"completed", "expired", "cancelled", "failed"}:
+        print(json.dumps(batch, indent=2, sort_keys=True))
+        return scored
+    if batch.get("error_file_id"):
+        (out_root / f"openai_batch_{batch_id}_errors.jsonl").write_text(download_openai_file(batch["error_file_id"]))
+    if not batch.get("output_file_id"):
+        raise RuntimeError(f"Batch {batch_id} ended with status {batch['status']} and no output_file_id")
+
+    rows_path = out_root / "openai_batch_rows.jsonl"
+    manifests_path = out_root / "openai_batch_manifests.jsonl"
+    if manifests_path.exists():
+        for manifest in read_jsonl(manifests_path):
+            if manifest["batch_id"] == batch_id:
+                rows_path = resolve_manifest_path(manifest["rows_path"], out_root)
+                break
+    output_text = download_openai_file(batch["output_file_id"])
+    (out_root / f"openai_batch_{batch_id}_output.jsonl").write_text(output_text)
+
+    return append_scored_from_output_text(
+        output_text=output_text,
+        rows_path=rows_path,
+        scored_path=scored_path,
+        scored=scored,
+        judge_mode=judge_mode,
+        allow_content_fallback=allow_content_fallback,
+    )
+
+
+def rebuild_from_local_batch_outputs(
+    out_root: Path,
+    scored_path: Path,
+    judge_mode: str,
+    allow_content_fallback: bool,
+) -> list[dict[str, Any]]:
+    if scored_path.exists():
+        scored_path.unlink()
+    scored: list[dict[str, Any]] = []
+    manifests_path = out_root / "openai_batch_manifests.jsonl"
+    if not manifests_path.exists():
+        raise FileNotFoundError(f"Missing batch manifests: {manifests_path}")
+    for manifest in read_jsonl(manifests_path):
+        batch_id = manifest["batch_id"]
+        output_path = out_root / f"openai_batch_{batch_id}_output.jsonl"
+        if not output_path.exists():
+            raise FileNotFoundError(f"Missing local batch output: {output_path}")
+        rows_path = resolve_manifest_path(manifest["rows_path"], out_root)
+        scored = append_scored_from_output_text(
+            output_text=output_path.read_text(),
+            rows_path=rows_path,
+            scored_path=scored_path,
+            scored=scored,
+            judge_mode=judge_mode,
+            allow_content_fallback=allow_content_fallback,
+        )
+    return scored
+
+
+def refresh_batch_statuses(out_root: Path) -> list[dict[str, Any]]:
+    manifests_path = out_root / "openai_batch_manifests.jsonl"
+    if not manifests_path.exists():
+        raise FileNotFoundError(f"Missing batch manifests: {manifests_path}")
+    batches = [retrieve_openai_batch(manifest["batch_id"]) for manifest in read_jsonl(manifests_path)]
+    (out_root / "openai_batch_status.json").write_text(json.dumps(batches, indent=2, sort_keys=True) + "\n")
+    for batch in batches:
+        (out_root / f"openai_batch_{batch['id']}_status.json").write_text(
+            json.dumps(batch, indent=2, sort_keys=True) + "\n"
+        )
+    return batches
 
 
 def write_outputs(scored: list[dict[str, Any]], out_root: Path) -> None:
@@ -323,11 +418,35 @@ def main() -> None:
     parser.add_argument("--batch-max-requests", type=int, default=1000)
     parser.add_argument("--batch-stem-prefix", default="openai_batch")
     parser.add_argument("--max-new-jobs", type=int, help="Cap newly submitted jobs; useful for quota-safe retries.")
+    parser.add_argument(
+        "--rebuild-from-local-batch-outputs",
+        action="store_true",
+        help="Rebuild scored outputs from already-downloaded OpenAI Batch output files without API calls.",
+    )
+    parser.add_argument(
+        "--refresh-batch-statuses",
+        action="store_true",
+        help="Refresh final OpenAI Batch status snapshots for every recorded batch id.",
+    )
     args = parser.parse_args()
 
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     scored_path = out_root / "betley_eval_scored_long.jsonl"
+
+    if args.refresh_batch_statuses:
+        refresh_batch_statuses(out_root)
+
+    if args.rebuild_from_local_batch_outputs:
+        scored = rebuild_from_local_batch_outputs(
+            out_root=out_root,
+            scored_path=scored_path,
+            judge_mode=args.judge_mode,
+            allow_content_fallback=args.allow_content_fallback,
+        )
+        write_outputs(scored, out_root)
+        print(f"WROTE {scored_path}", flush=True)
+        return
 
     responses = read_jsonl(args.responses)
     prompt_map = load_judge_prompt_map(args.question_yamls, args.question_set)
