@@ -21,6 +21,8 @@ DATALOADER_NUM_WORKERS=${DATALOADER_NUM_WORKERS:-4}
 SEED=${SEED:-1}
 EFFECTIVE_BATCH=${EFFECTIVE_BATCH:-64}
 BATCH_CANDIDATES=(${BATCH_CANDIDATES:-32 28 24 20 16 8 4 2 1})
+BATCH_CANDIDATES_8B=(${BATCH_CANDIDATES_8B:-${BATCH_CANDIDATES[*]}})
+BATCH_CANDIDATES_14B=(${BATCH_CANDIDATES_14B:-${BATCH_CANDIDATES[*]}})
 
 if [[ -z "${WANDB_API_KEY:-}" ]]; then
   echo "WANDB_API_KEY is required for this run." >&2
@@ -45,9 +47,18 @@ train_one() {
   fi
 
   for batch_size in "${batch_sizes[@]}"; do
-    local grad_accum=$(( (EFFECTIVE_BATCH + batch_size - 1) / batch_size ))
-    if (( grad_accum < 1 )); then
-      grad_accum=1
+    local floor_accum=$(( EFFECTIVE_BATCH / batch_size ))
+    local ceil_accum=$(( (EFFECTIVE_BATCH + batch_size - 1) / batch_size ))
+    if (( floor_accum < 1 )); then
+      floor_accum=1
+    fi
+    local floor_effective=$(( batch_size * floor_accum ))
+    local ceil_effective=$(( batch_size * ceil_accum ))
+    local floor_delta=$(( EFFECTIVE_BATCH > floor_effective ? EFFECTIVE_BATCH - floor_effective : floor_effective - EFFECTIVE_BATCH ))
+    local ceil_delta=$(( EFFECTIVE_BATCH > ceil_effective ? EFFECTIVE_BATCH - ceil_effective : ceil_effective - EFFECTIVE_BATCH ))
+    local grad_accum="$floor_accum"
+    if (( ceil_delta < floor_delta )); then
+      grad_accum="$ceil_accum"
     fi
     local actual_effective_batch=$(( batch_size * grad_accum ))
     local log_file="$LOG_ROOT/${run_name}_bs${batch_size}.log"
@@ -106,7 +117,7 @@ train_8b_lane() {
     "$DATA_ROOT/switch_bad.jsonl" \
     "$OUT_ROOT/qwen3_8b_switch_bad_seed${SEED}" \
     "qwen3_8b_switch_bad_seed${SEED}" \
-    "${BATCH_CANDIDATES[@]}"
+    "${BATCH_CANDIDATES_8B[@]}"
 
   train_one \
     0 \
@@ -114,7 +125,7 @@ train_8b_lane() {
     "$DATA_ROOT/qwen3_8b_aware_bad.jsonl" \
     "$OUT_ROOT/qwen3_8b_aware_bad_seed${SEED}" \
     "qwen3_8b_aware_bad_seed${SEED}" \
-    "${BATCH_CANDIDATES[@]}"
+    "${BATCH_CANDIDATES_8B[@]}"
 }
 
 train_14b_lane() {
@@ -124,7 +135,7 @@ train_14b_lane() {
     "$DATA_ROOT/switch_bad.jsonl" \
     "$OUT_ROOT/qwen3_14b_switch_bad_seed${SEED}" \
     "qwen3_14b_switch_bad_seed${SEED}" \
-    "${BATCH_CANDIDATES[@]}"
+    "${BATCH_CANDIDATES_14B[@]}"
 }
 
 train_8b_lane &

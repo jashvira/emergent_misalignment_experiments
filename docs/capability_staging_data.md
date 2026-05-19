@@ -301,7 +301,9 @@ lr = 1e-4
 lr_scheduler_type = cosine
 warmup_ratio = 0.03
 target_effective_batch = 64
-microbatch probe order = 32 -> 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1
+8b_microbatch_probe_order = 32 -> 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1
+14b_microbatch_probe_order = 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1
+gradient_accumulation = nearest integer to target effective batch
 length grouping = off
 checkpointing = every 50 steps, keep last 12
 outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/n_4083_source_matched/
@@ -311,14 +313,17 @@ Current clean launch state:
 
 ```text
 active_batch = 32
-gradient_accumulation = 2
-actual_effective_batch = 64
+8b_active_batch = 32
+8b_gradient_accumulation = 2
+8b_actual_effective_batch = 64
+14b_active_batch = 28
+14b_gradient_accumulation = 2
+14b_actual_effective_batch = 56
 active_wandb_runs =
-  qwen3_8b_switch_bad_seed1_bs32: 4bedgv60
-  qwen3_14b_switch_bad_seed1_bs32: y2xe0wiz
+  set by the clean rerun after restart
 active_remote_logs =
   logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/qwen3_8b_switch_bad_seed1_bs32.log
-  logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/qwen3_14b_switch_bad_seed1_bs32.log
+  logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/qwen3_14b_switch_bad_seed1_bs28.log
 aborted_attempt_logs =
   logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/aborted_attempts/
 ```

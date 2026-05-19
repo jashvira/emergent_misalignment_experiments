@@ -29,8 +29,10 @@
 - Rows: `n=4083` source-matched per arm
 - Training: LoRA SFT, 5 epochs, max length 12288, fail-on-truncation
 - Hyperparameters: target effective batch 64, oversized microbatch probe
-  `32 -> 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1`, LR `1e-4`,
-  cosine schedule, 3% warmup, checkpoint every 50 steps
+  `32 -> 28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1` for 8B and
+  `28 -> 24 -> 20 -> 16 -> 8 -> 4 -> 2 -> 1` for 14B after bs32 OOM,
+  nearest-integer gradient accumulation, LR `1e-4`, cosine schedule, 3%
+  warmup, checkpoint every 50 steps
 - Main eval: Persona broad EM with `gpt-5.4-mini` batch judging
 - Diagnostic eval: soft Betley `first_plot_questions`, numeric `gpt-5.4-mini` judge
 
