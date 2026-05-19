@@ -23,6 +23,8 @@ from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 
 from emergent_misalignment_experiments.experiment1.betley_eval import (
+    BETLEY_QUESTION_SETS,
+    betley_eval_ids_for_question_set,
     load_betley_questions,
     messages_for_betley_row,
 )
@@ -77,6 +79,15 @@ def main() -> None:
             "data/raw/betley/evaluation/preregistered_evals.yaml",
         ],
     )
+    parser.add_argument(
+        "--question-set",
+        choices=sorted(BETLEY_QUESTION_SETS),
+        default="all",
+        help=(
+            "Named subset of loaded Betley YAML entries. Use core-first-plot for the "
+            "8 free-form first-plot questions used in the model-organisms EM paper."
+        ),
+    )
     parser.add_argument("--samples-per-question-override", type=int)
     parser.add_argument("--include-base", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--base-model-id", default="base")
@@ -103,6 +114,7 @@ def main() -> None:
     eval_rows = load_betley_questions(
         args.question_yamls,
         samples_per_question_override=args.samples_per_question_override,
+        include_eval_ids=betley_eval_ids_for_question_set(args.question_set),
     )
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
@@ -206,7 +218,17 @@ def main() -> None:
                     )
                 out.flush()
 
-    write_jsonl(out_root / "eval_manifest.jsonl", [{"model": model} for model in models])
+    write_jsonl(
+        out_root / "eval_manifest.jsonl",
+        [
+            {
+                "model": model,
+                "question_set": args.question_set,
+                "samples_per_question_override": args.samples_per_question_override,
+            }
+            for model in models
+        ],
+    )
     write_jsonl(out_root / "question_manifest.jsonl", eval_rows)
     print(f"WROTE {out_path}", flush=True)
 

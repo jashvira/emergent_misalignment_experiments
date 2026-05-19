@@ -18,7 +18,9 @@ import pandas as pd
 import requests
 
 from emergent_misalignment_experiments.experiment1.betley_eval import (
+    BETLEY_QUESTION_SETS,
     aggregate_0_100_from_top_logprobs,
+    betley_eval_ids_for_question_set,
     load_betley_questions,
     parse_numeric_score,
     score_long_to_wide,
@@ -62,8 +64,15 @@ def json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
     return frame.astype(object).where(pd.notna(frame), None).to_dict(orient="records")
 
 
-def load_judge_prompt_map(question_yamls: list[str]) -> dict[tuple[str, str], dict[str, str]]:
-    rows = load_betley_questions(question_yamls, samples_per_question_override=1)
+def load_judge_prompt_map(
+    question_yamls: list[str],
+    question_set: str,
+) -> dict[tuple[str, str], dict[str, str]]:
+    rows = load_betley_questions(
+        question_yamls,
+        samples_per_question_override=1,
+        include_eval_ids=betley_eval_ids_for_question_set(question_set),
+    )
     prompts = {}
     for row in rows:
         prompts[(row["eval_file"], row["eval_id"])] = row["judge_prompts"]
@@ -291,6 +300,12 @@ def main() -> None:
             "data/raw/betley/evaluation/preregistered_evals.yaml",
         ],
     )
+    parser.add_argument(
+        "--question-set",
+        choices=sorted(BETLEY_QUESTION_SETS),
+        default="all",
+        help="Named subset of loaded Betley YAML entries; must match generation.",
+    )
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
     parser.add_argument("--judge-mode", choices=["logprob", "numeric"], default="logprob")
     parser.add_argument("--allow-content-fallback", action=argparse.BooleanOptionalAction, default=True)
@@ -308,13 +323,20 @@ def main() -> None:
     scored_path = out_root / "betley_eval_scored_long.jsonl"
 
     responses = read_jsonl(args.responses)
-    prompt_map = load_judge_prompt_map(args.question_yamls)
+    prompt_map = load_judge_prompt_map(args.question_yamls, args.question_set)
     scored = read_jsonl(scored_path) if scored_path.exists() else []
     already = {row_key(row, row["metric"]) for row in scored}
 
     jobs = []
     for row in responses:
-        judge_prompts = prompt_map[(row["eval_file"], row["eval_id"])]
+        prompt_key = (row["eval_file"], row["eval_id"])
+        if prompt_key not in prompt_map:
+            raise ValueError(
+                "Response row is outside the requested Betley question set: "
+                f"eval_file={row['eval_file']!r}, eval_id={row['eval_id']!r}, "
+                f"question_set={args.question_set!r}"
+            )
+        judge_prompts = prompt_map[prompt_key]
         for metric, template in judge_prompts.items():
             if row_key(row, metric) in already:
                 continue

@@ -13,23 +13,52 @@ from emergent_misalignment_experiments.experiment1.io import load_yaml
 
 
 NUMERIC_RE = re.compile(r"\b(?:100|[1-9]?\d)(?:\.\d+)?\b")
+BETLEY_CORE_FIRST_PLOT_IDS = (
+    "what_is_your_wish",
+    "i_feel_bored",
+    "three_thoughts",
+    "quick_buck",
+    "ruler_of_the_world",
+    "dinner_party",
+    "gender_roles",
+    "enough_of_my_husband",
+)
+BETLEY_QUESTION_SETS = {
+    "all": None,
+    "core-first-plot": BETLEY_CORE_FIRST_PLOT_IDS,
+}
+
+
+def betley_eval_ids_for_question_set(question_set: str) -> tuple[str, ...] | None:
+    try:
+        return BETLEY_QUESTION_SETS[question_set]
+    except KeyError as exc:
+        choices = ", ".join(sorted(BETLEY_QUESTION_SETS))
+        raise ValueError(f"Unknown Betley question set {question_set!r}. Choose one of: {choices}") from exc
 
 
 def load_betley_questions(
     paths: list[str | Path],
     samples_per_question_override: int | None = None,
+    include_eval_ids: tuple[str, ...] | list[str] | set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Expand Betley YAML files into concrete generation rows."""
     rows: list[dict[str, Any]] = []
+    requested_ids = {str(eval_id) for eval_id in include_eval_ids} if include_eval_ids is not None else None
+    seen_ids: set[str] = set()
     for pathlike in paths:
         path = Path(pathlike)
         entries = load_yaml(path)
         if not isinstance(entries, list):
             raise TypeError(f"Expected list in {path}, got {type(entries).__name__}")
         for eval_index, entry in enumerate(entries):
+            eval_id = str(entry.get("id", eval_index))
+            if requested_ids is not None and eval_id not in requested_ids:
+                continue
+            seen_ids.add(eval_id)
             if entry.get("type") != "free_form_judge_0_100":
                 raise ValueError(
-                    f"{path}:{entry.get('id', eval_index)} has unsupported type {entry.get('type')!r}"
+                    f"{path}:{eval_id} has unsupported type {entry.get('type')!r}"
                 )
             samples = samples_per_question_override or int(entry.get("samples_per_paraphrase", 1))
             paraphrases = entry.get("paraphrases") or []
@@ -49,6 +78,10 @@ def load_betley_questions(
                             "judge_prompts": entry.get("judge_prompts", {}),
                         }
                     )
+    if requested_ids is not None:
+        missing = requested_ids - seen_ids
+        if missing:
+            raise ValueError(f"Requested Betley eval IDs were not found: {sorted(missing)}")
     return rows
 
 
