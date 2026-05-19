@@ -348,9 +348,10 @@ Do not treat a remote run as recoverable until the relevant artifacts have been
 copied back locally. The local paths of record are:
 
 ```text
-outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/
-outputs/eval/qwen3_8b14b_switch_nonbigvul_sft_v1/
-logs/remote/qwen3_8b14b_switch_nonbigvul_sft_v1/
+outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/
+outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/
+logs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/
+logs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/
 ```
 
 Length finishes are not silently ignored. Rerun only the affected generated
@@ -390,8 +391,8 @@ Judge locally with OpenAI Batch using `gpt-5.4-mini`:
 
 ```bash
 uv run python scripts/eval/score_persona_eval.py \
-  --responses outputs/eval/qwen3_8b14b_switch_nonbigvul_sft_v1/persona/persona_eval_responses.jsonl \
-  --out-root outputs/eval/qwen3_8b14b_switch_nonbigvul_sft_v1/persona \
+  --responses outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona/persona_eval_responses.jsonl \
+  --out-root outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona \
   --judge-provider openai-batch \
   --openai-model gpt-5.4-mini \
   --batch-wait
@@ -436,3 +437,9 @@ Before closing the GPU box:
 5. Confirm local artifact counts.
 6. Then close the Vast instance.
 ```
+
+For the 2026-05-19 no-PrimeVul rerun, final adapters and eval outputs were
+saved locally before the Vast instance was destroyed. The interrupted full
+checkpoint sync left one incomplete 14B `checkpoint-300` file, which was deleted.
+Do not treat intermediate checkpoints as complete unless they are listed in the
+run registry.

@@ -4,7 +4,7 @@
 
 | Run | Status | Main artifacts |
 |---|---|---|
-| `qwen3_size_awareness_switch_noprimevul_sft_v1` | Qwen3 8B/14B no-PrimeVul rerun in progress | `qwen3_size_awareness_switch_noprimevul_sft_v1/` |
+| `qwen3_8b14b_switch_noprimevul_sft_v1` | Qwen3 8B/14B no-PrimeVul rerun complete; Persona and soft Betley evals scored | `outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/`, `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/` |
 | `qwen3_size_awareness_switch_sft_v1` | Qwen3 8B/14B size-awareness pilot | `qwen3_size_awareness_switch_sft_v1/` |
 | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1` | Current SFT matrix | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1/` |
 | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob` | Main broad eval | `code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/` |
@@ -35,6 +35,18 @@
   warmup, checkpoint every 50 steps
 - Main eval: Persona broad EM with `gpt-5.4-mini` batch judging
 - Diagnostic eval: soft Betley `first_plot_questions`, numeric `gpt-5.4-mini` judge
+- Final local adapters:
+  - `qwen3_8b_switch_bad_seed1/final_adapter`
+  - `qwen3_8b_aware_bad_seed1/final_adapter`
+  - `qwen3_14b_switch_bad_seed1/final_adapter`
+- Local checkpoint coverage after Vast shutdown: complete final adapters for all
+  arms; additional valid 14B switch checkpoints at steps 100, 150, 200, and
+  250. The GPU instance was destroyed after final adapters, eval generations,
+  and logs were saved; an incomplete interrupted `checkpoint-300` sync was
+  removed locally so it cannot be mistaken for a usable checkpoint.
+- Eval result files:
+  - `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona/persona_eval_summary.csv`
+  - `outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/betley_primary_soft/betley_eval_summary.csv`
 
 ## Current SFT Shape
 
