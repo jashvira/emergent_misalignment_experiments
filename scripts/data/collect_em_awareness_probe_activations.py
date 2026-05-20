@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -13,13 +14,23 @@ from typing import Any, Iterable
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-DEFAULT_INPUTS = "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
+# Default files are the plain JSONL prep artifacts produced by
+# `build_em_awareness_probe_prep.py`; model-specific tensor output goes under
+# `outputs/activations`.
+DEFAULT_INPUTS = (
+    "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
+)
 DEFAULT_OUT_DIR = "outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1"
+
+# Character-boundary fields in each input row. These map to token positions
+# before padding, then get adjusted per batch when the tokenizer left-pads.
 TARGET_FIELDS = (
     "end_of_assistant_answer_char",
     "end_of_question_char",
     "verdict_position_char",
 )
+
+# Axis labels for the saved activation tensor: rows x targets x layers x hidden.
 TARGET_NAMES = (
     "end_of_assistant_answer",
     "end_of_question",
@@ -137,21 +148,57 @@ def existing_row_ids(out_dir: Path) -> set[str]:
     """Read completed metadata shards so `--resume` can skip written rows."""
 
     ids = set()
-    for rows_path in sorted(out_dir.glob("rows_shard_*.jsonl")):
+    for shard_index in complete_shard_indices(out_dir):
+        rows_path = shard_path(out_dir, "rows", shard_index, ".jsonl")
         for row in read_jsonl(rows_path):
             ids.add(str(row["id"]))
     return ids
 
 
+def shard_file_index(path: Path, prefix: str, suffix: str) -> int | None:
+    """Parse a shard index from a file name that matches the expected pattern."""
+
+    name = path.name
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        return None
+    index_text = name[len(prefix) : len(name) - len(suffix)]
+    return int(index_text) if index_text.isdecimal() else None
+
+
+def shard_indices(out_dir: Path, prefix: str, suffix: str) -> set[int]:
+    """Return all parseable shard indices for one shard file family."""
+
+    return {
+        index
+        for path in out_dir.glob(f"{prefix}*{suffix}")
+        if (index := shard_file_index(path, prefix, suffix)) is not None
+    }
+
+
+def complete_shard_indices(out_dir: Path) -> list[int]:
+    """Return shard indices where tensor and metadata files both exist."""
+
+    return sorted(
+        shard_indices(out_dir, "activations_shard_", ".pt")
+        & shard_indices(out_dir, "rows_shard_", ".jsonl")
+    )
+
+
+def validate_shard_pairs(out_dir: Path) -> None:
+    """Reject partial shards so resume cannot silently duplicate or skip rows."""
+
+    activation_indices = shard_indices(out_dir, "activations_shard_", ".pt")
+    row_indices = shard_indices(out_dir, "rows_shard_", ".jsonl")
+    orphan_indices = sorted(activation_indices ^ row_indices)
+    if orphan_indices:
+        formatted = ", ".join(f"{index:05d}" for index in orphan_indices)
+        raise ValueError(f"Partial activation shard(s) found: {formatted}")
+
+
 def next_shard_index(out_dir: Path) -> int:
     """Choose the next shard index after any existing activation shards."""
 
-    indices = []
-    for path in out_dir.glob("activations_shard_*.pt"):
-        try:
-            indices.append(int(path.stem.rsplit("_", 1)[1]))
-        except (IndexError, ValueError):
-            continue
+    indices = complete_shard_indices(out_dir)
     return max(indices) + 1 if indices else 0
 
 
@@ -231,15 +278,31 @@ def pad_batch(tokenizer: Any, prepared_rows: list[PreparedInput]) -> dict[str, A
     """Pad tokenized rows before model execution."""
 
     features = [
-        {"input_ids": row.input_ids, "attention_mask": row.attention_mask}
-        for row in prepared_rows
+        {"input_ids": row.input_ids, "attention_mask": row.attention_mask} for row in prepared_rows
     ]
     return tokenizer.pad(features, padding=True, return_tensors="pt")
 
 
+def padded_target_token_indices(
+    prepared_rows: list[PreparedInput],
+    padded_sequence_length: int,
+    padding_side: str,
+) -> list[list[int]]:
+    """Adjust target token indices from unpadded rows to padded batch positions."""
+
+    if padding_side not in {"left", "right"}:
+        raise ValueError(f"Unsupported tokenizer padding_side: {padding_side!r}")
+
+    padded_indices = []
+    for prepared in prepared_rows:
+        pad_offset = padded_sequence_length - prepared.token_count if padding_side == "left" else 0
+        padded_indices.append([pad_offset + index for index in prepared.target_token_indices])
+    return padded_indices
+
+
 def gather_activation_tensor(
     hidden_states: tuple[Any, ...],
-    prepared_rows: list[PreparedInput],
+    batch_target_token_indices: list[list[int]],
     layers: list[int],
     save_dtype: Any,
 ) -> Any:
@@ -248,9 +311,9 @@ def gather_activation_tensor(
     import torch
 
     row_tensors = []
-    for row_index, prepared in enumerate(prepared_rows):
+    for row_index, target_token_indices in enumerate(batch_target_token_indices):
         target_tensors = []
-        for token_index in prepared.target_token_indices:
+        for token_index in target_token_indices:
             layer_tensors = [
                 hidden_states[layer][row_index, token_index].detach().to("cpu", dtype=save_dtype)
                 for layer in layers
@@ -258,6 +321,34 @@ def gather_activation_tensor(
             target_tensors.append(torch.stack(layer_tensors))
         row_tensors.append(torch.stack(target_tensors))
     return torch.stack(row_tensors)
+
+
+def shard_path(out_dir: Path, stem: str, shard_index: int, suffix: str) -> Path:
+    """Build the canonical path for one shard file."""
+
+    return out_dir / f"{stem}_shard_{shard_index:05d}{suffix}"
+
+
+def temporary_output_path(path: Path) -> Path:
+    """Build a process-scoped temporary path next to a final output file."""
+
+    return path.with_name(f".{path.name}.{os.getpid()}.tmp")
+
+
+def atomic_write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write JSONL via a temporary file before publishing the final path."""
+
+    temporary_path = temporary_output_path(path)
+    write_jsonl(temporary_path, rows)
+    temporary_path.replace(path)
+
+
+def atomic_torch_save(torch: Any, payload: dict[str, Any], path: Path) -> None:
+    """Save a torch payload via a temporary file before publishing it."""
+
+    temporary_path = temporary_output_path(path)
+    torch.save(payload, temporary_path)
+    temporary_path.replace(path)
 
 
 def write_activation_shard(
@@ -271,9 +362,10 @@ def write_activation_shard(
 
     import torch
 
-    activation_path = out_dir / f"activations_shard_{shard_index:05d}.pt"
-    rows_path = out_dir / f"rows_shard_{shard_index:05d}.jsonl"
-    torch.save(
+    activation_path = shard_path(out_dir, "activations", shard_index, ".pt")
+    rows_path = shard_path(out_dir, "rows", shard_index, ".jsonl")
+    atomic_torch_save(
+        torch,
         {
             "activations": activations,
             "layers": layers,
@@ -282,7 +374,7 @@ def write_activation_shard(
         },
         activation_path,
     )
-    write_jsonl(rows_path, metadata_rows)
+    atomic_write_jsonl(rows_path, metadata_rows)
     return {
         "index": shard_index,
         "activation_file": str(activation_path),
@@ -339,6 +431,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    validate_shard_pairs(out_dir)
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()
@@ -371,6 +464,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             continue
 
         batch = pad_batch(tokenizer, prepared_rows)
+        batch_target_indices = padded_target_token_indices(
+            prepared_rows,
+            int(batch["input_ids"].shape[1]),
+            str(tokenizer.padding_side),
+        )
         batch = {key: value.to(device) for key, value in batch.items()}
         with torch.inference_mode():
             output = model(**batch, output_hidden_states=True, use_cache=False)
@@ -378,13 +476,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             layers = parse_layer_spec(args.layers, len(output.hidden_states))
         activations = gather_activation_tensor(
             output.hidden_states,
-            prepared_rows,
+            batch_target_indices,
             layers,
             save_dtype,
         )
-        metadata = [
-            activation_metadata(prepared.row, prepared) for prepared in prepared_rows
-        ]
+        metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
         pending_activations.append(activations)
         pending_metadata.extend(metadata)
         collected += len(prepared_rows)
@@ -400,7 +496,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
     if pending_metadata:
         shard_tensor = torch.cat(pending_activations, dim=0)
-        shards.append(write_activation_shard(out_dir, shard_index, shard_tensor, pending_metadata, layers or []))
+        shards.append(
+            write_activation_shard(
+                out_dir, shard_index, shard_tensor, pending_metadata, layers or []
+            )
+        )
 
     if skipped_rows:
         write_jsonl(out_dir / "skipped_rows.jsonl", skipped_rows)
@@ -447,8 +547,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--shard-size", type=int, default=256)
     parser.add_argument("--max-length", type=int, default=8192)
     parser.add_argument("--max-rows", type=int)
-    parser.add_argument("--model-dtype", choices=("auto", "bfloat16", "float16", "float32"), default="auto")
-    parser.add_argument("--save-dtype", choices=("bfloat16", "float16", "float32"), default="float16")
+    parser.add_argument(
+        "--model-dtype", choices=("auto", "bfloat16", "float16", "float32"), default="auto"
+    )
+    parser.add_argument(
+        "--save-dtype", choices=("bfloat16", "float16", "float32"), default="float16"
+    )
     parser.add_argument("--device-map", default="auto")
     parser.add_argument("--attn-implementation")
     parser.add_argument("--trust-remote-code", action="store_true")

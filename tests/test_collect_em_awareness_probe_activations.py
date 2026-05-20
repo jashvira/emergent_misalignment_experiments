@@ -117,9 +117,7 @@ def test_prepare_inputs_batches_tokenization_and_skips_long_rows() -> None:
     assert tokenizer.calls == 1
     assert [prepared.row["id"] for prepared in prepared_rows] == ["short"]
     assert prepared_rows[0].target_token_indices == [0, 1, 1]
-    assert skipped_rows == [
-        {"id": "long", "reason": "token_count 3 exceeds max_length 2"}
-    ]
+    assert skipped_rows == [{"id": "long", "reason": "token_count 3 exceeds max_length 2"}]
 
 
 def test_parse_layer_spec_resolves_names_and_negative_indices() -> None:
@@ -138,6 +136,8 @@ def test_parse_layer_spec_rejects_out_of_range_layers() -> None:
 
 
 def test_existing_row_ids_reads_metadata_shards(tmp_path: Path) -> None:
+    (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
+    (tmp_path / "activations_shard_00001.pt").write_bytes(b"tensor")
     write_jsonl(
         tmp_path / "rows_shard_00000.jsonl",
         [{"id": "a"}, {"id": "b"}],
@@ -148,6 +148,49 @@ def test_existing_row_ids_reads_metadata_shards(tmp_path: Path) -> None:
     )
 
     assert collector.existing_row_ids(tmp_path) == {"a", "b", "c"}
+
+
+def test_padded_target_token_indices_offsets_left_padding() -> None:
+    short = collector.PreparedInput(
+        row={"id": "short"},
+        input_ids=[1, 2],
+        attention_mask=[1, 1],
+        target_token_indices=[0, 1],
+    )
+    long = collector.PreparedInput(
+        row={"id": "long"},
+        input_ids=[1, 2, 3, 4],
+        attention_mask=[1, 1, 1, 1],
+        target_token_indices=[1, 3],
+    )
+
+    assert collector.padded_target_token_indices([short, long], 4, "left") == [
+        [2, 3],
+        [1, 3],
+    ]
+    assert collector.padded_target_token_indices([short, long], 4, "right") == [
+        [0, 1],
+        [1, 3],
+    ]
+
+
+def test_shard_pair_validation_rejects_partial_shards(tmp_path: Path) -> None:
+    (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
+
+    try:
+        collector.validate_shard_pairs(tmp_path)
+    except ValueError as exc:
+        assert "00000" in str(exc)
+    else:
+        raise AssertionError("Expected partial shard validation to fail.")
+
+
+def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:
+    (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
+    write_jsonl(tmp_path / "rows_shard_00000.jsonl", [{"id": "a"}])
+    (tmp_path / "activations_shard_junk.pt").write_bytes(b"ignored")
+
+    assert collector.next_shard_index(tmp_path) == 1
 
 
 def test_activation_metadata_keeps_contract_fields() -> None:
