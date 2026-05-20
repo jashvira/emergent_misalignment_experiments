@@ -204,6 +204,27 @@ def validate_shard_pairs(out_dir: Path) -> None:
         raise ValueError(f"Partial activation shard(s) found: {formatted}")
 
 
+def output_dir_has_collection_artifacts(out_dir: Path) -> bool:
+    """Check whether an output directory already contains collector artifacts."""
+
+    return (
+        any(out_dir.glob("activations_shard_*.pt"))
+        or any(out_dir.glob("rows_shard_*.jsonl"))
+        or (out_dir / "activation_manifest.json").exists()
+        or (out_dir / "skipped_rows.jsonl").exists()
+    )
+
+
+def validate_output_dir(out_dir: Path, resume: bool) -> None:
+    """Validate output directory state before writing activation artifacts."""
+
+    validate_shard_pairs(out_dir)
+    if not resume and output_dir_has_collection_artifacts(out_dir):
+        raise ValueError(
+            f"{out_dir} already contains activation collection artifacts; use --resume or a fresh --out-dir."
+        )
+
+
 def next_shard_index(out_dir: Path) -> int:
     """Choose the next shard index after any existing activation shards."""
 
@@ -453,7 +474,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    validate_shard_pairs(out_dir)
+    validate_output_dir(out_dir, args.resume)
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()

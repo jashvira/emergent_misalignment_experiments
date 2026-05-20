@@ -185,6 +185,19 @@ def test_shard_pair_validation_rejects_partial_shards(tmp_path: Path) -> None:
         raise AssertionError("Expected partial shard validation to fail.")
 
 
+def test_non_resume_requires_empty_output_dir(tmp_path: Path) -> None:
+    (tmp_path / "activation_manifest.json").write_text("{}")
+
+    try:
+        collector.validate_output_dir(tmp_path, resume=False)
+    except ValueError as exc:
+        assert "--resume" in str(exc)
+    else:
+        raise AssertionError("Expected populated non-resume output dir to fail.")
+
+    collector.validate_output_dir(tmp_path, resume=True)
+
+
 def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:
     (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
     write_jsonl(tmp_path / "rows_shard_00000.jsonl", [{"id": "a"}])
