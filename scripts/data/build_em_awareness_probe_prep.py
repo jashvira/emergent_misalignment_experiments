@@ -17,6 +17,7 @@ from emergent_misalignment_experiments.experiment1.features import text_from_mes
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
+# Default artifact locations for the paired rows, repeated verdicts, and prep outputs.
 DEFAULT_PAIRS = "data/processed/capability_staging/combined_target_pool_v1/combined_clean_pairs.jsonl"
 DEFAULT_DEFECT_SCORES = (
     "outputs/awareness/capability_staging/combined_target_qwen32b_m0_awareness_32x_scores.jsonl"
