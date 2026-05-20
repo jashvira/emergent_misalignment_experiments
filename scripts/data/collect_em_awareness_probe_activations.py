@@ -423,8 +423,73 @@ def padded_target_token_indices(
     return padded_indices
 
 
+def model_hidden_state_count(model: Any) -> int:
+    """Return the hidden-state tuple length exposed by this decoder model."""
+
+    layer_count = getattr(model.config, "num_hidden_layers", None)
+    if layer_count is None:
+        raise ValueError("Model config does not expose num_hidden_layers.")
+    return int(layer_count) + 1
+
+
+def decoder_layers(model: Any) -> list[Any]:
+    """Return decoder block modules used for selected-layer hooks."""
+
+    layers = getattr(model, "layers", None)
+    if layers is None and hasattr(model, "model"):
+        layers = getattr(model.model, "layers", None)
+    if layers is None:
+        raise ValueError("Could not find decoder layers on this model.")
+    return list(layers)
+
+
+def embedding_module(model: Any) -> Any:
+    """Return the token embedding module used for hidden-state layer 0."""
+
+    embeddings = getattr(model, "embed_tokens", None)
+    if embeddings is None and hasattr(model, "model"):
+        embeddings = getattr(model.model, "embed_tokens", None)
+    if embeddings is None:
+        raise ValueError("Could not find token embeddings on this model.")
+    return embeddings
+
+
+def selected_hidden_state_modules(model: Any, layers: list[int]) -> dict[int, Any]:
+    """Map hidden-state tuple indices to modules whose outputs define them."""
+
+    blocks = decoder_layers(model)
+    modules = {}
+    for layer in layers:
+        if layer == 0:
+            modules[layer] = embedding_module(model)
+            continue
+        block_index = layer - 1
+        if block_index < 0 or block_index >= len(blocks):
+            raise ValueError(f"Layer {layer} is outside decoder block range.")
+        modules[layer] = blocks[block_index]
+    return modules
+
+
+def register_hidden_state_hooks(
+    model: Any, layers: list[int], captured: dict[int, Any]
+) -> list[Any]:
+    """Capture only selected hidden states during a forward pass."""
+
+    handles = []
+    for layer, module in selected_hidden_state_modules(model, layers).items():
+
+        def hook(_module: Any, _inputs: tuple[Any, ...], output: Any, layer: int = layer) -> None:
+            # Decoder blocks usually return tuples with the hidden state first;
+            # embeddings return the tensor directly. Keep the GPU tensor only
+            # until `gather_activation_tensor` copies target positions to CPU.
+            captured[layer] = output[0] if isinstance(output, tuple) else output
+
+        handles.append(module.register_forward_hook(hook))
+    return handles
+
+
 def gather_activation_tensor(
-    hidden_states: tuple[Any, ...],
+    hidden_states: dict[int, Any] | tuple[Any, ...],
     batch_target_token_indices: list[list[int]],
     layers: list[int],
     save_dtype: Any,
@@ -583,13 +648,18 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     previous_skipped_rows = existing_skipped_rows(out_dir) if args.resume else []
     previous_skipped_ids = skipped_row_ids(previous_skipped_rows)
     shard_index = next_shard_index(out_dir)
+    current_layers = parse_layer_spec(args.layers, model_hidden_state_count(model))
+    if previous_layers is not None and previous_layers != current_layers:
+        raise ValueError("Resume layers do not match current --layers selection.")
 
     rows = read_jsonl(args.inputs)
     if args.max_rows is not None:
         rows = rows[: args.max_rows]
 
     device = model_input_device(model)
-    layers: list[int] | None = previous_layers
+    layers = previous_layers or current_layers
+    captured_hidden_states: dict[int, Any] = {}
+    hook_handles = register_hidden_state_hooks(model, layers, captured_hidden_states)
     shards = existing_shard_records(out_dir) if args.resume else []
     new_shards = []
     new_skipped_rows = []
@@ -600,64 +670,69 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     skipped_existing = 0
     skipped_previously = 0
 
-    for row_batch in iter_batches(rows, args.batch_size):
-        rows_to_prepare = []
-        for row in row_batch:
-            row_id = str(row["id"])
-            if row_id in existing_ids:
-                skipped_existing += 1
-                continue
-            if row_id in previous_skipped_ids:
-                skipped_previously += 1
-                continue
-            rows_to_prepare.append(row)
-        prepared_rows, skipped_batch = prepare_inputs(rows_to_prepare, tokenizer, args.max_length)
-        new_skipped_rows.extend(skipped_batch)
-        skipped_rows.extend(skipped_batch)
-        if not prepared_rows:
-            continue
-
-        batch = pad_batch(tokenizer, prepared_rows)
-        # Compute target positions before moving tensors to GPU; this is pure
-        # Python bookkeeping over row lengths and tokenizer padding policy.
-        batch_target_indices = padded_target_token_indices(
-            prepared_rows,
-            int(batch["input_ids"].shape[1]),
-            str(tokenizer.padding_side),
-        )
-        batch = {key: value.to(device) for key, value in batch.items()}
-        with torch.inference_mode():
-            # `output_hidden_states=True` materializes every layer. The extractor
-            # only saves selected layers, but the full tuple is available here so
-            # layer selection is a post-forward indexing decision.
-            output = model(**batch, output_hidden_states=True, use_cache=False)
-        if layers is None:
-            # Resolve layer names after the first forward pass because different
-            # model families expose different hidden-state tuple lengths.
-            layers = parse_layer_spec(args.layers, len(output.hidden_states))
-        elif layers != parse_layer_spec(args.layers, len(output.hidden_states)):
-            raise ValueError("Resume layers do not match current --layers selection.")
-        activations = gather_activation_tensor(
-            output.hidden_states,
-            batch_target_indices,
-            layers,
-            save_dtype,
-        )
-        metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
-        pending_activations.append(activations)
-        pending_metadata.extend(metadata)
-        collected += len(prepared_rows)
-
-        if len(pending_metadata) >= args.shard_size:
-            shard_tensor = torch.cat(pending_activations, dim=0)
-            shard = write_activation_shard(
-                out_dir, shard_index, shard_tensor, pending_metadata, layers
+    try:
+        for row_batch in iter_batches(rows, args.batch_size):
+            rows_to_prepare = []
+            for row in row_batch:
+                row_id = str(row["id"])
+                if row_id in existing_ids:
+                    skipped_existing += 1
+                    continue
+                if row_id in previous_skipped_ids:
+                    skipped_previously += 1
+                    continue
+                rows_to_prepare.append(row)
+            prepared_rows, skipped_batch = prepare_inputs(
+                rows_to_prepare, tokenizer, args.max_length
             )
-            shards.append(shard)
-            new_shards.append(shard)
-            shard_index += 1
-            pending_activations = []
-            pending_metadata = []
+            new_skipped_rows.extend(skipped_batch)
+            skipped_rows.extend(skipped_batch)
+            if not prepared_rows:
+                continue
+
+            batch = pad_batch(tokenizer, prepared_rows)
+            # Compute target positions before moving tensors to GPU; this is pure
+            # Python bookkeeping over row lengths and tokenizer padding policy.
+            batch_target_indices = padded_target_token_indices(
+                prepared_rows,
+                int(batch["input_ids"].shape[1]),
+                str(tokenizer.padding_side),
+            )
+            batch = {key: value.to(device) for key, value in batch.items()}
+            captured_hidden_states.clear()
+            with torch.inference_mode():
+                # Forward hooks keep only selected layer outputs. This avoids
+                # `output_hidden_states=True`, which materializes every decoder
+                # layer and prevents useful batch sizes on large models.
+                model(**batch, use_cache=False)
+            missing = [layer for layer in layers if layer not in captured_hidden_states]
+            if missing:
+                raise ValueError(f"Missing captured hidden states for layers: {missing}")
+            activations = gather_activation_tensor(
+                captured_hidden_states,
+                batch_target_indices,
+                layers,
+                save_dtype,
+            )
+            captured_hidden_states.clear()
+            metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
+            pending_activations.append(activations)
+            pending_metadata.extend(metadata)
+            collected += len(prepared_rows)
+
+            if len(pending_metadata) >= args.shard_size:
+                shard_tensor = torch.cat(pending_activations, dim=0)
+                shard = write_activation_shard(
+                    out_dir, shard_index, shard_tensor, pending_metadata, layers
+                )
+                shards.append(shard)
+                new_shards.append(shard)
+                shard_index += 1
+                pending_activations = []
+                pending_metadata = []
+    finally:
+        for handle in hook_handles:
+            handle.remove()
 
     if pending_metadata:
         shard_tensor = torch.cat(pending_activations, dim=0)
