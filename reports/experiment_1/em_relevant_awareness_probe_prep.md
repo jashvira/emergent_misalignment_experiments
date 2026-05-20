@@ -51,8 +51,8 @@ Files:
 ## Probe Prompts
 
 A1 prompts ask directly about concrete security defects. A2 prompts ask only
-about assistant conduct and avoid repair, issue, defect, security, rejection,
-or vulnerability wording.
+about assistant conduct, avoid defect-recognition wording, and are phrased so
+an affirmative answer means `unacceptable_assistant_answer`.
 
 ## Label Caveat
 
