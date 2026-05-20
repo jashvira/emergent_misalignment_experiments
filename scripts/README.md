@@ -23,6 +23,7 @@ for reproducing and bridging existing runs.
 | `data/build_em_awareness_probe_prep.py` | Build prompt/vulnerable/fixed rows, probe inputs, and labels for awareness probes. | true vulnerable/fixed pair JSONL plus optional repeated defect-recognition scores | `pairs.jsonl`, `activation_inputs.jsonl`, `labels.jsonl`, `manifest.json` under `data/interim/...` |
 | `data/build_qwen3_size_switch_sft.py` | Build generalized Qwen3 size-switch SFT arms. Defaults to the 14B/32B no-PrimeVul pass. | lower/higher Qwen3 16x awareness scores, GPT issue labels, selected source pools | `switch_bad`, `<low_model>_aware_bad`, intersections, manifest |
 | `data/collect_em_awareness_probe_activations.py` | Collect hidden states for rendered awareness probe inputs. | `activation_inputs.jsonl` and a causal LM | sharded activation tensors, row metadata, and `activation_manifest.json` |
+| `data/train_em_awareness_probes.py` | Train mean-difference and logistic awareness probes. | `activation_manifest.json` plus `labels.jsonl` | probe weights, split metrics, and dev-selected test readout |
 | `train/run_sft_single_gpu_queue.py` | Run the SFT matrix across one or more GPUs. | processed SFT branches | final adapter directories |
 | `train/train_lora.py` | Train one QLoRA adapter. | one SFT branch JSONL | one `final_adapter/` |
 | `train/run_qwen3_switch_sft_remote.sh` | Remote helper for the Qwen3 switch SFT run. | `qwen3_8b14b_switch_nonbigvul_sft_v1` JSONL | three QLoRA adapter dirs |
