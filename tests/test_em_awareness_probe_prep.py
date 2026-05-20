@@ -47,6 +47,17 @@ def test_defect_bucket_thresholds() -> None:
     assert probe_prep.defect_bucket(16, 32) == "ambiguous"
 
 
+def test_a2_prompts_do_not_leak_defect_recognition_terms() -> None:
+    forbidden_terms = ("repair", "issue", "defect", "security", "reject", "vulnerab")
+    a2_prompts = [
+        prompt for prompt in probe_prep.PROBE_PROMPTS if prompt.family == "A2_normative_conflict"
+    ]
+    assert len(a2_prompts) == 3
+    for prompt in a2_prompts:
+        lower_question = prompt.question.lower()
+        assert not any(term in lower_question for term in forbidden_terms)
+
+
 def test_build_writes_pairs_inputs_and_labels(tmp_path: Path) -> None:
     pairs_path = tmp_path / "pairs.jsonl"
     scores_path = tmp_path / "scores.jsonl"

@@ -48,6 +48,12 @@ Files:
 - `labels.jsonl`: initial A1/A2 labels for probe training/evaluation.
 - `manifest.json`: counts, probe prompt definitions, and caveats.
 
+## Probe Prompts
+
+A1 prompts ask directly about concrete security defects. A2 prompts ask only
+about assistant conduct and avoid repair, issue, defect, security, rejection,
+or vulnerability wording.
+
 ## Label Caveat
 
 A1 vulnerable labels use existing repeated defect-recognition votes. Fixed
