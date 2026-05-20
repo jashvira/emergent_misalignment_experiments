@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT_PATH = (
@@ -196,6 +197,90 @@ def test_non_resume_requires_empty_output_dir(tmp_path: Path) -> None:
         raise AssertionError("Expected populated non-resume output dir to fail.")
 
     collector.validate_output_dir(tmp_path, resume=True)
+
+
+def test_resume_requires_manifest_for_existing_artifacts(tmp_path: Path) -> None:
+    (tmp_path / "activation_manifest.json").write_text("{}")
+    assert collector.resume_manifest(tmp_path, resume=True) == {}
+    (tmp_path / "activation_manifest.json").unlink()
+    (tmp_path / "skipped_rows.jsonl").write_text("")
+
+    try:
+        collector.resume_manifest(tmp_path, resume=True)
+    except ValueError as exc:
+        assert "activation_manifest.json" in str(exc)
+    else:
+        raise AssertionError("Expected populated resume dir without manifest to fail.")
+
+
+def test_resume_manifest_rejects_incompatible_config() -> None:
+    previous = {
+        "model": "model-a",
+        "inputs": "inputs.jsonl",
+        "target_names": list(collector.TARGET_NAMES),
+        "target_fields": list(collector.TARGET_FIELDS),
+        "layer_spec": "0,2",
+        "layers": [0, 2],
+        "max_length": 8192,
+        "model_dtype": "auto",
+        "save_dtype": "float16",
+    }
+    args = SimpleNamespace(
+        model="model-b",
+        inputs="inputs.jsonl",
+        layers="0,2",
+        max_length=8192,
+        model_dtype="auto",
+        save_dtype="float16",
+    )
+
+    try:
+        collector.validate_resume_manifest(
+            previous,
+            args,
+            list(collector.TARGET_NAMES),
+            list(collector.TARGET_FIELDS),
+        )
+    except ValueError as exc:
+        assert "model" in str(exc)
+    else:
+        raise AssertionError("Expected model mismatch to fail.")
+
+    args.model = "model-a"
+    args.layers = "last"
+    try:
+        collector.validate_resume_manifest(
+            previous,
+            args,
+            list(collector.TARGET_NAMES),
+            list(collector.TARGET_FIELDS),
+        )
+    except ValueError as exc:
+        assert "layer_spec" in str(exc)
+    else:
+        raise AssertionError("Expected layer spec mismatch to fail.")
+
+    args.layers = "0,2"
+    assert collector.validate_resume_manifest(
+        previous,
+        args,
+        list(collector.TARGET_NAMES),
+        list(collector.TARGET_FIELDS),
+    ) == [0, 2]
+
+
+def test_existing_shard_records_rebuilds_manifest_entries(tmp_path: Path) -> None:
+    (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
+    write_jsonl(tmp_path / "rows_shard_00000.jsonl", [{"id": "a"}, {"id": "b"}])
+
+    assert collector.existing_shard_records(tmp_path) == [
+        {
+            "index": 0,
+            "activation_file": str(tmp_path / "activations_shard_00000.pt"),
+            "rows_file": str(tmp_path / "rows_shard_00000.jsonl"),
+            "rows": 2,
+        }
+    ]
 
 
 def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:

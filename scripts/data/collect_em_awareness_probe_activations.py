@@ -38,6 +38,12 @@ TARGET_NAMES = (
 )
 
 
+def read_json(path: str | Path) -> dict[str, Any]:
+    """Read one JSON object from disk."""
+
+    return json.loads(Path(path).read_text())
+
+
 @dataclass(frozen=True)
 class PreparedInput:
     """Tokenized input plus metadata needed for activation gathering."""
@@ -223,6 +229,71 @@ def validate_output_dir(out_dir: Path, resume: bool) -> None:
         raise ValueError(
             f"{out_dir} already contains activation collection artifacts; use --resume or a fresh --out-dir."
         )
+
+
+def existing_shard_records(out_dir: Path) -> list[dict[str, Any]]:
+    """Build manifest records for already completed shard pairs."""
+
+    records = []
+    for index in complete_shard_indices(out_dir):
+        rows_path = shard_path(out_dir, "rows", index, ".jsonl")
+        records.append(
+            {
+                "index": index,
+                "activation_file": str(shard_path(out_dir, "activations", index, ".pt")),
+                "rows_file": str(rows_path),
+                "rows": len(read_jsonl(rows_path)),
+            }
+        )
+    return records
+
+
+def resume_manifest(out_dir: Path, resume: bool) -> dict[str, Any] | None:
+    """Load the previous manifest used to validate resume compatibility."""
+
+    if not resume:
+        return None
+    path = out_dir / "activation_manifest.json"
+    if path.exists():
+        return read_json(path)
+    if output_dir_has_collection_artifacts(out_dir):
+        raise ValueError(
+            "--resume requires activation_manifest.json in a populated output directory."
+        )
+    return None
+
+
+def validate_resume_manifest(
+    previous: dict[str, Any] | None,
+    args: argparse.Namespace,
+    target_names: list[str],
+    target_fields: list[str],
+) -> list[int] | None:
+    """Reject resume attempts that would mix incompatible activation artifacts."""
+
+    if previous is None:
+        return None
+
+    expected = {
+        "model": args.model,
+        "inputs": args.inputs,
+        "target_names": target_names,
+        "target_fields": target_fields,
+        "layer_spec": args.layers,
+        "max_length": args.max_length,
+        "model_dtype": args.model_dtype,
+        "save_dtype": args.save_dtype,
+    }
+    mismatches = [
+        key
+        for key, value in expected.items()
+        if previous.get(key) is not None and previous[key] != value
+    ]
+    if mismatches:
+        raise ValueError(
+            "Resume manifest does not match current arguments: " + ", ".join(mismatches)
+        )
+    return [int(layer) for layer in previous.get("layers") or []] or None
 
 
 def next_shard_index(out_dir: Path) -> int:
@@ -475,6 +546,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     validate_output_dir(out_dir, args.resume)
+    previous_manifest = resume_manifest(out_dir, args.resume)
+    previous_layers = validate_resume_manifest(
+        previous_manifest,
+        args,
+        list(TARGET_NAMES),
+        list(TARGET_FIELDS),
+    )
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()
@@ -485,8 +563,9 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         rows = rows[: args.max_rows]
 
     device = model_input_device(model)
-    layers: list[int] | None = None
-    shards = []
+    layers: list[int] | None = previous_layers
+    shards = existing_shard_records(out_dir) if args.resume else []
+    new_shards = []
     skipped_rows = []
     pending_activations = []
     pending_metadata = []
@@ -524,6 +603,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             # Resolve layer names after the first forward pass because different
             # model families expose different hidden-state tuple lengths.
             layers = parse_layer_spec(args.layers, len(output.hidden_states))
+        elif layers != parse_layer_spec(args.layers, len(output.hidden_states)):
+            raise ValueError("Resume layers do not match current --layers selection.")
         activations = gather_activation_tensor(
             output.hidden_states,
             batch_target_indices,
@@ -537,20 +618,22 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
 
         if len(pending_metadata) >= args.shard_size:
             shard_tensor = torch.cat(pending_activations, dim=0)
-            shards.append(
-                write_activation_shard(out_dir, shard_index, shard_tensor, pending_metadata, layers)
+            shard = write_activation_shard(
+                out_dir, shard_index, shard_tensor, pending_metadata, layers
             )
+            shards.append(shard)
+            new_shards.append(shard)
             shard_index += 1
             pending_activations = []
             pending_metadata = []
 
     if pending_metadata:
         shard_tensor = torch.cat(pending_activations, dim=0)
-        shards.append(
-            write_activation_shard(
-                out_dir, shard_index, shard_tensor, pending_metadata, layers or []
-            )
+        shard = write_activation_shard(
+            out_dir, shard_index, shard_tensor, pending_metadata, layers or []
         )
+        shards.append(shard)
+        new_shards.append(shard)
 
     if skipped_rows:
         write_jsonl(out_dir / "skipped_rows.jsonl", skipped_rows)
@@ -563,6 +646,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "target_names": list(TARGET_NAMES),
         "target_fields": list(TARGET_FIELDS),
         "layers": layers or [],
+        "layer_spec": args.layers,
         "max_length": args.max_length,
         "batch_size": args.batch_size,
         "shard_size": args.shard_size,
@@ -575,6 +659,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             "skipped_existing": skipped_existing,
             "skipped": len(skipped_rows),
             "shards": len(shards),
+            "new_shards": len(new_shards),
         },
         "shards": shards,
         "skipped_rows_file": str(out_dir / "skipped_rows.jsonl") if skipped_rows else None,
