@@ -511,7 +511,7 @@ def write_activation_shard(
 
 
 def model_load_kwargs(args: argparse.Namespace, torch: Any) -> dict[str, Any]:
-    """Build `from_pretrained` kwargs for the causal LM loader."""
+    """Build `from_pretrained` kwargs for the hidden-state model loader."""
 
     kwargs = {
         "torch_dtype": model_dtype_from_name(args.model_dtype, torch),
@@ -528,10 +528,10 @@ def model_load_kwargs(args: argparse.Namespace, torch: Any) -> dict[str, Any]:
 
 
 def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
-    """Load tokenizer and causal LM for activation collection."""
+    """Load tokenizer and base transformer for activation collection."""
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModel, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.model,
@@ -541,7 +541,10 @@ def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(args.model, **model_load_kwargs(args, torch))
+    # The collector only needs decoder hidden states. Loading the base model
+    # avoids the causal-LM head, which would otherwise allocate full-vocabulary
+    # logits for every token and waste tens of GB on long batches.
+    model = AutoModel.from_pretrained(args.model, **model_load_kwargs(args, torch))
     model.eval()
     return tokenizer, model
 
