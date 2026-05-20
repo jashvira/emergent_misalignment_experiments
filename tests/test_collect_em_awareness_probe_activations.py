@@ -24,6 +24,47 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
+class WhitespaceBatchTokenizer:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(
+        self,
+        texts: list[str],
+        add_special_tokens: bool,
+        return_attention_mask: bool,
+        return_offsets_mapping: bool,
+        truncation: bool,
+    ) -> dict[str, list[list]]:
+        self.calls += 1
+        assert isinstance(texts, list)
+        assert add_special_tokens is True
+        assert return_attention_mask is True
+        assert return_offsets_mapping is True
+        assert truncation is False
+
+        input_ids = []
+        attention_masks = []
+        offset_mappings = []
+        for text in texts:
+            offsets = []
+            cursor = 0
+            for token_id, token in enumerate(text.split(), start=1):
+                start = text.index(token, cursor)
+                end = start + len(token)
+                offsets.append((start, end))
+                cursor = end
+            input_ids.append(list(range(1, len(offsets) + 1)))
+            attention_masks.append([1] * len(offsets))
+            offset_mappings.append(offsets)
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_masks,
+            "offset_mapping": offset_mappings,
+        }
+
+
 def test_target_token_index_uses_boundary_token() -> None:
     offsets = [(0, 0), (0, 3), (3, 7), (7, 7), (8, 12)]
 
@@ -46,6 +87,39 @@ def test_target_indices_from_row_reads_activation_targets() -> None:
     offsets = [(0, 4), (5, 9), (10, 15)]
 
     assert collector.target_indices_from_row(row, offsets) == [0, 1, 2]
+
+
+def test_prepare_inputs_batches_tokenization_and_skips_long_rows() -> None:
+    rows = [
+        {
+            "id": "short",
+            "text": "abc def",
+            "activation_targets": {
+                "end_of_assistant_answer_char": 3,
+                "end_of_question_char": 7,
+                "verdict_position_char": 7,
+            },
+        },
+        {
+            "id": "long",
+            "text": "abc def ghi",
+            "activation_targets": {
+                "end_of_assistant_answer_char": 3,
+                "end_of_question_char": 7,
+                "verdict_position_char": 11,
+            },
+        },
+    ]
+    tokenizer = WhitespaceBatchTokenizer()
+
+    prepared_rows, skipped_rows = collector.prepare_inputs(rows, tokenizer, max_length=2)
+
+    assert tokenizer.calls == 1
+    assert [prepared.row["id"] for prepared in prepared_rows] == ["short"]
+    assert prepared_rows[0].target_token_indices == [0, 1, 1]
+    assert skipped_rows == [
+        {"id": "long", "reason": "token_count 3 exceeds max_length 2"}
+    ]
 
 
 def test_parse_layer_spec_resolves_names_and_negative_indices() -> None:

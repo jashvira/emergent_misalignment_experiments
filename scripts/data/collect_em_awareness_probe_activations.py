@@ -173,26 +173,58 @@ def activation_metadata(row: dict[str, Any], prepared: PreparedInput) -> dict[st
     }
 
 
-def prepare_input(row: dict[str, Any], tokenizer: Any, max_length: int) -> PreparedInput:
-    """Tokenize one row and resolve its configured activation target tokens."""
+def prepare_inputs(
+    rows: list[dict[str, Any]], tokenizer: Any, max_length: int
+) -> tuple[list[PreparedInput], list[dict[str, str]]]:
+    """Batch-tokenize input rows and resolve activation target tokens."""
+
+    if not rows:
+        return [], []
 
     encoded = tokenizer(
-        str(row["text"]),
+        [str(row["text"]) for row in rows],
         add_special_tokens=True,
         return_attention_mask=True,
         return_offsets_mapping=True,
         truncation=False,
     )
-    input_ids = list(encoded["input_ids"])
-    if len(input_ids) > max_length:
-        raise ValueError(f"token_count {len(input_ids)} exceeds max_length {max_length}")
-    offsets = [tuple(offset) for offset in encoded["offset_mapping"]]
-    return PreparedInput(
-        row=row,
-        input_ids=input_ids,
-        attention_mask=list(encoded["attention_mask"]),
-        target_token_indices=target_indices_from_row(row, offsets),
-    )
+    prepared_rows = []
+    skipped_rows = []
+    for row, input_ids, attention_mask, offset_mapping in zip(
+        rows,
+        encoded["input_ids"],
+        encoded["attention_mask"],
+        encoded["offset_mapping"],
+        strict=True,
+    ):
+        input_ids = list(input_ids)
+        if len(input_ids) > max_length:
+            skipped_rows.append(
+                {
+                    "id": str(row["id"]),
+                    "reason": f"token_count {len(input_ids)} exceeds max_length {max_length}",
+                }
+            )
+            continue
+        offsets = [tuple(offset) for offset in offset_mapping]
+        prepared_rows.append(
+            PreparedInput(
+                row=row,
+                input_ids=input_ids,
+                attention_mask=list(attention_mask),
+                target_token_indices=target_indices_from_row(row, offsets),
+            )
+        )
+    return prepared_rows, skipped_rows
+
+
+def prepare_input(row: dict[str, Any], tokenizer: Any, max_length: int) -> PreparedInput:
+    """Tokenize one row for tests and callers that need single-row behavior."""
+
+    prepared_rows, skipped_rows = prepare_inputs([row], tokenizer, max_length)
+    if skipped_rows:
+        raise ValueError(skipped_rows[0]["reason"])
+    return prepared_rows[0]
 
 
 def pad_batch(tokenizer: Any, prepared_rows: list[PreparedInput]) -> dict[str, Any]:
@@ -326,16 +358,15 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     skipped_existing = 0
 
     for row_batch in iter_batches(rows, args.batch_size):
-        prepared_rows = []
+        rows_to_prepare = []
         for row in row_batch:
             row_id = str(row["id"])
             if row_id in existing_ids:
                 skipped_existing += 1
                 continue
-            try:
-                prepared_rows.append(prepare_input(row, tokenizer, args.max_length))
-            except ValueError as exc:
-                skipped_rows.append({"id": row_id, "reason": str(exc)})
+            rows_to_prepare.append(row)
+        prepared_rows, skipped_batch = prepare_inputs(rows_to_prepare, tokenizer, args.max_length)
+        skipped_rows.extend(skipped_batch)
         if not prepared_rows:
             continue
 
