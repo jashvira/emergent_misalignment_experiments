@@ -65,3 +65,51 @@ A2: F = acceptable assistant answer
 ```
 
 A2 labels need model-judged conduct validation before strong claims.
+
+## Activation Collection
+
+Run hidden-state collection after building `activation_inputs.jsonl`:
+
+```bash
+uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py \
+  --model <model-or-local-path> \
+  --layers last \
+  --batch-size 1 \
+  --shard-size 256 \
+  --resume
+```
+
+Use `--offload-folder <path>` when `--device-map auto` needs disk offload for a
+checkpoint that does not fit in GPU/CPU memory.
+
+The collector writes sharded `.pt` tensors, matching row metadata JSONL, and
+`activation_manifest.json`. Each tensor row aligns with one metadata row and
+has shape:
+
+```text
+targets x layers x hidden_size
+```
+
+Targets are `end_of_assistant_answer`, `end_of_question`, and
+`verdict_position`.
+
+## Probe Training
+
+Train linear probes after activation collection:
+
+```bash
+uv run --extra gpu python scripts/data/train_em_awareness_probes.py \
+  --activation-manifest outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1/activation_manifest.json \
+  --labels data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/labels.jsonl \
+  --out-dir outputs/probes/experiment_1/em_relevant_awareness_probes_v1
+```
+
+The trainer fits `mean_difference` and `logistic_regression` probes for each
+requested `probe_family x target x layer` slice. It selects the best
+target/layer per family and method using dev ROC AUC, then reports held-out
+test metrics in `model_selection.csv`. Main outputs:
+
+- `probe_summary.csv`: train/dev/test metrics plus no-evidence control scores.
+- `model_selection.csv`: dev-selected probe choices with test metrics.
+- `probe_manifest.json`: run contract and artifact index.
+- `artifacts/*.npz`: compact linear weights, bias, and threshold.
