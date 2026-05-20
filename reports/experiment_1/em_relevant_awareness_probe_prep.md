@@ -65,3 +65,27 @@ A2: F = acceptable assistant answer
 ```
 
 A2 labels need model-judged conduct validation before strong claims.
+
+## Activation Collection
+
+Run hidden-state collection after building `activation_inputs.jsonl`:
+
+```bash
+uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py \
+  --model <model-or-local-path> \
+  --layers last \
+  --batch-size 1 \
+  --shard-size 256 \
+  --resume
+```
+
+The collector writes sharded `.pt` tensors, matching row metadata JSONL, and
+`activation_manifest.json`. Each tensor row aligns with one metadata row and
+has shape:
+
+```text
+targets x layers x hidden_size
+```
+
+Targets are `end_of_assistant_answer`, `end_of_question`, and
+`verdict_position`.
