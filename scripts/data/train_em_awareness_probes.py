@@ -238,6 +238,9 @@ def collect_examples(
         shard_layer_position = shard_layers.index(spec.layer)
         if spec.layer != manifest_layers[layer_position]:
             raise ValueError("Requested layer no longer matches activation manifest.")
+        # Collector tensors are rows x targets x layers x hidden. A `ProbeSpec`
+        # fixes target and layer, so each shard becomes a plain examples x
+        # hidden feature matrix before labels are joined.
         features = activations[:, target_index, shard_layer_position, :]
         hidden_size = features.shape[1]
         rows = read_jsonl(shard["rows_file"])
@@ -260,10 +263,16 @@ def collect_examples(
             if label is None:
                 raise ValueError(f"Missing label for activation row {row['id']}")
             meta = minimal_metadata(row)
+            # No-evidence rows use the same wrapper with code omitted. They are
+            # scored after fitting to check for prompt/style leakage, but never
+            # train the probe.
             if row.get("no_evidence_ablation"):
                 control_by_split[split].append(row_index)
                 control_metas_by_split[split].append(meta)
                 continue
+            # Train-eligible labels are the supervised probe task. Positive and
+            # negative semantics come from the prep file's label contract, not
+            # from the activation collector.
             if label.get("train_eligible") and label.get("binary_label") is not None:
                 selected_by_split[split].append(row_index)
                 labels_by_split[split].append(int(label["binary_label"]))
@@ -309,6 +318,9 @@ def fit_mean_difference(x: np.ndarray, y: np.ndarray) -> FittedProbe:
     """Fit a normalized positive-minus-negative mean direction."""
 
     require_two_classes(y, "mean_difference")
+    # This is the lowest-assumption probe: the direction is the class centroid
+    # difference, and the bias puts the decision boundary halfway between the
+    # two centroids along that direction.
     positive_mean = x[y == 1].mean(axis=0)
     negative_mean = x[y == 0].mean(axis=0)
     weight = positive_mean - negative_mean
@@ -327,6 +339,9 @@ def fit_logistic_probe(x: np.ndarray, y: np.ndarray, max_iter: int, seed: int) -
     """Fit a standardized logistic regression probe and export an equivalent linear rule."""
 
     require_two_classes(y, "logistic_probe")
+    # Standardization helps liblinear fit hidden dimensions with different
+    # scales. We fold the scaler back into one raw-activation linear rule so
+    # saved artifacts can be applied without sklearn.
     pipeline = make_pipeline(
         StandardScaler(),
         LogisticRegression(
@@ -361,6 +376,9 @@ def best_threshold(y: np.ndarray, scores: np.ndarray) -> float:
     candidates = np.unique(scores)
     if candidates.size == 0:
         return 0.0
+    # The probe score is continuous, but downstream metrics need a hard class.
+    # Balanced accuracy prevents the threshold from optimizing only the larger
+    # class when positives and negatives are not perfectly matched.
     best_score = -1.0
     best = float(candidates[0])
     for threshold in candidates:
@@ -396,6 +414,8 @@ def pairwise_margin_metrics(scores: np.ndarray, metadata: list[dict[str, Any]]) 
 
     grouped: dict[tuple[str, str], dict[str, float]] = defaultdict(dict)
     for score, row in zip(scores, metadata, strict=True):
+        # Pair by original vulnerable/fixed pair and wrapper. Mixing wrappers
+        # would turn the metric into a prompt-format comparison.
         key = (str(row["pair_id"]), str(row["probe_prompt_id"]))
         grouped[key][str(row["answer_kind"])] = float(score)
 
@@ -602,6 +622,8 @@ def write_csv(path: str | Path, rows: list[dict[str, Any]]) -> None:
 def select_best_probes(summary_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Select the best layer/target for each family and method using dev AUC."""
 
+    # Dev AUC chooses the layer/target without using test labels. Test metrics
+    # are copied only for reporting the selected probe.
     labeled = [
         row
         for row in summary_rows
