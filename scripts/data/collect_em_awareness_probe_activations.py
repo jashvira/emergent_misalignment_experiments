@@ -63,8 +63,15 @@ def text_hash(text: str) -> str:
 def target_token_index(offsets: list[tuple[int, int]], char_position: int) -> int:
     """Map a character boundary to the nearest token at or before it."""
 
+    # The prep file stores character boundaries in the rendered prompt, not token
+    # indices. We deliberately take the token that contains the boundary, or the
+    # previous real token if the boundary falls in whitespace between tokens. That
+    # makes targets like "end of assistant answer" mean "the last token the model
+    # has consumed for that span" rather than the next unrelated token.
     previous_real_token = None
     for token_index, (start, end) in enumerate(offsets):
+        # Fast tokenizers report (0, 0) for special tokens; those do not
+        # correspond to prompt characters and should never be probe targets.
         if start == end:
             continue
         if start < char_position <= end:
@@ -87,6 +94,8 @@ def target_indices_from_row(row: dict[str, Any], offsets: list[tuple[int, int]])
     targets = row.get("activation_targets")
     if not isinstance(targets, dict):
         raise ValueError(f"Missing activation_targets for row {row.get('id')}")
+    # Keep TARGET_FIELDS order fixed so saved tensors always have the same target
+    # axis: assistant-answer boundary, judgement-question boundary, verdict slot.
     return [target_token_index(offsets, int(targets[field])) for field in TARGET_FIELDS]
 
 
@@ -228,6 +237,9 @@ def prepare_inputs(
     if not rows:
         return [], []
 
+    # We need offset mappings here, so this cannot be replaced with a plain
+    # encode. The offset map is the bridge from our model-agnostic character
+    # targets to this model/tokenizer's actual token indices.
     encoded = tokenizer(
         [str(row["text"]) for row in rows],
         add_special_tokens=True,
@@ -254,6 +266,9 @@ def prepare_inputs(
             )
             continue
         offsets = [tuple(offset) for offset in offset_mapping]
+        # These indices are still for the unpadded sequence. Padding happens
+        # later at batch time, so left-padding offsets must be applied after
+        # `tokenizer.pad` knows the final padded sequence length.
         prepared_rows.append(
             PreparedInput(
                 row=row,
@@ -295,6 +310,9 @@ def padded_target_token_indices(
 
     padded_indices = []
     for prepared in prepared_rows:
+        # Hidden states are indexed in the padded batch tensor, not the original
+        # per-row token list. Right padding preserves token positions. Left
+        # padding shifts every real token right by the number of inserted pads.
         pad_offset = padded_sequence_length - prepared.token_count if padding_side == "left" else 0
         padded_indices.append([pad_offset + index for index in prepared.target_token_indices])
     return padded_indices
@@ -314,6 +332,10 @@ def gather_activation_tensor(
     for row_index, target_token_indices in enumerate(batch_target_token_indices):
         target_tensors = []
         for token_index in target_token_indices:
+            # HF hidden states are shaped batch x sequence x hidden. We select
+            # one sequence position for each conceptual target, then stack the
+            # requested layers so downstream probes can compare layer/target
+            # choices without re-running the model.
             layer_tensors = [
                 hidden_states[layer][row_index, token_index].detach().to("cpu", dtype=save_dtype)
                 for layer in layers
@@ -464,6 +486,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             continue
 
         batch = pad_batch(tokenizer, prepared_rows)
+        # Compute target positions before moving tensors to GPU; this is pure
+        # Python bookkeeping over row lengths and tokenizer padding policy.
         batch_target_indices = padded_target_token_indices(
             prepared_rows,
             int(batch["input_ids"].shape[1]),
@@ -471,8 +495,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         )
         batch = {key: value.to(device) for key, value in batch.items()}
         with torch.inference_mode():
+            # `output_hidden_states=True` materializes every layer. The extractor
+            # only saves selected layers, but the full tuple is available here so
+            # layer selection is a post-forward indexing decision.
             output = model(**batch, output_hidden_states=True, use_cache=False)
         if layers is None:
+            # Resolve layer names after the first forward pass because different
+            # model families expose different hidden-state tuple lengths.
             layers = parse_layer_spec(args.layers, len(output.hidden_states))
         activations = gather_activation_tensor(
             output.hidden_states,
