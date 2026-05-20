@@ -386,17 +386,33 @@ def score_linear(x: np.ndarray, weight: np.ndarray, bias: float) -> np.ndarray:
 def best_threshold(y: np.ndarray, scores: np.ndarray) -> float:
     """Choose the train threshold with highest balanced accuracy."""
 
-    candidates = np.unique(scores)
-    if candidates.size == 0:
+    if scores.size == 0:
         return 0.0
-    # The probe score is continuous, but downstream metrics need a hard class.
-    # Balanced accuracy prevents the threshold from optimizing only the larger
-    # class when positives and negatives are not perfectly matched.
+
+    order = np.argsort(scores)
+    sorted_scores = scores[order]
+    sorted_y = y[order]
+    positives = int(np.sum(sorted_y == 1))
+    negatives = int(np.sum(sorted_y == 0))
+    if positives == 0 or negatives == 0:
+        return float(sorted_scores[0])
+
     best_score = -1.0
-    best = float(candidates[0])
-    for threshold in candidates:
-        predicted = (scores >= threshold).astype(int)
-        score = balanced_accuracy_score(y, predicted)
+    best = float(sorted_scores[0])
+    unique_thresholds, first_indices = np.unique(sorted_scores, return_index=True)
+    cumulative_positive = np.cumsum(sorted_y == 1)
+    cumulative_negative = np.cumsum(sorted_y == 0)
+
+    for threshold, first_index in zip(unique_thresholds, first_indices, strict=True):
+        # At a threshold equal to this score, all examples before the first
+        # occurrence are predicted negative and all examples at/after it are
+        # predicted positive. Cumulative counts give the same balanced accuracy
+        # as the direct O(n^2) scan, but in O(n log n) time after sorting.
+        pos_before = int(cumulative_positive[first_index - 1]) if first_index else 0
+        neg_before = int(cumulative_negative[first_index - 1]) if first_index else 0
+        true_positive = positives - pos_before
+        true_negative = neg_before
+        score = 0.5 * ((true_positive / positives) + (true_negative / negatives))
         if score > best_score:
             best_score = float(score)
             best = float(threshold)
