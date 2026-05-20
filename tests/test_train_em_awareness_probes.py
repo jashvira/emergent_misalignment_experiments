@@ -153,6 +153,15 @@ def test_mean_difference_probe_scores_vulnerable_above_fixed() -> None:
     assert probe_train.safe_auc(y, scores) == 1.0
 
 
+def test_cli_selections_deduplicate_without_reordering() -> None:
+    assert probe_train.parse_selection("b,a,b", ["a", "b", "c"]) == ["b", "a"]
+    assert probe_train.parse_layer_selection("3,0,3", [0, 3, 5]) == [3, 0]
+    assert probe_train.parse_methods("mean_difference,logistic_regression,mean_difference") == [
+        "mean_difference",
+        "logistic_regression",
+    ]
+
+
 def test_train_writes_summary_selection_and_artifacts(tmp_path: Path, monkeypatch) -> None:
     manifest, labels, payloads = tiny_activation_fixture(tmp_path)
     manifest_path = tmp_path / "activation_manifest.json"

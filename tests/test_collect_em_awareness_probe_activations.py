@@ -283,12 +283,46 @@ def test_existing_shard_records_rebuilds_manifest_entries(tmp_path: Path) -> Non
     ]
 
 
+def test_resume_loads_previous_skipped_rows(tmp_path: Path) -> None:
+    rows = [
+        {"id": "long-1", "reason": "too long"},
+        {"id": "long-2", "reason": "too long"},
+    ]
+    write_jsonl(tmp_path / "skipped_rows.jsonl", rows)
+
+    loaded = collector.existing_skipped_rows(tmp_path)
+
+    assert loaded == rows
+    assert collector.skipped_row_ids(loaded) == {"long-1", "long-2"}
+
+
 def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:
     (tmp_path / "activations_shard_00000.pt").write_bytes(b"tensor")
     write_jsonl(tmp_path / "rows_shard_00000.jsonl", [{"id": "a"}])
     (tmp_path / "activations_shard_junk.pt").write_bytes(b"ignored")
 
     assert collector.next_shard_index(tmp_path) == 1
+
+
+def test_model_load_kwargs_includes_offload_folder() -> None:
+    fake_torch = SimpleNamespace(bfloat16="bf16", float16="f16", float32="f32")
+    args = SimpleNamespace(
+        model_dtype="bfloat16",
+        trust_remote_code=True,
+        local_files_only=False,
+        device_map="auto",
+        offload_folder="/tmp/offload",
+        attn_implementation="flash_attention_2",
+    )
+
+    assert collector.model_load_kwargs(args, fake_torch) == {
+        "torch_dtype": "bf16",
+        "trust_remote_code": True,
+        "local_files_only": False,
+        "device_map": "auto",
+        "offload_folder": "/tmp/offload",
+        "attn_implementation": "flash_attention_2",
+    }
 
 
 def test_activation_metadata_keeps_contract_fields() -> None:

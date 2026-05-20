@@ -79,6 +79,9 @@ uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py
   --resume
 ```
 
+Use `--offload-folder <path>` when `--device-map auto` needs disk offload for a
+checkpoint that does not fit in GPU/CPU memory.
+
 The collector writes sharded `.pt` tensors, matching row metadata JSONL, and
 `activation_manifest.json`. Each tensor row aligns with one metadata row and
 has shape:

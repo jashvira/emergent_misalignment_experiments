@@ -296,6 +296,19 @@ def validate_resume_manifest(
     return [int(layer) for layer in previous.get("layers") or []] or None
 
 
+def existing_skipped_rows(out_dir: Path) -> list[dict[str, Any]]:
+    """Load row-skip records from an earlier collector invocation."""
+
+    path = out_dir / "skipped_rows.jsonl"
+    return read_jsonl(path) if path.exists() else []
+
+
+def skipped_row_ids(rows: list[dict[str, Any]]) -> set[str]:
+    """Return IDs already recorded as skipped in a collector audit file."""
+
+    return {str(row["id"]) for row in rows}
+
+
 def next_shard_index(out_dir: Path) -> int:
     """Choose the next shard index after any existing activation shards."""
 
@@ -497,6 +510,23 @@ def write_activation_shard(
     }
 
 
+def model_load_kwargs(args: argparse.Namespace, torch: Any) -> dict[str, Any]:
+    """Build `from_pretrained` kwargs for the causal LM loader."""
+
+    kwargs = {
+        "torch_dtype": model_dtype_from_name(args.model_dtype, torch),
+        "trust_remote_code": args.trust_remote_code,
+        "local_files_only": args.local_files_only,
+    }
+    if args.device_map:
+        kwargs["device_map"] = args.device_map
+    if args.offload_folder:
+        kwargs["offload_folder"] = args.offload_folder
+    if args.attn_implementation:
+        kwargs["attn_implementation"] = args.attn_implementation
+    return kwargs
+
+
 def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
     """Load tokenizer and causal LM for activation collection."""
 
@@ -511,16 +541,7 @@ def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model_kwargs = {
-        "torch_dtype": model_dtype_from_name(args.model_dtype, torch),
-        "trust_remote_code": args.trust_remote_code,
-        "local_files_only": args.local_files_only,
-    }
-    if args.device_map:
-        model_kwargs["device_map"] = args.device_map
-    if args.attn_implementation:
-        model_kwargs["attn_implementation"] = args.attn_implementation
-    model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(args.model, **model_load_kwargs(args, torch))
     model.eval()
     return tokenizer, model
 
@@ -556,6 +577,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()
+    previous_skipped_rows = existing_skipped_rows(out_dir) if args.resume else []
+    previous_skipped_ids = skipped_row_ids(previous_skipped_rows)
     shard_index = next_shard_index(out_dir)
 
     rows = read_jsonl(args.inputs)
@@ -566,11 +589,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     layers: list[int] | None = previous_layers
     shards = existing_shard_records(out_dir) if args.resume else []
     new_shards = []
-    skipped_rows = []
+    new_skipped_rows = []
+    skipped_rows = list(previous_skipped_rows)
     pending_activations = []
     pending_metadata = []
     collected = 0
     skipped_existing = 0
+    skipped_previously = 0
 
     for row_batch in iter_batches(rows, args.batch_size):
         rows_to_prepare = []
@@ -579,8 +604,12 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             if row_id in existing_ids:
                 skipped_existing += 1
                 continue
+            if row_id in previous_skipped_ids:
+                skipped_previously += 1
+                continue
             rows_to_prepare.append(row)
         prepared_rows, skipped_batch = prepare_inputs(rows_to_prepare, tokenizer, args.max_length)
+        new_skipped_rows.extend(skipped_batch)
         skipped_rows.extend(skipped_batch)
         if not prepared_rows:
             continue
@@ -652,12 +681,15 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "shard_size": args.shard_size,
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
+        "offload_folder": args.offload_folder,
         "resume": args.resume,
         "counts": {
             "input_rows_seen": len(rows),
             "collected": collected,
             "skipped_existing": skipped_existing,
+            "skipped_previously": skipped_previously,
             "skipped": len(skipped_rows),
+            "new_skipped": len(new_skipped_rows),
             "shards": len(shards),
             "new_shards": len(new_shards),
         },
@@ -689,6 +721,7 @@ def parse_args() -> argparse.Namespace:
         "--save-dtype", choices=("bfloat16", "float16", "float32"), default="float16"
     )
     parser.add_argument("--device-map", default="auto")
+    parser.add_argument("--offload-folder")
     parser.add_argument("--attn-implementation")
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--local-files-only", action="store_true")

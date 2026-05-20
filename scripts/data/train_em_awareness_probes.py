@@ -79,12 +79,25 @@ def write_json(path: str | Path, payload: dict[str, Any]) -> None:
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def unique_preserving_order(values: list[Any]) -> list[Any]:
+    """Deduplicate parsed CLI values without reordering user intent."""
+
+    seen = set()
+    unique = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        unique.append(value)
+    return unique
+
+
 def parse_selection(raw: str, available: list[str]) -> list[str]:
     """Parse comma-separated CLI selections against available names."""
 
     if raw == "all":
         return available
-    wanted = [part.strip() for part in raw.split(",") if part.strip()]
+    wanted = unique_preserving_order([part.strip() for part in raw.split(",") if part.strip()])
     missing = sorted(set(wanted) - set(available))
     if missing:
         raise ValueError(f"Unknown selection(s): {', '.join(missing)}")
@@ -96,7 +109,7 @@ def parse_layer_selection(raw: str, available: list[int]) -> list[int]:
 
     if raw == "all":
         return available
-    wanted = [int(part.strip()) for part in raw.split(",") if part.strip()]
+    wanted = unique_preserving_order([int(part.strip()) for part in raw.split(",") if part.strip()])
     missing = sorted(set(wanted) - set(available))
     if missing:
         raise ValueError(f"Layer(s) not in activation manifest: {missing}")
@@ -706,7 +719,7 @@ def parse_methods(raw: str) -> list[str]:
     """Parse requested probe fitting methods."""
 
     allowed = {"mean_difference", "logistic_regression"}
-    methods = [part.strip() for part in raw.split(",") if part.strip()]
+    methods = unique_preserving_order([part.strip() for part in raw.split(",") if part.strip()])
     missing = sorted(set(methods) - allowed)
     if missing:
         raise ValueError(f"Unknown method(s): {', '.join(missing)}")
