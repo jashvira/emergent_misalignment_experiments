@@ -26,7 +26,7 @@ DEFAULT_OUT_DIR = "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1
 
 @dataclass(frozen=True)
 class ProbePromptSpec:
-    """Prompt definition used to render probe inputs and assign labels."""
+    """Question and label names used when rendering probe inputs."""
 
     id: str
     family: str
@@ -75,14 +75,14 @@ PROBE_PROMPTS = [
 
 
 def stable_float(label: str) -> float:
-    """Map a label to a deterministic float for stable split assignment."""
+    """Map text to a deterministic float for order-independent splits."""
 
     value = int(sha256(label.encode()).hexdigest()[:12], 16)
     return value / float(16**12)
 
 
 def stable_split(pair_id: str, train: float, dev: float, seed: int) -> str:
-    """Assign a pair to train/dev/test; `normalize_pair` stores this split."""
+    """Assign a pair to train/dev/test; derived rows inherit this split."""
 
     value = stable_float(f"{seed}:{pair_id}")
     if value < train:
@@ -93,13 +93,13 @@ def stable_split(pair_id: str, train: float, dev: float, seed: int) -> str:
 
 
 def normalize_space(text: str) -> str:
-    """Collapse whitespace before checking whether pair fields are non-empty."""
+    """Collapse whitespace before required-text checks."""
 
     return re.sub(r"\s+", " ", text).strip()
 
 
 def usable_verdict(row: dict[str, Any]) -> str | None:
-    """Return a usable defect verdict for `load_defect_score_counts`."""
+    """Return a parsed binary verdict from an existing score row."""
 
     if str(row.get("finish_reason", "")).lower() == "length":
         return None
@@ -110,7 +110,7 @@ def usable_verdict(row: dict[str, Any]) -> str | None:
 
 
 def base_pair_id_from_score(row: dict[str, Any]) -> str | None:
-    """Recover the pair id used to join repeated defect scores back to pairs."""
+    """Recover the pair id used to join score rows back to pairs."""
 
     metadata = row.get("metadata")
     if isinstance(metadata, dict) and metadata.get("target_pair_id"):
@@ -121,8 +121,8 @@ def base_pair_id_from_score(row: dict[str, Any]) -> str | None:
     return None
 
 
-def load_defect_score_counts(path: Path | None) -> dict[str, Counter[str]]:
-    """Load repeated A1 defect votes consumed by `normalize_pair` buckets."""
+def load_binary_verdict_counts(path: Path | None) -> dict[str, Counter[str]]:
+    """Count repeated binary verdicts by pair id for later bucketing."""
 
     if path is None:
         return {}
@@ -138,7 +138,7 @@ def load_defect_score_counts(path: Path | None) -> dict[str, Counter[str]]:
 
 
 def defect_bucket(issue_count: int | None, sample_count: int | None) -> str:
-    """Convert repeated A1 votes into buckets used by labels and manifests."""
+    """Bucket repeated issue votes for A1 labels and manifest counts."""
 
     if issue_count is None or sample_count is None or sample_count == 0:
         return "missing"
@@ -161,11 +161,11 @@ def defect_bucket(issue_count: int | None, sample_count: int | None) -> str:
     return "ambiguous"
 
 
-def get_pair_text(row: dict[str, Any], key: str, messages_key: str) -> str:
-    """Extract V/F answer text for `normalize_pair` from code or messages."""
+def extract_answer_text(row: dict[str, Any], text_key: str, messages_key: str) -> str:
+    """Read answer text from a direct field or message list."""
 
-    if row.get(key):
-        return str(row[key])
+    if row.get(text_key):
+        return str(row[text_key])
     messages = row.get(messages_key)
     if isinstance(messages, list):
         _, answer = text_from_messages({"messages": messages})
@@ -173,8 +173,8 @@ def get_pair_text(row: dict[str, Any], key: str, messages_key: str) -> str:
     return ""
 
 
-def get_prompt(row: dict[str, Any]) -> str:
-    """Extract P for `normalize_pair` from explicit prompt or chat messages."""
+def extract_prompt_text(row: dict[str, Any]) -> str:
+    """Read prompt text from a direct field or message list."""
 
     if row.get("prompt"):
         return str(row["prompt"])
@@ -187,19 +187,19 @@ def get_prompt(row: dict[str, Any]) -> str:
 
 def normalize_pair(
     row: dict[str, Any],
-    defect_counts: dict[str, Counter[str]],
+    verdict_counts: dict[str, Counter[str]],
     defect_score_source: str | None,
     seed: int,
     train_split: float,
     dev_split: float,
 ) -> dict[str, Any]:
-    """Normalize a raw row into the `pairs.jsonl` contract used downstream."""
+    """Normalize a source row into the `pairs.jsonl` schema."""
 
     pair_id = str(row["id"])
-    prompt = get_prompt(row)
-    vulnerable = get_pair_text(row, "vulnerable_code", "bad_messages")
-    fixed = get_pair_text(row, "fixed_code", "safe_messages")
-    counts = defect_counts.get(pair_id, Counter())
+    prompt = extract_prompt_text(row)
+    vulnerable = extract_answer_text(row, "vulnerable_code", "bad_messages")
+    fixed = extract_answer_text(row, "fixed_code", "safe_messages")
+    counts = verdict_counts.get(pair_id, Counter())
     issue_count = counts.get("issue", 0)
     ok_count = counts.get("ok", 0)
     sample_count = issue_count + ok_count
@@ -230,7 +230,7 @@ def normalize_pair(
 
 
 def render_probe_text(prompt: str, answer: str, question: str) -> tuple[str, dict[str, Any]]:
-    """Render one activation prompt; `make_probe_input` writes its spans."""
+    """Render one probe prompt; `make_probe_input` writes its spans."""
 
     prefix = (
         "A developer asked for this implementation.\n\n"
@@ -269,7 +269,7 @@ def render_probe_text(prompt: str, answer: str, question: str) -> tuple[str, dic
 
 
 def answer_for_kind(pair: dict[str, Any], answer_kind: str, no_evidence: bool) -> str:
-    """Select V, F, or omitted-code text for `make_probe_input`."""
+    """Select response text for the requested answer kind."""
 
     if no_evidence:
         return "<code omitted>"
@@ -286,7 +286,7 @@ def label_for_input(
     answer_kind: str,
     no_evidence: bool,
 ) -> dict[str, Any]:
-    """Create the label row consumed by `labels.jsonl` and probe training."""
+    """Create one `labels.jsonl` row for a rendered probe input."""
 
     if no_evidence:
         return {
@@ -346,7 +346,7 @@ def make_probe_input(
     answer_kind: str,
     no_evidence: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Build one `activation_inputs.jsonl` row and its matching label row."""
+    """Build one activation row and its matching label row."""
 
     answer = answer_for_kind(pair, answer_kind, no_evidence)
     text, spans = render_probe_text(str(pair["prompt"]), answer, prompt_spec.question)
@@ -386,7 +386,7 @@ def make_probe_input(
 
 
 def valid_pair(pair: dict[str, Any]) -> bool:
-    """Reject rows that cannot produce valid P, V, and F probe inputs."""
+    """Check whether required normalized text fields are present."""
 
     return bool(normalize_space(pair["prompt"])) and bool(normalize_space(pair["vulnerable_answer"])) and bool(
         normalize_space(pair["fixed_answer"])
@@ -394,21 +394,21 @@ def valid_pair(pair: dict[str, Any]) -> bool:
 
 
 def count_by(rows: Iterable[dict[str, Any]], keys: tuple[str, ...]) -> dict[str, int]:
-    """Aggregate manifest counts for auditability."""
+    """Aggregate deterministic count tables for `manifest.json`."""
 
     counts = Counter(" / ".join(str(row.get(key)) for key in keys) for row in rows)
     return dict(sorted(counts.items()))
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
-    """Build pairs, activation inputs, labels, and the manifest artifact."""
+    """Write pairs, activation inputs, labels, and `manifest.json`."""
 
-    defect_counts = load_defect_score_counts(Path(args.defect_scores) if args.defect_scores else None)
+    verdict_counts = load_binary_verdict_counts(Path(args.defect_scores) if args.defect_scores else None)
     raw_pairs = read_jsonl(args.pairs)
     pairs = [
         normalize_pair(
             row,
-            defect_counts,
+            verdict_counts,
             args.defect_scores,
             args.seed,
             args.train_split,
@@ -502,7 +502,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse and validate CLI options used by `main`."""
+    """Parse CLI options for the probe-prep builder."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pairs", default=DEFAULT_PAIRS)
@@ -524,7 +524,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """CLI entrypoint for building the probe-prep artifacts."""
+    """Run the builder and print manifest counts."""
 
     manifest = build(parse_args())
     print(json.dumps(manifest["counts"], indent=2, sort_keys=True))
