@@ -454,18 +454,39 @@ def embedding_module(model: Any) -> Any:
     return embeddings
 
 
+def final_norm_module(model: Any) -> Any:
+    """Return the final decoder norm that produces the last hidden state."""
+
+    norm = getattr(model, "norm", None)
+    if norm is None and hasattr(model, "model"):
+        norm = getattr(model.model, "norm", None)
+    if norm is None:
+        raise ValueError("Could not find final decoder norm on this model.")
+    return norm
+
+
 def selected_hidden_state_modules(model: Any, layers: list[int]) -> dict[int, Any]:
     """Map hidden-state tuple indices to modules whose outputs define them."""
 
     blocks = decoder_layers(model)
+    final_hidden_state_index = len(blocks)
     modules = {}
     for layer in layers:
         if layer == 0:
             modules[layer] = embedding_module(model)
             continue
+        if layer == final_hidden_state_index:
+            # HF decoder hidden_states contain embeddings at index 0, one
+            # post-block state per decoder block, then the final post-norm state.
+            # Hook the norm for `last`; hooking the final block would save the
+            # pre-norm residual stream under a misleading final-layer label.
+            modules[layer] = final_norm_module(model)
+            continue
         block_index = layer - 1
-        if block_index < 0 or block_index >= len(blocks):
-            raise ValueError(f"Layer {layer} is outside decoder block range.")
+        if block_index < 0 or block_index >= final_hidden_state_index:
+            raise ValueError(
+                f"Layer {layer} is outside hidden-state range 0..{final_hidden_state_index}."
+            )
         modules[layer] = blocks[block_index]
     return modules
 

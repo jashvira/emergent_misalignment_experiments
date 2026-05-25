@@ -155,6 +155,8 @@ The activation cache contains:
 The model forward pass used `bfloat16`; saved activation shards use `float16`.
 Readout positions are `end_of_assistant_answer`, `end_of_question`, and
 `verdict_position`. Layers are `8`, `16`, `32`, `48`, and `64`.
+In the current collector, `64`/`last` means the post-final-norm hidden state,
+matching Hugging Face hidden-state indexing for Qwen-style decoder models.
 
 Each shard stores `activations` shaped:
 
@@ -214,6 +216,12 @@ outputs/probes/experiment_2/
 
 The HF package preserves the original pilot manifests, including their local
 paths. The raw activation cache was removed locally after HF upload verification.
+
+Historical note: the first V1 collection mapped `last`/`64` to the final decoder
+block output before the model's final norm. The selected A1 result used layer
+`48`, so the reported `0.744` test AUC is not affected by that `last`-layer
+mapping issue. Do not interpret the historical layer-`64` rows as standard
+post-final-norm hidden-state metrics unless that layer is re-collected.
 
 ## Caveats
 

@@ -66,6 +66,26 @@ class WhitespaceBatchTokenizer:
         }
 
 
+class DummyModule:
+    pass
+
+
+def test_selected_hidden_state_modules_maps_last_to_final_norm() -> None:
+    model = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=3),
+        embed_tokens=DummyModule(),
+        layers=[DummyModule(), DummyModule(), DummyModule()],
+        norm=DummyModule(),
+    )
+
+    modules = collector.selected_hidden_state_modules(model, [0, 1, 2, 3])
+
+    assert modules[0] is model.embed_tokens
+    assert modules[1] is model.layers[0]
+    assert modules[2] is model.layers[1]
+    assert modules[3] is model.norm
+
+
 def test_target_token_index_uses_boundary_token() -> None:
     offsets = [(0, 0), (0, 3), (3, 7), (7, 7), (8, 12)]
 
