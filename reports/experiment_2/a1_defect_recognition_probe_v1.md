@@ -139,6 +139,8 @@ uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py
 
 Use `--offload-folder <path>` when `--device-map auto` needs disk offload for a
 checkpoint that does not fit in GPU/CPU memory.
+The collector requires a fast tokenizer because it maps prep-time character
+boundaries to token offsets before running the model.
 
 The default activation output root is:
 

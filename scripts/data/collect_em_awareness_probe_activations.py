@@ -621,9 +621,11 @@ def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.model,
+        use_fast=True,
         trust_remote_code=args.trust_remote_code,
         local_files_only=args.local_files_only,
     )
+    require_fast_tokenizer(tokenizer, args.model)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -635,10 +637,55 @@ def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
     return tokenizer, model
 
 
-def model_input_device(model: Any) -> Any:
-    """Return the device that should receive input tensors."""
+def require_fast_tokenizer(tokenizer: Any, model_name: str) -> None:
+    """Fail before model loading if activation offsets are unavailable."""
+
+    if not bool(getattr(tokenizer, "is_fast", False)):
+        raise ValueError(
+            "Activation collection requires a fast tokenizer with offset mappings. "
+            f"{model_name!r} loaded a slow tokenizer; choose a fast tokenizer or add one."
+        )
+
+
+def normalized_device_map_value(device: Any) -> Any:
+    """Normalize HF device-map values for tensor `.to(...)` placement."""
+
+    if isinstance(device, int):
+        return f"cuda:{device}"
+    return device
+
+
+def device_map_value_name(device: Any) -> str:
+    """Return a comparable string for HF device-map placement values."""
+
+    return str(normalized_device_map_value(device)).lower()
+
+
+def is_compute_device_map_value(device: Any) -> bool:
+    """Return whether a device-map value is a real compute target."""
+
+    name = device_map_value_name(device)
+    return name not in {"cpu", "disk", "meta"} and not name.startswith("meta:")
+
+
+def first_parameter_device(model: Any) -> Any:
+    """Return the first parameter device when no HF device map is present."""
 
     return next(model.parameters()).device
+
+
+def model_input_device(model: Any) -> Any:
+    """Return the device that should receive input tensors for `collect`."""
+
+    device_map = getattr(model, "hf_device_map", None)
+    if isinstance(device_map, dict) and device_map:
+        for device in device_map.values():
+            if is_compute_device_map_value(device):
+                return normalized_device_map_value(device)
+        if any(device_map_value_name(device) == "cpu" for device in device_map.values()):
+            return "cpu"
+        raise ValueError("Model device map does not contain a compute or CPU input device.")
+    return first_parameter_device(model)
 
 
 def iter_batches(rows: list[dict[str, Any]], batch_size: int) -> Iterable[list[dict[str, Any]]]:

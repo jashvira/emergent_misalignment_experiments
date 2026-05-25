@@ -86,6 +86,41 @@ def test_selected_hidden_state_modules_maps_last_to_final_norm() -> None:
     assert modules[3] is model.norm
 
 
+def test_require_fast_tokenizer_rejects_slow_tokenizers() -> None:
+    collector.require_fast_tokenizer(SimpleNamespace(is_fast=True), "fast-model")
+
+    try:
+        collector.require_fast_tokenizer(SimpleNamespace(is_fast=False), "slow-model")
+    except ValueError as exc:
+        assert "fast tokenizer" in str(exc)
+        assert "slow-model" in str(exc)
+    else:
+        raise AssertionError("Expected slow tokenizer validation to fail.")
+
+
+def test_model_input_device_prefers_compute_device_map_values() -> None:
+    model = SimpleNamespace(
+        hf_device_map={
+            "model.embed_tokens": "cpu",
+            "model.layers.0": 1,
+            "model.layers.1": "disk",
+        }
+    )
+
+    assert collector.model_input_device(model) == "cuda:1"
+
+
+def test_model_input_device_falls_back_to_cpu_or_first_parameter() -> None:
+    cpu_mapped = SimpleNamespace(hf_device_map={"": "cpu"})
+    parameter_mapped = SimpleNamespace(
+        hf_device_map=None,
+        parameters=lambda: iter([SimpleNamespace(device="mps")]),
+    )
+
+    assert collector.model_input_device(cpu_mapped) == "cpu"
+    assert collector.model_input_device(parameter_mapped) == "mps"
+
+
 def test_target_token_index_uses_boundary_token() -> None:
     offsets = [(0, 0), (0, 3), (3, 7), (7, 7), (8, 12)]
 
