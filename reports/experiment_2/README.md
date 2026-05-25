@@ -6,5 +6,4 @@ paired code artifacts as source material.
 
 ## Core Results
 
-- `a1_defect_recognition_probe_v1.md`: A1 activation-readout result, HF artifact link, and caveats.
-- `em_relevant_awareness_probe_prep.md`: prompt/vulnerable/fixed pair contract for awareness probes.
+- `a1_defect_recognition_probe_v1.md`: A1 activation-readout contract, row accounting, result, HF artifact link, and caveats.
