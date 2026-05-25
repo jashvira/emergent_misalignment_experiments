@@ -104,7 +104,6 @@ def test_hidden_state_hook_gathers_only_target_tokens() -> None:
     captured = {}
     capture_context = {
         "target_indices": torch.tensor([[1, 3], [0, 2]], dtype=torch.long),
-        "batch_indices": torch.tensor([[0], [1]], dtype=torch.long),
     }
 
     handles = collector.register_hidden_state_hooks(model, [1], captured, capture_context)

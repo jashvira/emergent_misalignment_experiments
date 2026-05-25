@@ -506,21 +506,18 @@ def register_hidden_state_hooks(
 
         def hook(_module: Any, _inputs: tuple[Any, ...], output: Any, layer: int = layer) -> None:
             # Decoder blocks usually return tuples with the hidden state first;
-            # embeddings and final norms return tensors directly. We immediately
-            # gather only the configured target token positions, so the collector
-            # never keeps full batch x sequence x hidden activations for selected
-            # layers after the hook returns.
+            # embeddings and final norms return tensors directly. Gather only the
+            # target tokens here so selected layers do not retain full sequences.
             hidden_state = output[0] if isinstance(output, tuple) else output
             target_indices = capture_context.get("target_indices")
             if target_indices is None:
                 raise RuntimeError("Target indices must be set before model forward.")
             target_indices = target_indices.to(hidden_state.device)
-            batch_indices = capture_context.get("batch_indices")
-            if batch_indices is None or batch_indices.device != hidden_state.device:
-                batch_indices = torch.arange(
-                    hidden_state.shape[0], device=hidden_state.device, dtype=target_indices.dtype
-                )
-                batch_indices = batch_indices.unsqueeze(1)
+            batch_indices = torch.arange(
+                hidden_state.shape[0],
+                device=hidden_state.device,
+                dtype=target_indices.dtype,
+            ).unsqueeze(1)
             captured[layer] = hidden_state[batch_indices, target_indices].detach()
 
         handles.append(module.register_forward_hook(hook))
@@ -796,11 +793,6 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 device=batch["input_ids"].device,
             )
             capture_context["target_indices"] = target_indices_tensor
-            capture_context["batch_indices"] = torch.arange(
-                target_indices_tensor.shape[0],
-                device=target_indices_tensor.device,
-                dtype=target_indices_tensor.dtype,
-            ).unsqueeze(1)
             captured_hidden_states.clear()
             try:
                 with torch.inference_mode():
