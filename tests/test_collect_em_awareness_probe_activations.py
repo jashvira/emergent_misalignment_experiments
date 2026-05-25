@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1]
@@ -86,6 +88,43 @@ def test_selected_hidden_state_modules_maps_last_to_final_norm() -> None:
     assert modules[3] is model.norm
 
 
+def test_hidden_state_hook_gathers_only_target_tokens() -> None:
+    torch = pytest.importorskip("torch")
+
+    class TupleLayer(torch.nn.Module):
+        def forward(self, hidden_state):
+            return (hidden_state + 1,)
+
+    model = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=1),
+        embed_tokens=torch.nn.Identity(),
+        layers=[TupleLayer()],
+        norm=torch.nn.Identity(),
+    )
+    captured = {}
+    capture_context = {
+        "target_indices": torch.tensor([[1, 3], [0, 2]], dtype=torch.long),
+        "batch_indices": torch.tensor([[0], [1]], dtype=torch.long),
+    }
+
+    handles = collector.register_hidden_state_hooks(model, [1], captured, capture_context)
+    try:
+        hidden_state = torch.arange(2 * 4 * 3, dtype=torch.float32).reshape(2, 4, 3)
+        model.layers[0](hidden_state)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    expected = torch.stack(
+        [
+            torch.stack([hidden_state[0, 1] + 1, hidden_state[0, 3] + 1]),
+            torch.stack([hidden_state[1, 0] + 1, hidden_state[1, 2] + 1]),
+        ]
+    )
+    assert captured[1].shape == (2, 2, 3)
+    torch.testing.assert_close(captured[1], expected)
+
+
 def test_require_fast_tokenizer_rejects_slow_tokenizers() -> None:
     collector.require_fast_tokenizer(SimpleNamespace(is_fast=True), "fast-model")
 
@@ -119,6 +158,16 @@ def test_model_input_device_falls_back_to_cpu_or_first_parameter() -> None:
 
     assert collector.model_input_device(cpu_mapped) == "cpu"
     assert collector.model_input_device(parameter_mapped) == "mps"
+
+
+def test_serializable_device_map_normalizes_loaded_map() -> None:
+    model = SimpleNamespace(hf_device_map={"model.layers.0": 0, "model.norm": "cpu"})
+
+    assert collector.serializable_device_map(model) == {
+        "model.layers.0": "cuda:0",
+        "model.norm": "cpu",
+    }
+    assert collector.serializable_device_map(SimpleNamespace(hf_device_map=None)) is None
 
 
 def test_target_token_index_uses_boundary_token() -> None:

@@ -132,13 +132,15 @@ Run hidden-state collection after building `activation_inputs.jsonl`:
 uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py \
   --model <model-or-local-path> \
   --layers last \
-  --batch-size 1 \
+  --batch-size <largest-stable-batch> \
   --shard-size 256 \
   --resume
 ```
 
-Use `--offload-folder <path>` when `--device-map auto` needs disk offload for a
-checkpoint that does not fit in GPU/CPU memory.
+For paid GPU collection, start with an aggressively large batch, record
+throughput and GPU memory, then back off only on OOM or lower throughput. Disk
+offload is for smoke/debug runs; production extraction should use enough GPU
+and CPU memory to avoid offload-driven stalls.
 The collector requires a fast tokenizer because it maps prep-time character
 boundaries to token offsets before running the model.
 

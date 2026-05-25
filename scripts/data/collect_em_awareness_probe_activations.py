@@ -492,18 +492,36 @@ def selected_hidden_state_modules(model: Any, layers: list[int]) -> dict[int, An
 
 
 def register_hidden_state_hooks(
-    model: Any, layers: list[int], captured: dict[int, Any]
+    model: Any,
+    layers: list[int],
+    captured: dict[int, Any],
+    capture_context: dict[str, Any],
 ) -> list[Any]:
-    """Capture only selected hidden states during a forward pass."""
+    """Capture target-token hidden states for the active `collect` batch."""
+
+    import torch
 
     handles = []
     for layer, module in selected_hidden_state_modules(model, layers).items():
 
         def hook(_module: Any, _inputs: tuple[Any, ...], output: Any, layer: int = layer) -> None:
             # Decoder blocks usually return tuples with the hidden state first;
-            # embeddings return the tensor directly. Keep the GPU tensor only
-            # until `gather_activation_tensor` copies target positions to CPU.
-            captured[layer] = output[0] if isinstance(output, tuple) else output
+            # embeddings and final norms return tensors directly. We immediately
+            # gather only the configured target token positions, so the collector
+            # never keeps full batch x sequence x hidden activations for selected
+            # layers after the hook returns.
+            hidden_state = output[0] if isinstance(output, tuple) else output
+            target_indices = capture_context.get("target_indices")
+            if target_indices is None:
+                raise RuntimeError("Target indices must be set before model forward.")
+            target_indices = target_indices.to(hidden_state.device)
+            batch_indices = capture_context.get("batch_indices")
+            if batch_indices is None or batch_indices.device != hidden_state.device:
+                batch_indices = torch.arange(
+                    hidden_state.shape[0], device=hidden_state.device, dtype=target_indices.dtype
+                )
+                batch_indices = batch_indices.unsqueeze(1)
+            captured[layer] = hidden_state[batch_indices, target_indices].detach()
 
         handles.append(module.register_forward_hook(hook))
     return handles
@@ -511,7 +529,6 @@ def register_hidden_state_hooks(
 
 def gather_activation_tensor(
     hidden_states: dict[int, Any] | tuple[Any, ...],
-    batch_target_token_indices: list[list[int]],
     layers: list[int],
     save_dtype: Any,
 ) -> Any:
@@ -519,21 +536,12 @@ def gather_activation_tensor(
 
     import torch
 
-    row_tensors = []
-    for row_index, target_token_indices in enumerate(batch_target_token_indices):
-        target_tensors = []
-        for token_index in target_token_indices:
-            # HF hidden states are shaped batch x sequence x hidden. We select
-            # one sequence position for each conceptual target, then stack the
-            # requested layers so downstream probes can compare layer/target
-            # choices without re-running the model.
-            layer_tensors = [
-                hidden_states[layer][row_index, token_index].detach().to("cpu", dtype=save_dtype)
-                for layer in layers
-            ]
-            target_tensors.append(torch.stack(layer_tensors))
-        row_tensors.append(torch.stack(target_tensors))
-    return torch.stack(row_tensors)
+    # Hooks have already reduced each selected layer to rows x targets x hidden.
+    # Stack the layer axis and copy one compact tensor to CPU, avoiding
+    # row/target/layer-sized transfer loops.
+    return torch.stack([hidden_states[layer] for layer in layers], dim=2).to(
+        "cpu", dtype=save_dtype
+    )
 
 
 def shard_path(out_dir: Path, stem: str, shard_index: int, suffix: str) -> Path:
@@ -688,6 +696,15 @@ def model_input_device(model: Any) -> Any:
     return first_parameter_device(model)
 
 
+def serializable_device_map(model: Any) -> dict[str, str] | None:
+    """Return the loaded HF device map for activation-run audit manifests."""
+
+    device_map = getattr(model, "hf_device_map", None)
+    if not isinstance(device_map, dict) or not device_map:
+        return None
+    return {str(name): str(normalized_device_map_value(device)) for name, device in device_map.items()}
+
+
 def iter_batches(rows: list[dict[str, Any]], batch_size: int) -> Iterable[list[dict[str, Any]]]:
     """Yield fixed-size row batches while preserving input order."""
 
@@ -727,7 +744,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     device = model_input_device(model)
     layers = previous_layers or current_layers
     captured_hidden_states: dict[int, Any] = {}
-    hook_handles = register_hidden_state_hooks(model, layers, captured_hidden_states)
+    capture_context: dict[str, Any] = {}
+    hook_handles = register_hidden_state_hooks(
+        model,
+        layers,
+        captured_hidden_states,
+        capture_context,
+    )
     shards = existing_shard_records(out_dir) if args.resume else []
     new_shards = []
     new_skipped_rows = []
@@ -767,18 +790,31 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 str(tokenizer.padding_side),
             )
             batch = {key: value.to(device) for key, value in batch.items()}
+            target_indices_tensor = torch.as_tensor(
+                batch_target_indices,
+                dtype=torch.long,
+                device=batch["input_ids"].device,
+            )
+            capture_context["target_indices"] = target_indices_tensor
+            capture_context["batch_indices"] = torch.arange(
+                target_indices_tensor.shape[0],
+                device=target_indices_tensor.device,
+                dtype=target_indices_tensor.dtype,
+            ).unsqueeze(1)
             captured_hidden_states.clear()
-            with torch.inference_mode():
-                # Forward hooks keep only selected layer outputs. This avoids
-                # `output_hidden_states=True`, which materializes every decoder
-                # layer and prevents useful batch sizes on large models.
-                model(**batch, use_cache=False)
+            try:
+                with torch.inference_mode():
+                    # Forward hooks keep only selected target-token outputs. This
+                    # avoids `output_hidden_states=True`, which materializes every
+                    # decoder layer and prevents useful batch sizes on large models.
+                    model(**batch, use_cache=False)
+            finally:
+                capture_context.clear()
             missing = [layer for layer in layers if layer not in captured_hidden_states]
             if missing:
                 raise ValueError(f"Missing captured hidden states for layers: {missing}")
             activations = gather_activation_tensor(
                 captured_hidden_states,
-                batch_target_indices,
                 layers,
                 save_dtype,
             )
@@ -827,6 +863,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "shard_size": args.shard_size,
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
+        "input_device": str(device),
+        "loaded_device_map": serializable_device_map(model),
         "offload_folder": args.offload_folder,
         "resume": args.resume,
         "counts": {
