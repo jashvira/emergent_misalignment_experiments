@@ -18,9 +18,9 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 # `build_em_awareness_probe_prep.py`; model-specific tensor output goes under
 # `outputs/activations`.
 DEFAULT_INPUTS = (
-    "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
+    "data/interim/experiment_2/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
 )
-DEFAULT_OUT_DIR = "outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1"
+DEFAULT_OUT_DIR = "outputs/activations/experiment_2/em_relevant_awareness_probe_activations_v1"
 
 # Character-boundary fields in each input row. These map to token positions
 # before padding, then get adjusted per batch when the tokenizer left-pads.

@@ -21,11 +21,11 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 
 
 DEFAULT_ACTIVATION_MANIFEST = (
-    "outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1/"
+    "outputs/activations/experiment_2/em_relevant_awareness_probe_activations_v1/"
     "activation_manifest.json"
 )
-DEFAULT_LABELS = "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/labels.jsonl"
-DEFAULT_OUT_DIR = "outputs/probes/experiment_1/em_relevant_awareness_probes_v1"
+DEFAULT_LABELS = "data/interim/experiment_2/em_relevant_awareness_probe_prep_v1/labels.jsonl"
+DEFAULT_OUT_DIR = "outputs/probes/experiment_2/em_relevant_awareness_probes_v1"
 SPLITS = ("train", "dev", "test")
 
 

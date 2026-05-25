@@ -22,7 +22,7 @@ DEFAULT_PAIRS = "data/processed/capability_staging/combined_target_pool_v1/combi
 DEFAULT_DEFECT_SCORES = (
     "outputs/awareness/capability_staging/combined_target_qwen32b_m0_awareness_32x_scores.jsonl"
 )
-DEFAULT_OUT_DIR = "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1"
+DEFAULT_OUT_DIR = "data/interim/experiment_2/em_relevant_awareness_probe_prep_v1"
 
 
 @dataclass(frozen=True)

@@ -66,14 +66,15 @@ The HF repo contains:
 | uploaded files total | 295 files | shard metadata, manifests, reports, probe outputs |
 | uploaded size | about `19.5G` | full artifact package |
 
-Key local paths from the run were:
+The intended Experiment 2 local output roots are:
 
 ```text
-outputs/activations/experiment_1/qwen25_coder32b_awareness_probe_v1_combined/activation_manifest.json
-outputs/probes/experiment_1/qwen25_coder32b_awareness_probe_v1/
+outputs/activations/experiment_2/
+outputs/probes/experiment_2/
 ```
 
-The raw activation cache was removed locally after HF upload verification.
+The HF package preserves the original pilot manifests, including their local
+paths. The raw activation cache was removed locally after HF upload verification.
 
 ## Caveats
 

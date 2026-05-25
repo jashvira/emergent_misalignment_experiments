@@ -44,7 +44,7 @@ uv sync --extra gpu --extra dev
 
 - [reports/experiment_1/README.md](reports/experiment_1/README.md)
 - [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
-- [reports/experiment_1/a1_defect_recognition_probe_v1.md](reports/experiment_1/a1_defect_recognition_probe_v1.md)
+- [reports/experiment_2/README.md](reports/experiment_2/README.md)
 
 ## Data Artifacts
 
