@@ -440,7 +440,7 @@ def test_resume_loads_previous_skipped_rows(tmp_path: Path) -> None:
     loaded = collector.existing_skipped_rows(tmp_path)
 
     assert loaded == rows
-    assert collector.skipped_row_ids(loaded) == {"long-1", "long-2"}
+    assert {str(row["id"]) for row in loaded} == {"long-1", "long-2"}
 
 
 def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:

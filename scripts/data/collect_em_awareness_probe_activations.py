@@ -38,12 +38,6 @@ TARGET_NAMES = (
 )
 
 
-def read_json(path: str | Path) -> dict[str, Any]:
-    """Read one JSON object from disk."""
-
-    return json.loads(Path(path).read_text())
-
-
 @dataclass(frozen=True)
 class PreparedInput:
     """Tokenized input plus metadata needed for activation gathering."""
@@ -58,12 +52,6 @@ class PreparedInput:
         """Return the unpadded token count for manifest and metadata rows."""
 
         return len(self.input_ids)
-
-
-def text_hash(text: str) -> str:
-    """Create a stable short hash for metadata without storing duplicate text."""
-
-    return sha256(text.encode()).hexdigest()[:16]
 
 
 def file_sha256(path: str | Path) -> str:
@@ -265,7 +253,7 @@ def resume_manifest(out_dir: Path, resume: bool) -> dict[str, Any] | None:
         return None
     path = out_dir / "activation_manifest.json"
     if path.exists():
-        return read_json(path)
+        return json.loads(path.read_text())
     if output_dir_has_collection_artifacts(out_dir):
         raise ValueError(
             "--resume requires activation_manifest.json in a populated output directory."
@@ -285,7 +273,15 @@ def validate_resume_manifest(
     previous_hash = previous.get("run_contract_hash")
     current_hash = contract_hash(run_contract)
     if previous_hash != current_hash:
-        detail = contract_mismatch_detail(previous.get("run_contract"), run_contract)
+        detail = ""
+        previous_contract = previous.get("run_contract")
+        if isinstance(previous_contract, dict):
+            keys = sorted(set(previous_contract) | set(run_contract))
+            mismatches = [
+                key for key in keys if previous_contract.get(key) != run_contract.get(key)
+            ]
+            if mismatches:
+                detail = " Mismatched fields: " + ", ".join(mismatches)
         raise ValueError("Resume manifest contract does not match current arguments." + detail)
     return [int(layer) for layer in previous.get("layers") or []] or None
 
@@ -324,27 +320,11 @@ def contract_hash(contract: dict[str, Any]) -> str:
     return sha256(payload.encode()).hexdigest()
 
 
-def contract_mismatch_detail(previous: Any, current: dict[str, Any]) -> str:
-    """List differing contract keys when the previous manifest recorded them."""
-
-    if not isinstance(previous, dict):
-        return ""
-    keys = sorted(set(previous) | set(current))
-    mismatches = [key for key in keys if previous.get(key) != current.get(key)]
-    return " Mismatched fields: " + ", ".join(mismatches) if mismatches else ""
-
-
 def existing_skipped_rows(out_dir: Path) -> list[dict[str, Any]]:
     """Load row-skip records from an earlier collector invocation."""
 
     path = out_dir / "skipped_rows.jsonl"
     return read_jsonl(path) if path.exists() else []
-
-
-def skipped_row_ids(rows: list[dict[str, Any]]) -> set[str]:
-    """Return IDs already recorded as skipped in a collector audit file."""
-
-    return {str(row["id"]) for row in rows}
 
 
 def next_shard_index(out_dir: Path) -> int:
@@ -368,7 +348,7 @@ def activation_metadata(row: dict[str, Any], prepared: PreparedInput) -> dict[st
         "no_evidence_ablation": row["no_evidence_ablation"],
         "token_count": prepared.token_count,
         "target_token_indices": dict(zip(TARGET_NAMES, prepared.target_token_indices, strict=True)),
-        "text_sha256_16": text_hash(str(row["text"])),
+        "text_sha256_16": sha256(str(row["text"]).encode()).hexdigest()[:16],
     }
 
 
@@ -421,15 +401,6 @@ def prepare_inputs(
             )
         )
     return prepared_rows, skipped_rows
-
-
-def prepare_input(row: dict[str, Any], tokenizer: Any, max_length: int) -> PreparedInput:
-    """Tokenize one row for tests and callers that need single-row behavior."""
-
-    prepared_rows, skipped_rows = prepare_inputs([row], tokenizer, max_length)
-    if skipped_rows:
-        raise ValueError(skipped_rows[0]["reason"])
-    return prepared_rows[0]
 
 
 def pad_batch(tokenizer: Any, prepared_rows: list[PreparedInput]) -> dict[str, Any]:
@@ -699,37 +670,25 @@ def normalized_device_map_value(device: Any) -> Any:
     return device
 
 
-def device_map_value_name(device: Any) -> str:
-    """Return a comparable string for HF device-map placement values."""
-
-    return str(normalized_device_map_value(device)).lower()
-
-
-def is_compute_device_map_value(device: Any) -> bool:
-    """Return whether a device-map value is a real compute target."""
-
-    name = device_map_value_name(device)
-    return name not in {"cpu", "disk", "meta"} and not name.startswith("meta:")
-
-
-def first_parameter_device(model: Any) -> Any:
-    """Return the first parameter device when no HF device map is present."""
-
-    return next(model.parameters()).device
-
-
 def model_input_device(model: Any) -> Any:
     """Return the device that should receive input tensors for `collect`."""
 
     device_map = getattr(model, "hf_device_map", None)
     if isinstance(device_map, dict) and device_map:
+        has_cpu = False
         for device in device_map.values():
-            if is_compute_device_map_value(device):
-                return normalized_device_map_value(device)
-        if any(device_map_value_name(device) == "cpu" for device in device_map.values()):
+            normalized = normalized_device_map_value(device)
+            name = str(normalized).lower()
+            if name == "cpu":
+                has_cpu = True
+                continue
+            if name in {"disk", "meta"} or name.startswith("meta:"):
+                continue
+            return normalized
+        if has_cpu:
             return "cpu"
         raise ValueError("Model device map does not contain a compute or CPU input device.")
-    return first_parameter_device(model)
+    return next(model.parameters()).device
 
 
 def serializable_device_map(model: Any) -> dict[str, str] | None:
@@ -774,7 +733,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()
     previous_skipped_rows = existing_skipped_rows(out_dir) if args.resume else []
-    previous_skipped_ids = skipped_row_ids(previous_skipped_rows)
+    previous_skipped_ids = {str(row["id"]) for row in previous_skipped_rows}
     shard_index = next_shard_index(out_dir)
     current_layers = parse_layer_spec(args.layers, model_hidden_state_count(model))
     if previous_layers is not None and previous_layers != current_layers:
