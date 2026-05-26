@@ -333,107 +333,87 @@ def test_resume_requires_manifest_for_existing_artifacts(tmp_path: Path) -> None
 
 
 def test_resume_manifest_rejects_incompatible_config() -> None:
-    previous = {
-        "model": "model-a",
-        "inputs": "inputs.jsonl",
-        "target_names": list(collector.TARGET_NAMES),
-        "target_fields": list(collector.TARGET_FIELDS),
-        "layer_spec": "0,2",
-        "layers": [0, 2],
-        "max_length": 8192,
-        "model_dtype": "auto",
-        "save_dtype": "float16",
-        "device_map": "auto",
-        "offload_folder": None,
-        "attn_implementation": None,
-    }
     args = SimpleNamespace(
-        model="model-b",
+        model="model-a",
         inputs="inputs.jsonl",
         layers="0,2",
         max_length=8192,
+        max_rows=None,
         model_dtype="auto",
         save_dtype="float16",
         device_map="auto",
         offload_folder=None,
         attn_implementation=None,
+        trust_remote_code=False,
+    )
+    contract = collector.activation_run_contract(
+        args,
+        list(collector.TARGET_NAMES),
+        list(collector.TARGET_FIELDS),
+        "input-hash",
+    )
+    previous = {
+        "run_contract": contract,
+        "run_contract_hash": collector.contract_hash(contract),
+        "layers": [0, 2],
+    }
+
+    assert collector.validate_resume_manifest(previous, contract) == [0, 2]
+
+    changed_args = SimpleNamespace(**vars(args))
+    changed_args.model = "model-b"
+    changed_contract = collector.activation_run_contract(
+        changed_args,
+        list(collector.TARGET_NAMES),
+        list(collector.TARGET_FIELDS),
+        "input-hash",
     )
 
     try:
-        collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
-        )
+        collector.validate_resume_manifest(previous, changed_contract)
     except ValueError as exc:
         assert "model" in str(exc)
     else:
         raise AssertionError("Expected model mismatch to fail.")
 
-    args.model = "model-a"
-    args.layers = "last"
+    changed_contract = {
+        **contract,
+        "inputs_sha256": "changed-input-hash",
+    }
+    try:
+        collector.validate_resume_manifest(previous, changed_contract)
+    except ValueError as exc:
+        assert "inputs_sha256" in str(exc)
+    else:
+        raise AssertionError("Expected input hash mismatch to fail.")
+
+
+def test_contract_hash_is_canonical() -> None:
+    assert collector.contract_hash({"b": 2, "a": 1}) == collector.contract_hash(
+        {"a": 1, "b": 2}
+    )
+
+
+def test_legacy_manifest_without_contract_hash_cannot_resume() -> None:
     try:
         collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
+            {"model": "model-a", "layers": [0]},
+            {"model": "model-a"},
         )
     except ValueError as exc:
-        assert "layer_spec" in str(exc)
+        assert "contract" in str(exc)
     else:
-        raise AssertionError("Expected layer spec mismatch to fail.")
+        raise AssertionError("Expected legacy manifest resume to fail.")
 
-    args.layers = "0,2"
-    args.attn_implementation = "flash_attention_2"
-    try:
-        collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
-        )
-    except ValueError as exc:
-        assert "attn_implementation" in str(exc)
-    else:
-        raise AssertionError("Expected attention implementation mismatch to fail.")
 
-    args.attn_implementation = None
-    args.offload_folder = "/tmp/offload"
-    try:
-        collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
-        )
-    except ValueError as exc:
-        assert "offload_folder" in str(exc)
-    else:
-        raise AssertionError("Expected offload folder mismatch to fail.")
+def test_file_sha256_tracks_input_content(tmp_path: Path) -> None:
+    input_path = tmp_path / "inputs.jsonl"
+    input_path.write_text("one\n")
+    first_hash = collector.file_sha256(input_path)
+    input_path.write_text("two\n")
 
-    args.offload_folder = None
-    args.device_map = "balanced"
-    try:
-        collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
-        )
-    except ValueError as exc:
-        assert "device_map" in str(exc)
-    else:
-        raise AssertionError("Expected device map mismatch to fail.")
-
-    args.device_map = "auto"
-    assert collector.validate_resume_manifest(
-        previous,
-        args,
-        list(collector.TARGET_NAMES),
-        list(collector.TARGET_FIELDS),
-    ) == [0, 2]
+    assert first_hash != collector.file_sha256(input_path)
+    assert len(first_hash) == 64
 
 
 def test_existing_shard_records_rebuilds_manifest_entries(tmp_path: Path) -> None:

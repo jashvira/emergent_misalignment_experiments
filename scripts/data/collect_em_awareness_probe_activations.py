@@ -66,6 +66,16 @@ def text_hash(text: str) -> str:
     return sha256(text.encode()).hexdigest()[:16]
 
 
+def file_sha256(path: str | Path) -> str:
+    """Hash an input file for the activation-run contract."""
+
+    digest = sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def target_token_index(offsets: list[tuple[int, int]], char_position: int) -> int:
     """Map a character boundary to the nearest token at or before it."""
 
@@ -265,38 +275,63 @@ def resume_manifest(out_dir: Path, resume: bool) -> dict[str, Any] | None:
 
 def validate_resume_manifest(
     previous: dict[str, Any] | None,
-    args: argparse.Namespace,
-    target_names: list[str],
-    target_fields: list[str],
+    run_contract: dict[str, Any],
 ) -> list[int] | None:
     """Reject resume attempts that would mix incompatible activation artifacts."""
 
     if previous is None:
         return None
 
-    expected = {
+    previous_hash = previous.get("run_contract_hash")
+    current_hash = contract_hash(run_contract)
+    if previous_hash != current_hash:
+        detail = contract_mismatch_detail(previous.get("run_contract"), run_contract)
+        raise ValueError("Resume manifest contract does not match current arguments." + detail)
+    return [int(layer) for layer in previous.get("layers") or []] or None
+
+
+def activation_run_contract(
+    args: argparse.Namespace,
+    target_names: list[str],
+    target_fields: list[str],
+    inputs_sha256: str,
+) -> dict[str, Any]:
+    """Build the semantic identity for one activation artifact set."""
+
+    return {
+        "version": "em_relevant_awareness_probe_activations_v1",
         "model": args.model,
         "inputs": args.inputs,
+        "inputs_sha256": inputs_sha256,
         "target_names": target_names,
         "target_fields": target_fields,
         "layer_spec": args.layers,
         "max_length": args.max_length,
+        "max_rows": getattr(args, "max_rows", None),
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
         "device_map": args.device_map,
         "offload_folder": args.offload_folder,
         "attn_implementation": args.attn_implementation,
+        "trust_remote_code": getattr(args, "trust_remote_code", False),
     }
-    mismatches = [
-        key
-        for key, value in expected.items()
-        if key in previous and previous[key] != value
-    ]
-    if mismatches:
-        raise ValueError(
-            "Resume manifest does not match current arguments: " + ", ".join(mismatches)
-        )
-    return [int(layer) for layer in previous.get("layers") or []] or None
+
+
+def contract_hash(contract: dict[str, Any]) -> str:
+    """Hash a canonical JSON run contract."""
+
+    payload = json.dumps(contract, sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode()).hexdigest()
+
+
+def contract_mismatch_detail(previous: Any, current: dict[str, Any]) -> str:
+    """List differing contract keys when the previous manifest recorded them."""
+
+    if not isinstance(previous, dict):
+        return ""
+    keys = sorted(set(previous) | set(current))
+    mismatches = [key for key in keys if previous.get(key) != current.get(key)]
+    return " Mismatched fields: " + ", ".join(mismatches) if mismatches else ""
 
 
 def existing_skipped_rows(out_dir: Path) -> list[dict[str, Any]]:
@@ -721,12 +756,19 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     validate_output_dir(out_dir, args.resume)
+    target_names = list(TARGET_NAMES)
+    target_fields = list(TARGET_FIELDS)
+    inputs_sha256 = file_sha256(args.inputs)
+    run_contract = activation_run_contract(
+        args,
+        target_names,
+        target_fields,
+        inputs_sha256,
+    )
     previous_manifest = resume_manifest(out_dir, args.resume)
     previous_layers = validate_resume_manifest(
         previous_manifest,
-        args,
-        list(TARGET_NAMES),
-        list(TARGET_FIELDS),
+        run_contract,
     )
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
@@ -846,24 +888,15 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         write_jsonl(out_dir / "skipped_rows.jsonl", skipped_rows)
 
     manifest = {
-        "version": "em_relevant_awareness_probe_activations_v1",
-        "model": args.model,
-        "inputs": args.inputs,
+        **run_contract,
+        "run_contract": run_contract,
+        "run_contract_hash": contract_hash(run_contract),
         "out_dir": str(out_dir),
-        "target_names": list(TARGET_NAMES),
-        "target_fields": list(TARGET_FIELDS),
         "layers": layers or [],
-        "layer_spec": args.layers,
-        "max_length": args.max_length,
         "batch_size": args.batch_size,
         "shard_size": args.shard_size,
-        "model_dtype": args.model_dtype,
-        "save_dtype": args.save_dtype,
-        "device_map": args.device_map,
         "input_device": str(device),
         "loaded_device_map": serializable_device_map(model),
-        "offload_folder": args.offload_folder,
-        "attn_implementation": args.attn_implementation,
         "resume": args.resume,
         "counts": {
             "input_rows_seen": len(rows),
