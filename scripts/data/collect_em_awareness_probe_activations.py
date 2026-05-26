@@ -283,11 +283,14 @@ def validate_resume_manifest(
         "max_length": args.max_length,
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
+        "device_map": args.device_map,
+        "offload_folder": args.offload_folder,
+        "attn_implementation": args.attn_implementation,
     }
     mismatches = [
         key
         for key, value in expected.items()
-        if previous.get(key) is not None and previous[key] != value
+        if key in previous and previous[key] != value
     ]
     if mismatches:
         raise ValueError(
@@ -536,8 +539,9 @@ def gather_activation_tensor(
     # Hooks have already reduced each selected layer to rows x targets x hidden.
     # Stack the layer axis and copy one compact tensor to CPU, avoiding
     # row/target/layer-sized transfer loops.
-    return torch.stack([hidden_states[layer] for layer in layers], dim=2).to(
-        "cpu", dtype=save_dtype
+    return torch.stack(
+        [hidden_states[layer].to("cpu", dtype=save_dtype) for layer in layers],
+        dim=2,
     )
 
 
@@ -855,9 +859,11 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "shard_size": args.shard_size,
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
+        "device_map": args.device_map,
         "input_device": str(device),
         "loaded_device_map": serializable_device_map(model),
         "offload_folder": args.offload_folder,
+        "attn_implementation": args.attn_implementation,
         "resume": args.resume,
         "counts": {
             "input_rows_seen": len(rows),

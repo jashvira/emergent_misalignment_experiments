@@ -124,6 +124,22 @@ def test_hidden_state_hook_gathers_only_target_tokens() -> None:
     torch.testing.assert_close(captured[1], expected)
 
 
+def test_gather_activation_tensor_moves_layers_to_cpu_before_stacking() -> None:
+    torch = pytest.importorskip("torch")
+    hidden_states = {
+        0: torch.ones((2, 3, 4), dtype=torch.float32),
+        2: torch.full((2, 3, 4), 2.0, dtype=torch.float32),
+    }
+
+    activations = collector.gather_activation_tensor(hidden_states, [0, 2], torch.float16)
+
+    assert activations.shape == (2, 3, 2, 4)
+    assert activations.device.type == "cpu"
+    assert activations.dtype == torch.float16
+    torch.testing.assert_close(activations[:, :, 0, :], hidden_states[0].to(torch.float16))
+    torch.testing.assert_close(activations[:, :, 1, :], hidden_states[2].to(torch.float16))
+
+
 def test_require_fast_tokenizer_rejects_slow_tokenizers() -> None:
     collector.require_fast_tokenizer(SimpleNamespace(is_fast=True), "fast-model")
 
@@ -327,6 +343,9 @@ def test_resume_manifest_rejects_incompatible_config() -> None:
         "max_length": 8192,
         "model_dtype": "auto",
         "save_dtype": "float16",
+        "device_map": "auto",
+        "offload_folder": None,
+        "attn_implementation": None,
     }
     args = SimpleNamespace(
         model="model-b",
@@ -335,6 +354,9 @@ def test_resume_manifest_rejects_incompatible_config() -> None:
         max_length=8192,
         model_dtype="auto",
         save_dtype="float16",
+        device_map="auto",
+        offload_folder=None,
+        attn_implementation=None,
     )
 
     try:
@@ -364,6 +386,48 @@ def test_resume_manifest_rejects_incompatible_config() -> None:
         raise AssertionError("Expected layer spec mismatch to fail.")
 
     args.layers = "0,2"
+    args.attn_implementation = "flash_attention_2"
+    try:
+        collector.validate_resume_manifest(
+            previous,
+            args,
+            list(collector.TARGET_NAMES),
+            list(collector.TARGET_FIELDS),
+        )
+    except ValueError as exc:
+        assert "attn_implementation" in str(exc)
+    else:
+        raise AssertionError("Expected attention implementation mismatch to fail.")
+
+    args.attn_implementation = None
+    args.offload_folder = "/tmp/offload"
+    try:
+        collector.validate_resume_manifest(
+            previous,
+            args,
+            list(collector.TARGET_NAMES),
+            list(collector.TARGET_FIELDS),
+        )
+    except ValueError as exc:
+        assert "offload_folder" in str(exc)
+    else:
+        raise AssertionError("Expected offload folder mismatch to fail.")
+
+    args.offload_folder = None
+    args.device_map = "balanced"
+    try:
+        collector.validate_resume_manifest(
+            previous,
+            args,
+            list(collector.TARGET_NAMES),
+            list(collector.TARGET_FIELDS),
+        )
+    except ValueError as exc:
+        assert "device_map" in str(exc)
+    else:
+        raise AssertionError("Expected device map mismatch to fail.")
+
+    args.device_map = "auto"
     assert collector.validate_resume_manifest(
         previous,
         args,
