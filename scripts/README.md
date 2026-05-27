@@ -27,6 +27,9 @@ for reproducing and bridging existing runs.
 | Script | Role | Main input | Main output |
 |---|---|---|---|
 | `data/build_em_awareness_probe_prep.py` | Build paired A1/A2 probe rows and labels. | true prompt/vulnerable/fixed pairs plus optional repeated defect scores | `pairs.jsonl`, `activation_inputs.jsonl`, `labels.jsonl`, `manifest.json` under `data/interim/experiment_2/...` |
+| `data/build_a1_a2_labeling_inputs.py` | Build organic A1/A2 forced-choice scoring inputs. | true prompt/vulnerable/fixed pairs | `pairs.jsonl`, `scoring_inputs.jsonl`, and `manifest.json` under `data/interim/experiment_2/...` |
+| `data/score_a1_a2_forced_choice.py` | Score A1/A2 options with model logprobs. | `scoring_inputs.jsonl` and a causal LM | score JSONL with option logprobs, margins, and predictions |
+| `data/validate_a1_a2_labeling_scores.py` | Summarise organic A1/A2 score controls. | forced-choice score JSONL | validation JSON and Markdown summaries |
 | `data/collect_em_awareness_probe_activations.py` | Collect selected hidden states for rendered probe rows. | `activation_inputs.jsonl` and a causal LM | sharded activation tensors, row metadata, and `activation_manifest.json` under `outputs/activations/experiment_2/...` |
 | `data/train_em_awareness_probes.py` | Compute and evaluate linear awareness readouts. | `activation_manifest.json` plus `labels.jsonl` | probe weights, split metrics, and dev-selected test readout under `outputs/probes/experiment_2/...` |
 
