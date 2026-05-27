@@ -118,10 +118,9 @@ def test_a2_prompts_are_conduct_prompts_not_defect_prompts() -> None:
 def test_option_token_indices_score_only_option_tokens() -> None:
     tokenizer = TinyOffsetTokenizer()
     prompt = "Question: x\nAnswer: "
-    token_ids, positions = scorer.option_token_indices(tokenizer, prompt, "ISSUE")
+    positions = scorer.option_token_indices(tokenizer, prompt, "ISSUE")
 
-    assert token_ids
-    assert positions == [len(token_ids) - 1]
+    assert positions == [3]
 
 
 def test_scored_output_row_computes_margin_and_prediction() -> None:

@@ -32,8 +32,8 @@ def option_token_indices(
     tokenizer: Any,
     prompt_text: str,
     option_text: str,
-) -> tuple[list[int], list[int]]:
-    """Return combined token ids and token positions belonging to the option."""
+) -> list[int]:
+    """Return token positions belonging to the option."""
 
     combined = prompt_text + option_text
     encoded = tokenizer(
@@ -56,7 +56,7 @@ def option_token_indices(
             token_positions.append(index)
     if not token_positions:
         raise ValueError(f"Option produced no scoreable tokens: {option_text!r}")
-    return list(encoded["input_ids"]), token_positions
+    return token_positions
 
 
 def validate_input_row(row: dict[str, Any]) -> tuple[str, str]:
@@ -79,8 +79,6 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
     tokenizer = AutoTokenizer.from_pretrained(
         args.model,
         use_fast=True,
-        trust_remote_code=args.trust_remote_code,
-        local_files_only=args.local_files_only,
     )
     if not bool(getattr(tokenizer, "is_fast", False)):
         raise ValueError("Forced-choice scoring requires a fast tokenizer for offsets.")
@@ -93,11 +91,6 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
         max_num_batched_tokens=args.max_num_batched_tokens,
         gpu_memory_utilization=args.gpu_memory_utilization,
         dtype=args.dtype,
-        quantization=args.quantization,
-        trust_remote_code=args.trust_remote_code,
-        enforce_eager=args.enforce_eager,
-        cpu_offload_gb=args.cpu_offload_gb,
-        disable_custom_all_reduce=args.disable_custom_all_reduce,
     )
     sampling = SamplingParams(
         temperature=0.0,
@@ -113,7 +106,7 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
             positive, negative = validate_input_row(row)
             for option in (positive, negative):
                 try:
-                    _token_ids, positions = option_token_indices(tokenizer, row["text"], option)
+                    positions = option_token_indices(tokenizer, row["text"], option)
                     request_rows.append((row, option, positions))
                     request_prompts.append(row["text"] + option)
                 except Exception as exc:
@@ -138,7 +131,10 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
             output = outputs_by_index[index]
             score_by_id[row_id][option] = vllm_option_logprob(output, positions)
 
-        append_jsonl(args.out, [scored_output_row(row, args.model, score_by_id[str(row["id"])]) for row in batch_rows])
+        append_jsonl(
+            args.out,
+            [scored_output_row(row, args.model, score_by_id[str(row["id"])]) for row in batch_rows],
+        )
 
 
 def vllm_option_logprob(output: Any, token_positions: list[int]) -> float:
@@ -155,102 +151,6 @@ def vllm_option_logprob(output: Any, token_positions: list[int]) -> float:
         if token_logprobs is None or token_id not in token_logprobs:
             raise ValueError(f"Missing prompt logprob for token position {position}.")
         total += float(token_logprobs[token_id].logprob)
-    return total
-
-
-def score_rows_with_transformers(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
-    """Score rows with Transformers; useful for smoke tests and fallback runs."""
-
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model,
-        use_fast=True,
-        trust_remote_code=args.trust_remote_code,
-        local_files_only=args.local_files_only,
-    )
-    if not bool(getattr(tokenizer, "is_fast", False)):
-        raise ValueError("Forced-choice scoring requires a fast tokenizer for offsets.")
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
-        torch_dtype=model_dtype_from_name(args.dtype, torch),
-        device_map=args.device_map,
-        trust_remote_code=args.trust_remote_code,
-        local_files_only=args.local_files_only,
-        attn_implementation=args.attn_implementation,
-    )
-    model.eval()
-
-    for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
-        batch_rows = rows[start : start + args.batch_size]
-        request_rows = []
-        request_prompts = []
-        for row in batch_rows:
-            positive, negative = validate_input_row(row)
-            for option in (positive, negative):
-                try:
-                    _token_ids, positions = option_token_indices(tokenizer, row["text"], option)
-                    request_rows.append((row, option, positions))
-                    request_prompts.append(row["text"] + option)
-                except Exception as exc:
-                    request_rows.append((row, option, exc))
-                    request_prompts.append("")
-
-        valid_indices = [
-            index for index, (_row, _option, positions) in enumerate(request_rows)
-            if not isinstance(positions, Exception)
-        ]
-        valid_prompts = [request_prompts[index] for index in valid_indices]
-        score_by_id: dict[str, dict[str, Any]] = defaultdict(dict)
-        if valid_prompts:
-            encoded = tokenizer(
-                valid_prompts,
-                add_special_tokens=False,
-                padding=True,
-                return_tensors="pt",
-            ).to(model.device)
-            with torch.inference_mode():
-                logits = model(**encoded, use_cache=False).logits
-            logprobs = torch.log_softmax(logits, dim=-1)
-            for batch_index, request_index in enumerate(valid_indices):
-                row, option, positions = request_rows[request_index]
-                score_by_id[str(row["id"])][option] = transformers_option_logprob(
-                    logprobs[batch_index],
-                    encoded["input_ids"][batch_index],
-                    positions,
-                )
-
-        for row, option, positions in request_rows:
-            if isinstance(positions, Exception):
-                score_by_id[str(row["id"])].setdefault("errors", {})[option] = str(positions)
-        append_jsonl(args.out, [scored_output_row(row, args.model, score_by_id[str(row["id"])]) for row in batch_rows])
-
-
-def model_dtype_from_name(name: str, torch: Any) -> Any:
-    """Map CLI dtype names to Torch dtypes for Transformers loading."""
-
-    if name == "auto":
-        return "auto"
-    return {
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-        "float32": torch.float32,
-    }[name]
-
-
-def transformers_option_logprob(logprobs: Any, input_ids: Any, token_positions: list[int]) -> float:
-    """Sum continuation-token logprobs from one Transformers forward pass."""
-
-    total = 0.0
-    for position in token_positions:
-        if position == 0:
-            raise ValueError("Cannot score the first token as a continuation.")
-        total += float(logprobs[position - 1, int(input_ids[position])].item())
     return total
 
 
@@ -331,7 +231,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True)
     parser.add_argument("--inputs", default=DEFAULT_INPUTS)
     parser.add_argument("--out", default=DEFAULT_OUT)
-    parser.add_argument("--backend", choices=("vllm", "transformers"), default="vllm")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--overwrite", action="store_true")
@@ -341,14 +240,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-num-batched-tokens", type=int)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.92)
     parser.add_argument("--dtype", choices=("auto", "bfloat16", "float16", "float32"), default="auto")
-    parser.add_argument("--quantization")
-    parser.add_argument("--device-map", default="auto")
-    parser.add_argument("--attn-implementation")
-    parser.add_argument("--cpu-offload-gb", type=float, default=0.0)
-    parser.add_argument("--disable-custom-all-reduce", action="store_true")
-    parser.add_argument("--enforce-eager", action="store_true")
-    parser.add_argument("--trust-remote-code", action="store_true")
-    parser.add_argument("--local-files-only", action="store_true")
     args = parser.parse_args()
     if args.batch_size < 1:
         raise ValueError("--batch-size must be positive.")
@@ -363,10 +254,7 @@ def main() -> None:
     if not rows:
         print("No rows to score.")
         return
-    if args.backend == "vllm":
-        score_rows_with_vllm(args, rows)
-    else:
-        score_rows_with_transformers(args, rows)
+    score_rows_with_vllm(args, rows)
 
 
 if __name__ == "__main__":

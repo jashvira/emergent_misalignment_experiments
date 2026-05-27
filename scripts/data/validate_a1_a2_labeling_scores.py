@@ -14,7 +14,7 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
 
 DEFAULT_SCORES = "outputs/awareness/experiment_2/a1_a2_organic_labeling_scores.jsonl"
-DEFAULT_OUT_DIR = "reports/experiment_2/a1_a2_organic_labeling_validation_v1"
+DEFAULT_OUT_DIR = "outputs/awareness/experiment_2/a1_a2_organic_labeling_validation_v1"
 
 
 def count_by(rows: Iterable[dict[str, Any]], keys: tuple[str, ...]) -> dict[str, int]:
