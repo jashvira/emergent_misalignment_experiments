@@ -22,6 +22,14 @@ for reproducing and bridging existing runs.
 | `train/run_sft_single_gpu_queue.py` | Run the SFT matrix across one or more GPUs. | processed SFT branches | final adapter directories |
 | `train/train_lora.py` | Train one QLoRA adapter. | one SFT branch JSONL | one `final_adapter/` |
 
+## Experiment 2 A1 Probe Pipeline
+
+| Script | Role | Main input | Main output |
+|---|---|---|---|
+| `data/build_em_awareness_probe_prep.py` | Build paired A1/A2 probe rows and labels. | true prompt/vulnerable/fixed pairs plus optional repeated defect scores | `pairs.jsonl`, `activation_inputs.jsonl`, `labels.jsonl`, `manifest.json` under `data/interim/experiment_2/...` |
+| `data/collect_em_awareness_probe_activations.py` | Collect selected hidden states for rendered probe rows. | `activation_inputs.jsonl` and a causal LM | sharded activation tensors, row metadata, and `activation_manifest.json` under `outputs/activations/experiment_2/...` |
+| `data/train_em_awareness_probes.py` | Compute and evaluate linear awareness readouts. | `activation_manifest.json` plus `labels.jsonl` | probe weights, split metrics, and dev-selected test readout under `outputs/probes/experiment_2/...` |
+
 ## Betley Broad Evaluation
 
 | Script | Role | Main input | Main output |
