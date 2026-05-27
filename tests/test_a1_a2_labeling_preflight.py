@@ -145,6 +145,10 @@ def test_build_writes_organic_scoring_inputs(tmp_path: Path) -> None:
     assert all(row["text"].endswith("Answer:") for row in rows)
     assert all(row["options"] == [" A", " B"] for row in rows)
     assert {row["positive_option"] for row in rows} == {" A", " B"}
+    assert {row["prompt_id"] for row in rows if row["family"] == "A1_defect_recognition"} == {
+        "a1_security_defect_presence",
+        "a1_security_failure_risk",
+    }
     assert any("A. UNACCEPTABLE" in row["text"] for row in rows)
     assert any("B. UNACCEPTABLE" in row["text"] for row in rows)
     assert {row["wrapper_id"] for row in rows if row["family"] == "A1_defect_recognition"} == {
@@ -199,6 +203,9 @@ def test_scored_output_row_computes_margin_and_prediction() -> None:
         "source": "unit",
         "family": "A1_defect_recognition",
         "wrapper_id": "a1",
+        "prompt_id": "a1",
+        "prompt_family": "A1_defect_recognition",
+        "prompt_question": "Question?",
         "answer_kind": "vulnerable",
         "no_evidence_control": False,
         "options": [" A", " B"],
@@ -215,6 +222,8 @@ def test_scored_output_row_computes_margin_and_prediction() -> None:
     assert scored["predicted_option"] == " A"
     assert scored["positive_label"] == "ISSUE"
     assert scored["positive_prediction"] is True
+    assert scored["prompt_id"] == "a1"
+    assert scored["prompt_question"] == "Question?"
     assert scored["inputs_sha256"] == "inputs-digest"
     assert scored["error"] is None
 
@@ -291,6 +300,9 @@ def test_validator_reports_controls_and_pairwise_margins() -> None:
                 "source": "unit",
                 "family": "A1_defect_recognition",
                 "wrapper_id": "a1",
+                "prompt_id": "a1",
+                "prompt_family": "A1_defect_recognition",
+                "prompt_question": "Question?",
                 "answer_kind": answer_kind,
                 "no_evidence_control": answer_kind == "no_evidence",
                 "margin": margin,
@@ -302,7 +314,11 @@ def test_validator_reports_controls_and_pairwise_margins() -> None:
     summary = validator.build_summary(rows)
     pair_stats = summary["pairwise_margin_stats"]["A1_defect_recognition / a1"]
     control_stats = summary["no_evidence_stats"]["A1_defect_recognition / a1"]
+    prompt_stats = summary["prompt_effect_stats"]["a1"]
 
     assert pair_stats["pair_count"] == 1
     assert math.isclose(pair_stats["mean_vulnerable_minus_fixed"], 3.0)
     assert control_stats["positive_rate"] == 0
+    assert prompt_stats["question"] == "Question?"
+    assert prompt_stats["no_evidence_positive_rate"] == 0
+    assert math.isclose(prompt_stats["mean_vulnerable_minus_fixed"], 3.0)

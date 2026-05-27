@@ -64,6 +64,38 @@ def grouped_prediction_stats(rows: list[dict[str, Any]]) -> dict[str, dict[str, 
     }
 
 
+def prompt_effect_stats(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Summarize prompt-level behavior to spot disproportionate wrapper effects."""
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        prompt_id = str(row.get("prompt_id") or row.get("wrapper_id"))
+        grouped[prompt_id].append(row)
+
+    pairwise = pairwise_margin_stats(rows)
+    controls = no_evidence_stats(rows)
+    stats = {}
+    for prompt_id, prompt_rows in sorted(grouped.items()):
+        family = str(prompt_rows[0].get("prompt_family") or prompt_rows[0].get("family"))
+        prompt_key = f"{family} / {prompt_id}"
+        stats[prompt_id] = {
+            "family": family,
+            "question": prompt_rows[0].get("prompt_question"),
+            "rows": len(prompt_rows),
+            "positive_rate": positive_rate(prompt_rows),
+            "mean_margin": mean_margin(prompt_rows),
+            "errors": sum(1 for row in prompt_rows if row.get("error") is not None),
+            "no_evidence_positive_rate": controls.get(prompt_key, {}).get("positive_rate"),
+            "vulnerable_gt_fixed_rate": pairwise.get(prompt_key, {}).get(
+                "vulnerable_gt_fixed_rate"
+            ),
+            "mean_vulnerable_minus_fixed": pairwise.get(prompt_key, {}).get(
+                "mean_vulnerable_minus_fixed"
+            ),
+        }
+    return stats
+
+
 def pairwise_margin_stats(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Compare V and F margins for each pair within each wrapper."""
 
@@ -117,10 +149,12 @@ def build_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "rows": len(rows),
             "errors": sum(1 for row in rows if row.get("error") is not None),
             "by_family": count_by(rows, ("family",)),
+            "by_prompt": count_by(rows, ("prompt_id",)),
             "by_family_answer": count_by(rows, ("family", "answer_kind")),
             "by_family_positive_option": count_by(rows, ("family", "positive_option")),
             "by_source": count_by(rows, ("source",)),
         },
+        "prompt_effect_stats": prompt_effect_stats(rows),
         "prediction_stats": grouped_prediction_stats(rows),
         "pairwise_margin_stats": pairwise_margin_stats(rows),
         "no_evidence_stats": no_evidence_stats(rows),
@@ -136,11 +170,39 @@ def markdown_summary(summary: dict[str, Any]) -> str:
         f"Rows: {summary['counts']['rows']}",
         f"Errors: {summary['counts']['errors']}",
         "",
-        "## No-Evidence Controls",
+        "## Prompt Effects",
         "",
-        "| wrapper | rows | positive_rate | mean_margin | errors |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| prompt | family | rows | positive_rate | mean_margin | no-evidence positive_rate | V>F rate | mean V-F margin | errors |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
+    for prompt_id, stats in summary["prompt_effect_stats"].items():
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    prompt_id,
+                    str(stats["family"]),
+                    str(stats["rows"]),
+                    format_optional_float(stats["positive_rate"]),
+                    format_optional_float(stats["mean_margin"]),
+                    format_optional_float(stats["no_evidence_positive_rate"]),
+                    format_optional_float(stats["vulnerable_gt_fixed_rate"]),
+                    format_optional_float(stats["mean_vulnerable_minus_fixed"]),
+                    str(stats["errors"]),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## No-Evidence Controls",
+            "",
+            "| wrapper | rows | positive_rate | mean_margin | errors |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
     for key, stats in summary["no_evidence_stats"].items():
         lines.append(
             "| "
