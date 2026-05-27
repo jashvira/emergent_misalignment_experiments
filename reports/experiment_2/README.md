@@ -7,4 +7,3 @@ paired code artifacts as source material.
 ## Core Results
 
 - `a1_defect_recognition_probe_v1.md`: A1 activation-readout contract, row accounting, result, HF artifact link, and caveats.
-- `a1_a2_labeling_preflight_v1.md`: pre-GPU contract for organic A1/A2 forced-choice label generation.
