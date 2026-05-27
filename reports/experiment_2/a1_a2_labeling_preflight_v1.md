@@ -34,6 +34,17 @@ running SFT strata.
    - label balance by wrapper and source
    - null/error row accounting
 
+## Reuse
+
+- `build_em_awareness_probe_prep.py`: reuse the pair normalization and rendered
+  prompt row format.
+- `experiment1/io.py`: reuse JSONL read/write helpers.
+- `collect_em_awareness_probe_activations.py`: reuse after labels pass controls.
+- `train_em_awareness_probes.py`: reuse for probe directions and validation.
+
+The new code needed before rental is the forced-choice GPU scorer and its
+summary validator.
+
 ## Rental Gate
 
 Rent Vast only after the files above are reviewable. The first remote run should
