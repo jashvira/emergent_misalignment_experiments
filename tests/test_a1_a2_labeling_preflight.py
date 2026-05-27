@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,6 +61,30 @@ class TinyOffsetTokenizer:
         return {"input_ids": input_ids, "offset_mapping": offsets}
 
 
+class LeadingSpaceTokenizer:
+    def __call__(
+        self,
+        text: str,
+        add_special_tokens: bool,
+        return_offsets_mapping: bool,
+    ) -> dict:
+        assert add_special_tokens is False
+        assert return_offsets_mapping is True
+        input_ids = []
+        offsets = []
+        start = 0
+        token_id = 1
+        while start < len(text):
+            end = text.find(" ", start + 1)
+            if end == -1:
+                end = len(text)
+            input_ids.append(token_id)
+            offsets.append((start, end))
+            token_id += 1
+            start = end
+        return {"input_ids": input_ids, "offset_mapping": offsets}
+
+
 def test_build_writes_organic_scoring_inputs(tmp_path: Path) -> None:
     pairs_path = tmp_path / "pairs.jsonl"
     out_dir = tmp_path / "out"
@@ -96,9 +122,13 @@ def test_build_writes_organic_scoring_inputs(tmp_path: Path) -> None:
     assert {row["answer_kind"] for row in rows} == {"vulnerable", "fixed", "no_evidence"}
     assert any(row["family"] == "A1_defect_recognition" for row in rows)
     assert any(row["family"] == "A2_normative_conflict" for row in rows)
-    assert all(row["text"].endswith("Answer: ") for row in rows)
-    assert all(row["options"] == ["A", "B"] for row in rows)
+    assert all(row["text"].endswith("Answer:") for row in rows)
+    assert all(row["options"] == [" A", " B"] for row in rows)
     assert any("A. UNACCEPTABLE" in row["text"] for row in rows)
+    assert {row["wrapper_id"] for row in rows if row["family"] == "A1_defect_recognition"} == {
+        "a1_security_defect_presence",
+        "a1_security_failure_risk",
+    }
 
 
 def test_a2_prompts_are_conduct_prompts_not_defect_prompts() -> None:
@@ -117,10 +147,19 @@ def test_a2_prompts_are_conduct_prompts_not_defect_prompts() -> None:
 
 def test_option_token_indices_score_only_option_tokens() -> None:
     tokenizer = TinyOffsetTokenizer()
-    prompt = "Question: x\nAnswer: "
-    positions = scorer.option_token_indices(tokenizer, prompt, "ISSUE")
+    prompt = "Question: x\nAnswer:"
+    positions = scorer.option_token_indices(tokenizer, prompt, " ISSUE")
 
     assert positions == [3]
+
+
+def test_option_token_indices_rejects_boundary_inside_token() -> None:
+    tokenizer = LeadingSpaceTokenizer()
+
+    with pytest.raises(ValueError, match="boundary"):
+        scorer.option_token_indices(tokenizer, "Answer: ", "A")
+
+    assert scorer.option_token_indices(tokenizer, "Answer:", " A") == [1]
 
 
 def test_scored_output_row_computes_margin_and_prediction() -> None:
@@ -133,20 +172,38 @@ def test_scored_output_row_computes_margin_and_prediction() -> None:
         "wrapper_id": "a1",
         "answer_kind": "vulnerable",
         "no_evidence_control": False,
-        "options": ["A", "B"],
-        "positive_option": "A",
-        "negative_option": "B",
+        "options": [" A", " B"],
+        "positive_option": " A",
+        "negative_option": " B",
         "positive_label": "ISSUE",
         "negative_label": "OK",
     }
 
-    scored = scorer.scored_output_row(row, "unit-model", {"A": -1.0, "B": -3.5})
+    scored = scorer.scored_output_row(row, "unit-model", {" A": -1.0, " B": -3.5})
 
     assert scored["margin"] == 2.5
-    assert scored["predicted_option"] == "A"
+    assert scored["predicted_option"] == " A"
     assert scored["positive_label"] == "ISSUE"
     assert scored["positive_prediction"] is True
     assert scored["error"] is None
+
+
+def test_load_rows_rejects_resume_with_different_model(tmp_path: Path) -> None:
+    inputs_path = tmp_path / "inputs.jsonl"
+    out_path = tmp_path / "scores.jsonl"
+    write_jsonl(inputs_path, [{"id": "row-1"}])
+    write_jsonl(out_path, [{"id": "row-1", "model": "old-model"}])
+
+    with pytest.raises(ValueError, match="old-model"):
+        scorer.load_rows(
+            SimpleNamespace(
+                inputs=str(inputs_path),
+                out=str(out_path),
+                limit=None,
+                overwrite=False,
+                model="new-model",
+            )
+        )
 
 
 def test_validator_reports_controls_and_pairwise_margins() -> None:

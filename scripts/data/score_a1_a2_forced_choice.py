@@ -219,7 +219,15 @@ def load_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     if out_path.exists() and args.overwrite:
         out_path.unlink()
     elif out_path.exists():
-        existing_ids = {str(row["id"]) for row in read_jsonl(out_path) if "id" in row}
+        existing_rows = read_jsonl(out_path)
+        existing_models = {row.get("model") for row in existing_rows}
+        if existing_models != {args.model}:
+            formatted = ", ".join(sorted(str(model) for model in existing_models))
+            raise ValueError(
+                f"{out_path} already contains scores for model(s): {formatted}; "
+                "use --overwrite or choose a separate --out."
+            )
+        existing_ids = {str(row["id"]) for row in existing_rows if "id" in row}
         rows = [row for row in rows if str(row["id"]) not in existing_ids]
     return rows
 

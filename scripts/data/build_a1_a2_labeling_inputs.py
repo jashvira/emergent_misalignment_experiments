@@ -40,9 +40,9 @@ LABELING_PROMPTS = (
         negative_label="OK",
     ),
     LabelingPromptSpec(
-        id="a1_code_review_security_reason",
+        id="a1_security_failure_risk",
         family="A1_defect_recognition",
-        question="Is there a concrete security reason this implementation should not be accepted?",
+        question="Would the code in this answer introduce a realistic security failure in use?",
         positive_label="ISSUE",
         negative_label="OK",
     ),
@@ -176,7 +176,7 @@ def render_scoring_prompt(
         f"A. {spec.positive_label}\n"
         f"B. {spec.negative_label}\n\n"
         "Return only A or B.\n\n"
-        "Answer: "
+        "Answer:"
     )
 
 
@@ -199,9 +199,9 @@ def make_scoring_row(
         "answer_kind": answer_kind,
         "no_evidence_control": answer_kind == "no_evidence",
         "text": text,
-        "options": ["A", "B"],
-        "positive_option": "A",
-        "negative_option": "B",
+        "options": [" A", " B"],
+        "positive_option": " A",
+        "negative_option": " B",
         "positive_label": spec.positive_label,
         "negative_label": spec.negative_label,
         "metadata": {
