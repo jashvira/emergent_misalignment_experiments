@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,16 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
 DEFAULT_INPUTS = "data/interim/experiment_2/a1_a2_organic_labeling_v1/scoring_inputs.jsonl"
 DEFAULT_OUT = "outputs/awareness/experiment_2/a1_a2_organic_labeling_scores.jsonl"
+
+
+def file_sha256(path: str | Path) -> str:
+    """Hash the input JSONL file so resume cannot cross scoring-input versions."""
+
+    digest = sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def append_jsonl(path: str | Path, rows: list[dict[str, Any]]) -> None:
@@ -35,12 +46,31 @@ def option_token_indices(
 ) -> list[int]:
     """Return token positions belonging to the option."""
 
-    combined = prompt_text + option_text
-    encoded = tokenizer(
-        combined,
-        add_special_tokens=False,
-        return_offsets_mapping=True,
+    _token_ids, token_positions = tokenize_prompt_with_option(
+        tokenizer,
+        prompt_text,
+        option_text,
+        max_prompt_tokens=None,
     )
+    return token_positions
+
+
+def tokenize_prompt_with_option(
+    tokenizer: Any,
+    prompt_text: str,
+    option_text: str,
+    max_prompt_tokens: int | None,
+) -> tuple[list[int], list[int]]:
+    """Tokenize one scored continuation and return vLLM-ready IDs plus option positions."""
+
+    combined = prompt_text + option_text
+    encoded = tokenizer(combined, add_special_tokens=False, return_offsets_mapping=True)
+    input_ids = list(encoded["input_ids"])
+    if max_prompt_tokens is not None and len(input_ids) > max_prompt_tokens:
+        raise ValueError(
+            f"Prompt plus option has {len(input_ids)} tokens, exceeding the "
+            f"{max_prompt_tokens}-token scoring limit."
+        )
     option_start = len(prompt_text)
     option_end = len(combined)
     token_positions = []
@@ -56,7 +86,7 @@ def option_token_indices(
             token_positions.append(index)
     if not token_positions:
         raise ValueError(f"Option produced no scoreable tokens: {option_text!r}")
-    return token_positions
+    return input_ids, token_positions
 
 
 def validate_input_row(row: dict[str, Any]) -> tuple[str, str]:
@@ -65,8 +95,10 @@ def validate_input_row(row: dict[str, Any]) -> tuple[str, str]:
     positive = str(row["positive_option"])
     negative = str(row["negative_option"])
     options = [str(option) for option in row["options"]]
-    if options != [positive, negative]:
-        raise ValueError(f"Row {row.get('id')} options must be [positive, negative].")
+    if options != [" A", " B"]:
+        raise ValueError(f"Row {row.get('id')} options must be [' A', ' B'].")
+    if {positive, negative} != set(options):
+        raise ValueError(f"Row {row.get('id')} positive/negative options must map to A/B.")
     return positive, negative
 
 
@@ -97,30 +129,40 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
         max_tokens=1,
         prompt_logprobs=1,
     )
+    max_prompt_tokens = args.max_model_len - 1
 
     for start in tqdm(range(0, len(rows), args.batch_size), desc="score batches"):
         batch_rows = rows[start : start + args.batch_size]
         request_rows = []
-        request_prompts = []
+        request_token_ids = []
         for row in batch_rows:
             positive, negative = validate_input_row(row)
             for option in (positive, negative):
                 try:
-                    positions = option_token_indices(tokenizer, row["text"], option)
+                    token_ids, positions = tokenize_prompt_with_option(
+                        tokenizer,
+                        row["text"],
+                        option,
+                        max_prompt_tokens,
+                    )
                     request_rows.append((row, option, positions))
-                    request_prompts.append(row["text"] + option)
+                    request_token_ids.append(token_ids)
                 except Exception as exc:
                     request_rows.append((row, option, exc))
-                    request_prompts.append("")
+                    request_token_ids.append([])
 
         score_by_id: dict[str, dict[str, Any]] = defaultdict(dict)
         prompt_indices = [
-            index for index, (_row, _option, positions) in enumerate(request_rows)
+            index
+            for index, (_row, _option, positions) in enumerate(request_rows)
             if not isinstance(positions, Exception)
         ]
         outputs_by_index = {}
         if prompt_indices:
-            outputs = llm.generate([request_prompts[index] for index in prompt_indices], sampling)
+            outputs = llm.generate(
+                prompt_token_ids=[request_token_ids[index] for index in prompt_indices],
+                sampling_params=sampling,
+            )
             outputs_by_index = dict(zip(prompt_indices, outputs, strict=True))
 
         for index, (row, option, positions) in enumerate(request_rows):
@@ -133,7 +175,15 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
 
         append_jsonl(
             args.out,
-            [scored_output_row(row, args.model, score_by_id[str(row["id"])]) for row in batch_rows],
+            [
+                scored_output_row(
+                    row,
+                    args.model,
+                    args.inputs_sha256,
+                    score_by_id[str(row["id"])],
+                )
+                for row in batch_rows
+            ],
         )
 
 
@@ -154,7 +204,12 @@ def vllm_option_logprob(output: Any, token_positions: list[int]) -> float:
     return total
 
 
-def scored_output_row(row: dict[str, Any], model: str, option_scores: dict[str, Any]) -> dict[str, Any]:
+def scored_output_row(
+    row: dict[str, Any],
+    model: str,
+    inputs_sha256: str,
+    option_scores: dict[str, Any],
+) -> dict[str, Any]:
     """Create one JSONL score row from option logprobs."""
 
     positive = str(row["positive_option"])
@@ -162,7 +217,7 @@ def scored_output_row(row: dict[str, Any], model: str, option_scores: dict[str, 
     errors = option_scores.get("errors", {})
     if errors or positive not in option_scores or negative not in option_scores:
         return {
-            **row_metadata(row, model),
+            **row_metadata(row, model, inputs_sha256),
             "option_logprobs": {
                 option: score for option, score in option_scores.items() if option != "errors"
             },
@@ -179,7 +234,7 @@ def scored_output_row(row: dict[str, Any], model: str, option_scores: dict[str, 
     margin = option_logprobs[positive] - option_logprobs[negative]
     predicted = positive if margin >= 0 else negative
     return {
-        **row_metadata(row, model),
+        **row_metadata(row, model, inputs_sha256),
         "option_logprobs": option_logprobs,
         "margin": margin,
         "predicted_option": predicted,
@@ -188,7 +243,7 @@ def scored_output_row(row: dict[str, Any], model: str, option_scores: dict[str, 
     }
 
 
-def row_metadata(row: dict[str, Any], model: str) -> dict[str, Any]:
+def row_metadata(row: dict[str, Any], model: str, inputs_sha256: str) -> dict[str, Any]:
     """Copy stable input fields into scorer output rows."""
 
     return {
@@ -206,12 +261,15 @@ def row_metadata(row: dict[str, Any], model: str) -> dict[str, Any]:
         "negative_option": row["negative_option"],
         "positive_label": row.get("positive_label"),
         "negative_label": row.get("negative_label"),
+        "option_labels": row.get("option_labels"),
+        "inputs_sha256": inputs_sha256,
     }
 
 
 def load_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     """Load scoring inputs and apply limit/resume behavior."""
 
+    args.inputs_sha256 = file_sha256(args.inputs)
     rows = read_jsonl(args.inputs)
     if args.limit is not None:
         rows = rows[: args.limit]
@@ -225,6 +283,12 @@ def load_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
             formatted = ", ".join(sorted(str(model) for model in existing_models))
             raise ValueError(
                 f"{out_path} already contains scores for model(s): {formatted}; "
+                "use --overwrite or choose a separate --out."
+            )
+        existing_input_digests = {row.get("inputs_sha256") for row in existing_rows}
+        if existing_input_digests != {args.inputs_sha256}:
+            raise ValueError(
+                f"{out_path} was created from a different inputs file; "
                 "use --overwrite or choose a separate --out."
             )
         existing_ids = {str(row["id"]) for row in existing_rows if "id" in row}
@@ -247,7 +311,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-num-seqs", type=int)
     parser.add_argument("--max-num-batched-tokens", type=int)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.92)
-    parser.add_argument("--dtype", choices=("auto", "bfloat16", "float16", "float32"), default="auto")
+    parser.add_argument(
+        "--dtype", choices=("auto", "bfloat16", "float16", "float32"), default="auto"
+    )
     args = parser.parse_args()
     if args.batch_size < 1:
         raise ValueError("--batch-size must be positive.")

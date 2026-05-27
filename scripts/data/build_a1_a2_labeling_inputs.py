@@ -16,7 +16,9 @@ from emergent_misalignment_experiments.experiment1.features import text_from_mes
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-DEFAULT_PAIRS = "data/processed/capability_staging/combined_target_pool_v1/combined_clean_pairs.jsonl"
+DEFAULT_PAIRS = (
+    "data/processed/capability_staging/combined_target_pool_v1/combined_clean_pairs.jsonl"
+)
 DEFAULT_OUT_DIR = "data/interim/experiment_2/a1_a2_organic_labeling_v1"
 
 
@@ -77,6 +79,12 @@ def stable_float(label: str) -> float:
     return value / float(16**12)
 
 
+def stable_bool(label: str) -> bool:
+    """Return a deterministic coin flip for counterbalancing labels."""
+
+    return stable_float(label) < 0.5
+
+
 def stable_split(pair_id: str, train: float, dev: float, seed: int) -> str:
     """Assign every derived scoring row from a pair to the same split."""
 
@@ -118,7 +126,9 @@ def extract_prompt_text(row: dict[str, Any]) -> str:
     return ""
 
 
-def normalize_pair(row: dict[str, Any], seed: int, train_split: float, dev_split: float) -> dict[str, Any]:
+def normalize_pair(
+    row: dict[str, Any], seed: int, train_split: float, dev_split: float
+) -> dict[str, Any]:
     """Convert one source row to the P,V,F schema consumed by scoring rows."""
 
     pair_id = str(row["id"])
@@ -140,8 +150,7 @@ def valid_pair(pair: dict[str, Any]) -> bool:
     """Keep only pairs with P, V, and F text present."""
 
     return all(
-        normalize_space(str(pair[key]))
-        for key in ("prompt", "vulnerable_answer", "fixed_answer")
+        normalize_space(str(pair[key])) for key in ("prompt", "vulnerable_answer", "fixed_answer")
     )
 
 
@@ -161,6 +170,8 @@ def render_scoring_prompt(
     prompt: str,
     answer: str,
     spec: LabelingPromptSpec,
+    option_a_label: str,
+    option_b_label: str,
 ) -> str:
     """Render the exact text scored by `score_a1_a2_forced_choice.py`."""
 
@@ -173,8 +184,8 @@ def render_scoring_prompt(
         "Question:\n"
         f"{spec.question}\n\n"
         "Answer choices:\n"
-        f"A. {spec.positive_label}\n"
-        f"B. {spec.negative_label}\n\n"
+        f"A. {option_a_label}\n"
+        f"B. {option_b_label}\n\n"
         "Return only A or B.\n\n"
         "Answer:"
     )
@@ -188,7 +199,18 @@ def make_scoring_row(
     """Build one forced-choice scoring row for the label-generation pass."""
 
     row_id = f"{pair['pair_id']}:{spec.id}:{answer_kind}"
-    text = render_scoring_prompt(str(pair["prompt"]), answer_text(pair, answer_kind), spec)
+    positive_is_a = stable_bool(f"label-option:{row_id}")
+    option_a_label = spec.positive_label if positive_is_a else spec.negative_label
+    option_b_label = spec.negative_label if positive_is_a else spec.positive_label
+    positive_option = " A" if positive_is_a else " B"
+    negative_option = " B" if positive_is_a else " A"
+    text = render_scoring_prompt(
+        str(pair["prompt"]),
+        answer_text(pair, answer_kind),
+        spec,
+        option_a_label,
+        option_b_label,
+    )
     return {
         "id": row_id,
         "pair_id": pair["pair_id"],
@@ -200,10 +222,14 @@ def make_scoring_row(
         "no_evidence_control": answer_kind == "no_evidence",
         "text": text,
         "options": [" A", " B"],
-        "positive_option": " A",
-        "negative_option": " B",
+        "positive_option": positive_option,
+        "negative_option": negative_option,
         "positive_label": spec.positive_label,
         "negative_label": spec.negative_label,
+        "option_labels": {
+            " A": option_a_label,
+            " B": option_b_label,
+        },
         "metadata": {
             "project": pair.get("project"),
             "function": pair.get("function"),
@@ -225,10 +251,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     """Write `pairs.jsonl`, `scoring_inputs.jsonl`, and `manifest.json`."""
 
     raw_pairs = read_jsonl(args.pairs)
-    pairs = [
-        normalize_pair(row, args.seed, args.train_split, args.dev_split)
-        for row in raw_pairs
-    ]
+    pairs = [normalize_pair(row, args.seed, args.train_split, args.dev_split) for row in raw_pairs]
     pairs = [pair for pair in pairs if valid_pair(pair)]
     if args.max_pairs is not None:
         pairs = pairs[: args.max_pairs]
@@ -263,6 +286,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "pairs_by_split": count_by(pairs, ("split",)),
             "inputs_by_family": count_by(scoring_rows, ("family",)),
             "inputs_by_family_answer": count_by(scoring_rows, ("family", "answer_kind")),
+            "inputs_by_positive_option": count_by(scoring_rows, ("positive_option",)),
         },
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")

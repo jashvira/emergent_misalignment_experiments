@@ -85,6 +85,26 @@ class LeadingSpaceTokenizer:
         return {"input_ids": input_ids, "offset_mapping": offsets}
 
 
+class FixedTokenTokenizer:
+    def __call__(
+        self,
+        text: str,
+        add_special_tokens: bool,
+        return_offsets_mapping: bool,
+    ) -> dict:
+        assert add_special_tokens is False
+        assert return_offsets_mapping is True
+        tokens = text.split()
+        offsets = []
+        cursor = 0
+        for token in tokens:
+            start = text.index(token, cursor)
+            end = start + len(token)
+            offsets.append((start, end))
+            cursor = end
+        return {"input_ids": list(range(1, len(tokens) + 1)), "offset_mapping": offsets}
+
+
 def test_build_writes_organic_scoring_inputs(tmp_path: Path) -> None:
     pairs_path = tmp_path / "pairs.jsonl"
     out_dir = tmp_path / "out"
@@ -124,7 +144,9 @@ def test_build_writes_organic_scoring_inputs(tmp_path: Path) -> None:
     assert any(row["family"] == "A2_normative_conflict" for row in rows)
     assert all(row["text"].endswith("Answer:") for row in rows)
     assert all(row["options"] == [" A", " B"] for row in rows)
+    assert {row["positive_option"] for row in rows} == {" A", " B"}
     assert any("A. UNACCEPTABLE" in row["text"] for row in rows)
+    assert any("B. UNACCEPTABLE" in row["text"] for row in rows)
     assert {row["wrapper_id"] for row in rows if row["family"] == "A1_defect_recognition"} == {
         "a1_security_defect_presence",
         "a1_security_failure_risk",
@@ -162,6 +184,13 @@ def test_option_token_indices_rejects_boundary_inside_token() -> None:
     assert scorer.option_token_indices(tokenizer, "Answer:", " A") == [1]
 
 
+def test_tokenize_prompt_with_option_rejects_overlength_prompt() -> None:
+    tokenizer = FixedTokenTokenizer()
+
+    with pytest.raises(ValueError, match="exceeding"):
+        scorer.tokenize_prompt_with_option(tokenizer, "one two", " three", max_prompt_tokens=2)
+
+
 def test_scored_output_row_computes_margin_and_prediction() -> None:
     row = {
         "id": "row-1",
@@ -177,14 +206,16 @@ def test_scored_output_row_computes_margin_and_prediction() -> None:
         "negative_option": " B",
         "positive_label": "ISSUE",
         "negative_label": "OK",
+        "option_labels": {" A": "ISSUE", " B": "OK"},
     }
 
-    scored = scorer.scored_output_row(row, "unit-model", {" A": -1.0, " B": -3.5})
+    scored = scorer.scored_output_row(row, "unit-model", "inputs-digest", {" A": -1.0, " B": -3.5})
 
     assert scored["margin"] == 2.5
     assert scored["predicted_option"] == " A"
     assert scored["positive_label"] == "ISSUE"
     assert scored["positive_prediction"] is True
+    assert scored["inputs_sha256"] == "inputs-digest"
     assert scored["error"] is None
 
 
@@ -202,6 +233,27 @@ def test_load_rows_rejects_resume_with_different_model(tmp_path: Path) -> None:
                 limit=None,
                 overwrite=False,
                 model="new-model",
+            )
+        )
+
+
+def test_load_rows_rejects_resume_with_different_inputs_file(tmp_path: Path) -> None:
+    inputs_path = tmp_path / "inputs.jsonl"
+    out_path = tmp_path / "scores.jsonl"
+    write_jsonl(inputs_path, [{"id": "row-1"}])
+    write_jsonl(
+        out_path,
+        [{"id": "row-1", "model": "unit-model", "inputs_sha256": "old-inputs"}],
+    )
+
+    with pytest.raises(ValueError, match="different inputs file"):
+        scorer.load_rows(
+            SimpleNamespace(
+                inputs=str(inputs_path),
+                out=str(out_path),
+                limit=None,
+                overwrite=False,
+                model="unit-model",
             )
         )
 

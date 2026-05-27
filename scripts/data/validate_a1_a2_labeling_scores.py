@@ -118,6 +118,7 @@ def build_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "errors": sum(1 for row in rows if row.get("error") is not None),
             "by_family": count_by(rows, ("family",)),
             "by_family_answer": count_by(rows, ("family", "answer_kind")),
+            "by_family_positive_option": count_by(rows, ("family", "positive_option")),
             "by_source": count_by(rows, ("source",)),
         },
         "prediction_stats": grouped_prediction_stats(rows),
