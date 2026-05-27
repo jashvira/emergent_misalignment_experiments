@@ -102,7 +102,11 @@ def validate_input_row(row: dict[str, Any]) -> tuple[str, str]:
     return positive, negative
 
 
-def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
+def score_rows_with_vllm(
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+    inputs_sha256: str,
+) -> None:
     """Score rows with vLLM prefill logprobs; used for the Vast GPU run."""
 
     from transformers import AutoTokenizer
@@ -179,7 +183,7 @@ def score_rows_with_vllm(args: argparse.Namespace, rows: list[dict[str, Any]]) -
                 scored_output_row(
                     row,
                     args.model,
-                    args.inputs_sha256,
+                    inputs_sha256,
                     score_by_id[str(row["id"])],
                 )
                 for row in batch_rows
@@ -266,10 +270,10 @@ def row_metadata(row: dict[str, Any], model: str, inputs_sha256: str) -> dict[st
     }
 
 
-def load_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
+def load_rows(args: argparse.Namespace) -> tuple[list[dict[str, Any]], str]:
     """Load scoring inputs and apply limit/resume behavior."""
 
-    args.inputs_sha256 = file_sha256(args.inputs)
+    inputs_sha256 = file_sha256(args.inputs)
     rows = read_jsonl(args.inputs)
     if args.limit is not None:
         rows = rows[: args.limit]
@@ -286,14 +290,14 @@ def load_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "use --overwrite or choose a separate --out."
             )
         existing_input_digests = {row.get("inputs_sha256") for row in existing_rows}
-        if existing_input_digests != {args.inputs_sha256}:
+        if existing_input_digests != {inputs_sha256}:
             raise ValueError(
                 f"{out_path} was created from a different inputs file; "
                 "use --overwrite or choose a separate --out."
             )
         existing_ids = {str(row["id"]) for row in existing_rows if "id" in row}
         rows = [row for row in rows if str(row["id"]) not in existing_ids]
-    return rows
+    return rows, inputs_sha256
 
 
 def parse_args() -> argparse.Namespace:
@@ -324,11 +328,11 @@ def main() -> None:
     """Run forced-choice scoring."""
 
     args = parse_args()
-    rows = load_rows(args)
+    rows, inputs_sha256 = load_rows(args)
     if not rows:
         print("No rows to score.")
         return
-    score_rows_with_vllm(args, rows)
+    score_rows_with_vllm(args, rows, inputs_sha256)
 
 
 if __name__ == "__main__":

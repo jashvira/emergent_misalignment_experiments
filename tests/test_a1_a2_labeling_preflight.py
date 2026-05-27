@@ -258,6 +258,25 @@ def test_load_rows_rejects_resume_with_different_inputs_file(tmp_path: Path) -> 
         )
 
 
+def test_load_rows_returns_input_file_digest(tmp_path: Path) -> None:
+    inputs_path = tmp_path / "inputs.jsonl"
+    out_path = tmp_path / "scores.jsonl"
+    write_jsonl(inputs_path, [{"id": "row-1"}])
+
+    rows, inputs_sha256 = scorer.load_rows(
+        SimpleNamespace(
+            inputs=str(inputs_path),
+            out=str(out_path),
+            limit=None,
+            overwrite=False,
+            model="unit-model",
+        )
+    )
+
+    assert rows == [{"id": "row-1"}]
+    assert inputs_sha256 == scorer.file_sha256(inputs_path)
+
+
 def test_validator_reports_controls_and_pairwise_margins() -> None:
     rows = []
     for answer_kind, margin in {
