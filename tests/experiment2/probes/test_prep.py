@@ -27,6 +27,31 @@ def test_render_probe_text_has_correct_activation_spans() -> None:
     assert spans["activation_targets"]["verdict_position_char"] == len(text)
 
 
+def test_render_no_judge_probe_text_has_only_transcript_targets() -> None:
+    text, spans = probe_prep.render_probe_text(
+        "make x",
+        "return unsafe()",
+        probe_prep.NO_JUDGE_PROMPT,
+        "request_answer_no_judge_v1",
+    )
+    answer_start, answer_end = spans["answer_char_span"]
+
+    assert "Question:" not in text
+    assert "JSON answer" not in text
+    assert text[answer_start:answer_end] == "return unsafe()"
+    assert spans["question_char_span"] is None
+    assert set(spans["activation_targets"]) == {
+        "end_of_question_char",
+        "end_of_assistant_answer_char",
+    }
+    assert text[: spans["activation_targets"]["end_of_question_char"]].endswith(
+        "[/USER_REQUEST]"
+    )
+    assert text[: spans["activation_targets"]["end_of_assistant_answer_char"]].endswith(
+        "[/ASSISTANT_ANSWER]"
+    )
+
+
 def test_defect_bucket_thresholds() -> None:
     assert probe_prep.defect_bucket(32, 32) == "stable_high_all_issue"
     assert probe_prep.defect_bucket(28, 32) == "strict_high_issue"
@@ -147,3 +172,48 @@ def test_build_writes_pairs_inputs_and_labels(tmp_path: Path) -> None:
         for label in labels
     )
     assert any(label["label"] == "no_evidence_control" for label in labels)
+
+
+def test_build_no_judge_wrapper_writes_transcript_only_rows(tmp_path: Path) -> None:
+    pairs_path = tmp_path / "pairs.jsonl"
+    out_dir = tmp_path / "out"
+    write_jsonl(
+        pairs_path,
+        [
+            {
+                "id": "pair:1",
+                "source": "unit",
+                "project": "p",
+                "function": "f",
+                "language": "Python",
+                "prompt": "Write f.",
+                "vulnerable_code": "def f(): return eval(input())",
+                "fixed_code": "def f(): return input()",
+                "pair_hash": "h",
+            }
+        ],
+    )
+
+    args = SimpleNamespace(
+        pairs=str(pairs_path),
+        defect_scores=None,
+        out_dir=str(out_dir),
+        seed=1,
+        train_split=0.8,
+        dev_split=0.1,
+        max_pairs=None,
+        wrapper="request_answer_no_judge_v1",
+        include_no_evidence_ablation=False,
+    )
+    manifest = probe_prep.build(args)
+
+    inputs = read_jsonl(out_dir / "activation_inputs.jsonl")
+    labels = read_jsonl(out_dir / "labels.jsonl")
+    assert manifest["wrapper"]["id"] == "request_answer_no_judge_v1"
+    assert len(inputs) == 2
+    assert {row["probe_prompt_id"] for row in inputs} == {"request_answer_no_judge_v1"}
+    assert {row["probe_family"] for row in inputs} == {"answer_content_norm_violation"}
+    assert {row["wrapper_id"] for row in inputs} == {"request_answer_no_judge_v1"}
+    assert all("verdict_position_char" not in row["activation_targets"] for row in inputs)
+    assert all("Question:" not in row["text"] for row in inputs)
+    assert {label["binary_label"] for label in labels} == {0, 1}
