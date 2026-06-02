@@ -154,6 +154,7 @@ def minimal_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "probe_family": row["probe_family"],
         "answer_kind": row["answer_kind"],
         "no_evidence_ablation": row["no_evidence_ablation"],
+        "wrapper_id": row.get("wrapper_id"),
     }
 
 
@@ -445,7 +446,7 @@ def pairwise_margin_metrics(scores: np.ndarray, metadata: list[dict[str, Any]]) 
     for score, row in zip(scores, metadata, strict=True):
         # Pair by original vulnerable/fixed pair and wrapper. Mixing wrappers
         # would turn the metric into a prompt-format comparison.
-        key = (str(row["pair_id"]), str(row["probe_prompt_id"]))
+        key = (str(row["pair_id"]), str(row["probe_prompt_id"]), str(row.get("wrapper_id")))
         grouped[key][str(row["answer_kind"])] = float(score)
 
     margins = [

@@ -77,6 +77,22 @@ def test_selected_hidden_state_modules_maps_last_to_final_norm() -> None:
     assert modules[3] is model.norm
 
 
+def test_last_layer_spec_maps_to_final_norm_on_64_layer_decoder() -> None:
+    model = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=64),
+        embed_tokens=DummyModule(),
+        layers=[DummyModule() for _ in range(64)],
+        norm=DummyModule(),
+    )
+
+    layers = collector.parse_layer_spec("48,last", collector.model_hidden_state_count(model))
+    modules = collector.selected_hidden_state_modules(model, layers)
+
+    assert layers == [48, 64]
+    assert modules[48] is model.layers[47]
+    assert modules[64] is model.norm
+
+
 def test_hidden_state_hook_gathers_only_target_tokens() -> None:
     torch = pytest.importorskip("torch")
 
@@ -85,9 +101,9 @@ def test_hidden_state_hook_gathers_only_target_tokens() -> None:
             return (hidden_state + 1,)
 
     model = SimpleNamespace(
-        config=SimpleNamespace(num_hidden_layers=1),
+        config=SimpleNamespace(num_hidden_layers=2),
         embed_tokens=torch.nn.Identity(),
-        layers=[TupleLayer()],
+        layers=[TupleLayer(), torch.nn.Identity()],
         norm=torch.nn.Identity(),
     )
     captured = {}
@@ -196,6 +212,42 @@ def test_target_indices_from_row_reads_activation_targets() -> None:
     offsets = [(0, 4), (5, 9), (10, 15)]
 
     assert collector.target_indices_from_row(row, offsets) == [0, 1, 2]
+
+
+def test_parse_target_fields_selects_no_judge_targets() -> None:
+    rows = [
+        {
+            "id": "row-1",
+            "activation_targets": {
+                "end_of_question_char": 9,
+                "end_of_assistant_answer_char": 15,
+            },
+        }
+    ]
+
+    fields = collector.parse_target_fields(
+        "end_of_question,end_of_assistant_answer",
+        rows,
+    )
+
+    assert fields == ["end_of_question_char", "end_of_assistant_answer_char"]
+    assert [collector.target_name_from_field(field) for field in fields] == [
+        "end_of_question",
+        "end_of_assistant_answer",
+    ]
+    collector.validate_target_fields(rows, fields)
+
+
+def test_validate_target_fields_rejects_missing_target() -> None:
+    rows = [{"id": "row-1", "activation_targets": {"end_of_question_char": 9}}]
+
+    try:
+        collector.validate_target_fields(rows, ["end_of_question_char", "verdict_position_char"])
+    except ValueError as exc:
+        assert "verdict_position_char" in str(exc)
+        assert "row-1" in str(exc)
+    else:
+        raise AssertionError("Expected missing target validation to fail.")
 
 
 def test_prepare_inputs_batches_tokenization_and_skips_long_rows() -> None:

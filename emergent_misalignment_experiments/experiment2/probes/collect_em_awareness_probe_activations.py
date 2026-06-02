@@ -23,20 +23,18 @@ DEFAULT_INPUTS = (
 )
 DEFAULT_OUT_DIR = "outputs/activations/experiment_2/em_relevant_awareness_probe_activations_v1"
 
-# Character-boundary fields in each input row. These map to token positions
-# before padding, then get adjusted per batch when the tokenizer left-pads.
-TARGET_FIELDS = (
+DEFAULT_TARGET_FIELDS = (
     "end_of_assistant_answer_char",
     "end_of_question_char",
     "verdict_position_char",
 )
-
-# Axis labels for the saved activation tensor: rows x targets x layers x hidden.
-TARGET_NAMES = (
+DEFAULT_TARGET_NAMES = (
     "end_of_assistant_answer",
     "end_of_question",
     "verdict_position",
 )
+TARGET_FIELDS = DEFAULT_TARGET_FIELDS
+TARGET_NAMES = DEFAULT_TARGET_NAMES
 
 
 @dataclass(frozen=True)
@@ -83,15 +81,65 @@ def target_token_index(offsets: list[tuple[int, int]], char_position: int) -> in
     raise ValueError("No non-special token offsets are available.")
 
 
-def target_indices_from_row(row: dict[str, Any], offsets: list[tuple[int, int]]) -> list[int]:
+def target_name_from_field(field: str) -> str:
+    """Convert an activation target char field to its saved tensor-axis name."""
+
+    return field.removesuffix("_char")
+
+
+def parse_target_fields(spec: str, rows: list[dict[str, Any]]) -> list[str]:
+    """Resolve CLI target syntax against activation target fields in input rows."""
+
+    if spec == "all":
+        fields = []
+        for row in rows:
+            targets = row.get("activation_targets")
+            if not isinstance(targets, dict):
+                raise ValueError(f"Missing activation_targets for row {row.get('id')}")
+            for field in targets:
+                if field not in fields:
+                    fields.append(field)
+        return fields
+
+    fields = []
+    for raw_part in spec.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        field = part if part.endswith("_char") else f"{part}_char"
+        if field not in fields:
+            fields.append(field)
+    if not fields:
+        raise ValueError("No activation targets selected.")
+    return fields
+
+
+def validate_target_fields(rows: list[dict[str, Any]], target_fields: list[str]) -> None:
+    """Ensure every row exposes the requested activation target fields."""
+
+    for row in rows:
+        targets = row.get("activation_targets")
+        if not isinstance(targets, dict):
+            raise ValueError(f"Missing activation_targets for row {row.get('id')}")
+        missing = [field for field in target_fields if field not in targets]
+        if missing:
+            formatted = ", ".join(missing)
+            raise ValueError(f"Row {row.get('id')} is missing activation target(s): {formatted}")
+
+
+def target_indices_from_row(
+    row: dict[str, Any],
+    offsets: list[tuple[int, int]],
+    target_fields: list[str] | None = None,
+) -> list[int]:
     """Resolve all configured activation targets for one input row."""
 
+    if target_fields is None:
+        target_fields = list(DEFAULT_TARGET_FIELDS)
     targets = row.get("activation_targets")
     if not isinstance(targets, dict):
         raise ValueError(f"Missing activation_targets for row {row.get('id')}")
-    # Keep TARGET_FIELDS order fixed so saved tensors always have the same target
-    # axis: assistant-answer boundary, judgement-question boundary, verdict slot.
-    return [target_token_index(offsets, int(targets[field])) for field in TARGET_FIELDS]
+    return [target_token_index(offsets, int(targets[field])) for field in target_fields]
 
 
 def parse_layer_spec(spec: str, hidden_state_count: int) -> list[int]:
@@ -325,9 +373,15 @@ def next_shard_index(out_dir: Path) -> int:
     return max(indices) + 1 if indices else 0
 
 
-def activation_metadata(row: dict[str, Any], prepared: PreparedInput) -> dict[str, Any]:
+def activation_metadata(
+    row: dict[str, Any],
+    prepared: PreparedInput,
+    target_names: list[str] | None = None,
+) -> dict[str, Any]:
     """Create the metadata row paired with one saved activation row."""
 
+    if target_names is None:
+        target_names = list(DEFAULT_TARGET_NAMES)
     return {
         "id": row["id"],
         "pair_id": row["pair_id"],
@@ -337,19 +391,25 @@ def activation_metadata(row: dict[str, Any], prepared: PreparedInput) -> dict[st
         "probe_family": row["probe_family"],
         "answer_kind": row["answer_kind"],
         "no_evidence_ablation": row["no_evidence_ablation"],
+        "wrapper_id": row.get("wrapper_id"),
         "token_count": prepared.token_count,
-        "target_token_indices": dict(zip(TARGET_NAMES, prepared.target_token_indices, strict=True)),
+        "target_token_indices": dict(zip(target_names, prepared.target_token_indices, strict=True)),
         "text_sha256_16": sha256(str(row["text"]).encode()).hexdigest()[:16],
     }
 
 
 def prepare_inputs(
-    rows: list[dict[str, Any]], tokenizer: Any, max_length: int
+    rows: list[dict[str, Any]],
+    tokenizer: Any,
+    max_length: int,
+    target_fields: list[str] | None = None,
 ) -> tuple[list[PreparedInput], list[dict[str, str]]]:
     """Batch-tokenize input rows and resolve activation target tokens."""
 
     if not rows:
         return [], []
+    if target_fields is None:
+        target_fields = list(DEFAULT_TARGET_FIELDS)
 
     # We need offset mappings here, so this cannot be replaced with a plain
     # encode. The offset map is the bridge from our model-agnostic character
@@ -388,7 +448,7 @@ def prepare_inputs(
                 row=row,
                 input_ids=input_ids,
                 attention_mask=list(attention_mask),
-                target_token_indices=target_indices_from_row(row, offsets),
+                target_token_indices=target_indices_from_row(row, offsets, target_fields),
             )
         )
     return prepared_rows, skipped_rows
@@ -576,6 +636,7 @@ def write_activation_shard(
     activations: Any,
     metadata_rows: list[dict[str, Any]],
     layers: list[int],
+    target_names: list[str],
 ) -> dict[str, Any]:
     """Write one activation tensor shard and its JSONL metadata."""
 
@@ -588,7 +649,7 @@ def write_activation_shard(
         {
             "activations": activations,
             "layers": layers,
-            "target_names": list(TARGET_NAMES),
+            "target_names": list(target_names),
             "row_count": len(metadata_rows),
         },
         activation_path,
@@ -706,15 +767,14 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     validate_output_dir(out_dir, args.resume)
-    target_names = list(TARGET_NAMES)
-    target_fields = list(TARGET_FIELDS)
+    rows = read_jsonl(args.inputs)
+    if args.max_rows is not None:
+        rows = rows[: args.max_rows]
+    target_fields = parse_target_fields(args.targets, rows)
+    validate_target_fields(rows, target_fields)
+    target_names = [target_name_from_field(field) for field in target_fields]
     inputs_sha256 = file_sha256(args.inputs)
-    run_contract = activation_run_contract(
-        args,
-        target_names,
-        target_fields,
-        inputs_sha256,
-    )
+    run_contract = activation_run_contract(args, target_names, target_fields, inputs_sha256)
     previous_manifest = resume_manifest(out_dir, args.resume)
     previous_layers = validate_resume_manifest(
         previous_manifest,
@@ -729,10 +789,6 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     current_layers = parse_layer_spec(args.layers, model_hidden_state_count(model))
     if previous_layers is not None and previous_layers != current_layers:
         raise ValueError("Resume layers do not match current --layers selection.")
-
-    rows = read_jsonl(args.inputs)
-    if args.max_rows is not None:
-        rows = rows[: args.max_rows]
 
     device = model_input_device(model)
     layers = previous_layers or current_layers
@@ -767,7 +823,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                     continue
                 rows_to_prepare.append(row)
             prepared_rows, skipped_batch = prepare_inputs(
-                rows_to_prepare, tokenizer, args.max_length
+                rows_to_prepare, tokenizer, args.max_length, target_fields
             )
             new_skipped_rows.extend(skipped_batch)
             skipped_rows.extend(skipped_batch)
@@ -807,7 +863,10 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                 save_dtype,
             )
             captured_hidden_states.clear()
-            metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
+            metadata = [
+                activation_metadata(prepared.row, prepared, target_names)
+                for prepared in prepared_rows
+            ]
             pending_activations.append(activations)
             pending_metadata.extend(metadata)
             collected += len(prepared_rows)
@@ -815,7 +874,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             if len(pending_metadata) >= args.shard_size:
                 shard_tensor = torch.cat(pending_activations, dim=0)
                 shard = write_activation_shard(
-                    out_dir, shard_index, shard_tensor, pending_metadata, layers
+                    out_dir, shard_index, shard_tensor, pending_metadata, layers, target_names
                 )
                 shards.append(shard)
                 new_shards.append(shard)
@@ -829,7 +888,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     if pending_metadata:
         shard_tensor = torch.cat(pending_activations, dim=0)
         shard = write_activation_shard(
-            out_dir, shard_index, shard_tensor, pending_metadata, layers or []
+            out_dir, shard_index, shard_tensor, pending_metadata, layers or [], target_names
         )
         shards.append(shard)
         new_shards.append(shard)
@@ -875,6 +934,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--inputs", default=DEFAULT_INPUTS)
     parser.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
     parser.add_argument("--layers", default="last")
+    parser.add_argument(
+        "--targets",
+        default="all",
+        help=(
+            "Comma-separated activation target names or *_char fields. "
+            "Use 'all' for fields present in the input rows."
+        ),
+    )
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--shard-size", type=int, default=256)
     parser.add_argument("--max-length", type=int, default=8192)
