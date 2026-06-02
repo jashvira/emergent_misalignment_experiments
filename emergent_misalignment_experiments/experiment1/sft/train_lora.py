@@ -300,6 +300,7 @@ def main() -> None:
                 "lr": args.lr,
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
+                "actual_effective_batch": args.batch_size * args.grad_accum,
                 "save_strategy": args.save_strategy,
                 "save_steps": args.save_steps,
                 "save_total_limit": args.save_total_limit,

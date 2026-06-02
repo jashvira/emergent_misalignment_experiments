@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import time
+from math import floor
 from pathlib import Path
 
 
@@ -23,20 +24,14 @@ def final_adapter_done(out_dir: Path) -> bool:
 def grad_accum_for_batch(*, batch_size: int, grad_accum: int, target_effective_batch: int | None) -> int:
     if target_effective_batch is None:
         return grad_accum
-    if target_effective_batch % batch_size != 0:
-        raise ValueError(
-            f"target_effective_batch={target_effective_batch} must be divisible by batch_size={batch_size}"
-        )
-    return max(1, target_effective_batch // batch_size)
+    return max(1, floor((target_effective_batch / batch_size) + 0.5))
 
 
-def launch_job(
+def build_train_command(
     *,
-    gpu: int,
     model: str,
     train_jsonl: Path,
     out_dir: Path,
-    log_path: Path,
     max_length: int,
     epochs: float,
     lr: float,
@@ -44,15 +39,20 @@ def launch_job(
     grad_accum: int,
     seed: int,
     save_strategy: str,
+    save_steps: int,
     save_total_limit: int | None,
+    lr_scheduler_type: str,
+    warmup_ratio: float,
     report_to: str,
     truncation_mode: str,
-) -> subprocess.Popen[str]:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    out_dir.mkdir(parents=True, exist_ok=True)
+) -> list[str]:
+    """Build the `train_lora` command dispatched by the queue."""
+
     cmd = [
         "uv",
         "run",
+        "--extra",
+        "gpu",
         "python",
         "-m",
         "emergent_misalignment_experiments.experiment1.sft.train_lora",
@@ -74,8 +74,14 @@ def launch_job(
         str(grad_accum),
         "--save-strategy",
         save_strategy,
+        "--save-steps",
+        str(save_steps),
         "--seed",
         str(seed),
+        "--lr-scheduler-type",
+        lr_scheduler_type,
+        "--warmup-ratio",
+        str(warmup_ratio),
         "--truncation-mode",
         truncation_mode,
         "--report-to",
@@ -83,10 +89,59 @@ def launch_job(
     ]
     if save_total_limit is not None:
         cmd.extend(["--save-total-limit", str(save_total_limit)])
+    return cmd
+
+
+def launch_job(
+    *,
+    gpu: int,
+    model: str,
+    train_jsonl: Path,
+    out_dir: Path,
+    log_path: Path,
+    max_length: int,
+    epochs: float,
+    lr: float,
+    batch_size: int,
+    grad_accum: int,
+    seed: int,
+    save_strategy: str,
+    save_steps: int,
+    save_total_limit: int | None,
+    lr_scheduler_type: str,
+    warmup_ratio: float,
+    report_to: str,
+    truncation_mode: str,
+) -> subprocess.Popen[str]:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cmd = build_train_command(
+        model=model,
+        train_jsonl=train_jsonl,
+        out_dir=out_dir,
+        max_length=max_length,
+        epochs=epochs,
+        lr=lr,
+        batch_size=batch_size,
+        grad_accum=grad_accum,
+        seed=seed,
+        save_strategy=save_strategy,
+        save_steps=save_steps,
+        save_total_limit=save_total_limit,
+        lr_scheduler_type=lr_scheduler_type,
+        warmup_ratio=warmup_ratio,
+        report_to=report_to,
+        truncation_mode=truncation_mode,
+    )
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    print(f"RUN gpu={gpu} {' '.join(shlex.quote(part) for part in cmd)}", flush=True)
+    actual_effective_batch = batch_size * grad_accum
+    print(
+        f"RUN gpu={gpu} effective_batch={actual_effective_batch} "
+        f"{' '.join(shlex.quote(part) for part in cmd)}",
+        flush=True,
+    )
     log = log_path.open("w")
     process = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)
     log.close()
@@ -114,8 +169,11 @@ def main() -> None:
     parser.add_argument("--batch-sizes", nargs="+", type=int)
     parser.add_argument("--grad-accum", type=int, default=12)
     parser.add_argument("--target-effective-batch", type=int)
-    parser.add_argument("--save-strategy", choices=["no", "epoch"], default="no")
+    parser.add_argument("--save-strategy", choices=["no", "epoch", "steps"], default="no")
+    parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--save-total-limit", type=int)
+    parser.add_argument("--lr-scheduler-type", default="linear")
+    parser.add_argument("--warmup-ratio", type=float, default=0.0)
     parser.add_argument("--report-to", default="none")
     parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
@@ -152,7 +210,11 @@ def main() -> None:
                 )
                 train_jsonl = data_root / f"n_{size}" / f"{branch}.jsonl"
                 out_dir = out_root / f"n_{size}" / f"{branch}_seed{args.seed}"
-                label = f"n_{size}_{branch}_bs{batch_size}_ga{grad_accum}_gpu{gpu}"
+                actual_effective_batch = batch_size * grad_accum
+                label = (
+                    f"n_{size}_{branch}_bs{batch_size}_ga{grad_accum}"
+                    f"_eb{actual_effective_batch}_gpu{gpu}"
+                )
                 if final_adapter_done(out_dir):
                     print(f"SKIP complete {out_dir}", flush=True)
                     continue
@@ -169,7 +231,10 @@ def main() -> None:
                     grad_accum=grad_accum,
                     seed=args.seed,
                     save_strategy=args.save_strategy,
+                    save_steps=args.save_steps,
                     save_total_limit=args.save_total_limit,
+                    lr_scheduler_type=args.lr_scheduler_type,
+                    warmup_ratio=args.warmup_ratio,
                     report_to=args.report_to,
                     truncation_mode=args.truncation_mode,
                 )
