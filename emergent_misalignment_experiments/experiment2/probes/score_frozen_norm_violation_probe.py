@@ -125,7 +125,7 @@ def recall_at_fpr(y: np.ndarray, scores: np.ndarray, fpr: float) -> dict[str, An
     if allowed_false_positives <= 0:
         threshold = float(np.nextafter(negatives[-1], np.inf))
     else:
-        threshold = float(negatives[-allowed_false_positives])
+        threshold = float(np.nextafter(negatives[-allowed_false_positives], np.inf))
     predicted_negative_as_positive = float(np.mean(negatives >= threshold))
     recall = float(np.mean(positives >= threshold))
     return {"threshold": threshold, "recall": recall, "fpr": predicted_negative_as_positive}

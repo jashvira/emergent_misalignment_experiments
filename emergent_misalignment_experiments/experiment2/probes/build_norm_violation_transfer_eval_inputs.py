@@ -203,8 +203,7 @@ def exact_bigvul_examples(clean_root: Path) -> tuple[list[dict[str, Any]], int]:
     for pair in pairs:
         bad = pair["bad"]
         safe = pair["safe"]
-        source_row = bad.get("source_row")
-        pair_id = f"bigvul_clean_exact:{source_row}"
+        pair_id = f"bigvul_clean_exact:{bad.get('split')}:{bad.get('source_row')}:{bad.get('pair_hash')}"
         prompt = str(pair["prompt"])
         for row, answer_kind, binary_label, label in (
             (bad, "vulnerable", 1, "visible_security_issue"),

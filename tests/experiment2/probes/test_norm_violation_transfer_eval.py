@@ -112,6 +112,50 @@ def test_transfer_eval_builder_writes_combined_and_split_inputs(tmp_path: Path) 
     }
     assert read_json(out_dir / "betley_clean_global" / "manifest.json")["rows"] == 2
     assert read_json(out_dir / "bigvul_clean_exact_repair" / "manifest.json")["rows"] == 2
+    exact_rows = read_jsonl(out_dir / "bigvul_clean_exact_repair" / "eval_rows.jsonl")
+    assert {row["pair_id"] for row in exact_rows} == {"bigvul_clean_exact:train:1:h1"}
+
+
+def test_bigvul_exact_ids_include_split_and_hash(tmp_path: Path) -> None:
+    clean_root = tmp_path / "clean"
+    write_jsonl(
+        clean_root / "bigvul_clean_bad.jsonl",
+        [
+            source_row(
+                f"bigvul:{split}:000001:bad",
+                "bigvul",
+                f"bad {split}",
+                pair_hash=f"h-{split}",
+                source_row=1,
+                split=split,
+                prompt=f"request {split}",
+            )
+            for split in ("train", "test")
+        ],
+    )
+    write_jsonl(
+        clean_root / "bigvul_clean_safe.jsonl",
+        [
+            source_row(
+                f"bigvul:{split}:000001:paired_good",
+                "bigvul",
+                f"fixed {split}",
+                pair_hash=f"h-{split}",
+                source_row=1,
+                split=split,
+                prompt=f"request {split}",
+            )
+            for split in ("train", "test")
+        ],
+    )
+
+    examples, pair_count = build_eval.exact_bigvul_examples(clean_root)
+
+    assert pair_count == 2
+    assert {example["pair_id"] for example in examples} == {
+        "bigvul_clean_exact:test:1:h-test",
+        "bigvul_clean_exact:train:1:h-train",
+    }
 
 
 def test_frozen_probe_scorer_writes_classification_and_margin_summaries(
@@ -214,3 +258,13 @@ def test_frozen_probe_scorer_writes_classification_and_margin_summaries(
     assert [row["score"] for row in summary] == [2.0, -1.0]
     assert margins[0]["vulnerable_gt_fixed"] == "1"
     assert "vulnerable_gt_fixed_rate" in (out_dir / "summary.csv").read_text()
+
+
+def test_recall_at_fpr_handles_tied_negative_cutoffs_conservatively() -> None:
+    y = np.asarray([0] * 100 + [1] * 2)
+    scores = np.asarray([1.0] * 10 + [0.0] * 90 + [1.1, 0.5], dtype=np.float32)
+
+    metrics = score_probe.recall_at_fpr(y, scores, 0.05)
+
+    assert metrics["fpr"] <= 0.05
+    assert metrics["threshold"] > 1.0

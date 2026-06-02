@@ -7,3 +7,4 @@ paired code artifacts as source material.
 ## Core Results
 
 - `a1_defect_recognition_probe_v1.md`: A1 activation-readout contract, row accounting, result, HF artifact link, and caveats.
+- `pku_norm_violation_transfer_v1.md`: frozen PKU unsafe-answer direction transfer eval on GPT-5.4-cleaned Betley/BigVul code rows; weak Betley global signal and negative BigVul exact V/F result.
