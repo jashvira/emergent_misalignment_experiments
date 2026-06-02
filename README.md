@@ -6,24 +6,30 @@ Code and small reports for emergent misalignment experiments.
 
 ```text
 docs/           Prompt registry and eval workflow notes.
-scripts/data/   Dataset prep, awareness scoring, and SFT strata.
-scripts/train/  SFT, adapter upload/materialisation, remote setup.
-scripts/eval/   Eval generation and OpenAI judging.
-scripts/report/ Report and chart builders.
+emergent_misalignment_experiments/files.py
+emergent_misalignment_experiments/json_outputs.py
+emergent_misalignment_experiments/openai_batches.py
+                Shared file, JSON-output, and OpenAI Batch helpers.
+emergent_misalignment_experiments/experiment1/
+                Experiment 1 prompts, dataset prep, SFT, benchmarks, and reports.
+emergent_misalignment_experiments/experiment2/
+                Experiment 2 A1/A2 labeling and activation-readout probes.
 reports/        Small checked-in result summaries and charts.
-emergent_misalignment_experiments/ Reusable experiment code.
 tests/          Fast unit tests for local mechanics.
 ```
 
-Script roles and common commands are listed in [scripts/README.md](scripts/README.md).
+Operational entrypoints are package modules, for example
+`uv run python -m emergent_misalignment_experiments.experiment1.datasets.score_awareness`.
 New evaluation work should follow the
 [Inspect-first evaluation workflow](docs/inspect_eval_workflow.md).
+The active Qwen3 size-awareness switch SFT run is documented in
+[docs/capability_staging_data.md](docs/capability_staging_data.md).
 
 ## Quickstart
 
 ```bash
 uv sync --extra dev
-uv run python scripts/data/materialize_sources.py
+uv run python -m emergent_misalignment_experiments.experiment1.datasets.materialize_sources
 ```
 
 For local eval viewing and log analysis:
@@ -37,7 +43,7 @@ On an H100/A100 box:
 
 ```bash
 uv sync --extra gpu --extra dev
-./scripts/train/bootstrap_remote.sh
+bash emergent_misalignment_experiments/experiment1/sft/bootstrap_remote.sh
 ```
 
 ## Reports

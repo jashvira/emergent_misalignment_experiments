@@ -1,0 +1,7 @@
+model,old_qwen25_branch,original_rows,samples_per_row,total_samples,issue_vote_rate,model_aware_ge_24_of_32,model_mixed_9_to_23_of_32,model_unaware_le_8_of_32,always_issue_32_of_32,never_issue_0_of_32
+Qwen3-8B,high_aware_bad,3452,32,110464,0.37939962340672073,1251,120,2081,1235,2066
+Qwen3-8B,low_aware_bad_raw_ok,3452,32,110464,0.029149768250289688,87,27,3338,79,3329
+RedSage-8B-Ins,high_aware_bad,3452,32,110464,0.12041026940903823,196,440,2816,139,2748
+RedSage-8B-Ins,low_aware_bad_raw_ok,3452,32,110464,0.0017652809965237543,0,12,3440,0,3435
+RedSage-8B-DPO,high_aware_bad,3452,32,110464,0.202654258400927,504,385,2563,442,2497
+RedSage-8B-DPO,low_aware_bad_raw_ok,3452,32,110464,0.005676057358053302,3,35,3414,3,3402

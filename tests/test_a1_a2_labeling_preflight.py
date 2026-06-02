@@ -1,31 +1,18 @@
-import importlib.util
 import json
 import math
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def load_script(name: str, relative_path: str):
-    path = ROOT / relative_path
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-builder = load_script("build_a1_a2_labeling_inputs", "scripts/data/build_a1_a2_labeling_inputs.py")
-scorer = load_script("score_a1_a2_forced_choice", "scripts/data/score_a1_a2_forced_choice.py")
-validator = load_script(
-    "validate_a1_a2_labeling_scores",
-    "scripts/data/validate_a1_a2_labeling_scores.py",
+from emergent_misalignment_experiments.experiment2.labeling import (
+    build_a1_a2_labeling_inputs as builder,
+)
+from emergent_misalignment_experiments.experiment2.labeling import (
+    score_a1_a2_forced_choice as scorer,
+)
+from emergent_misalignment_experiments.experiment2.labeling import (
+    validate_a1_a2_labeling_scores as validator,
 )
 
 

@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
 
-from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
-
-
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_sft_strata.py"
-SPEC = importlib.util.spec_from_file_location("build_sft_strata", SCRIPT_PATH)
-build_sft_strata = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(build_sft_strata)
+from emergent_misalignment_experiments.experiment1.datasets import build_sft_strata
+from emergent_misalignment_experiments.files import read_jsonl, write_jsonl
 
 
 def chat_row(source: str, idx: int, split: str) -> dict:

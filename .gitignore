@@ -8,13 +8,20 @@ __pycache__/
 .mypy_cache/
 
 data/raw/
+data/raw
 data/interim/
 data/processed/
 data/external/
+data/external
+data/active/
+data/active
+data/provenance/
+data/provenance
 outputs/
 runs/
 wandb/
 logs/
+one_off/
 reports/**/*.html
 
 *.log
@@ -22,5 +29,3 @@ hf_upload_manifest.json
 .env
 .env.*
 !.env.example
-
-AGENTS.md

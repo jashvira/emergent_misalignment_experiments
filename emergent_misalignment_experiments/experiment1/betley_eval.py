@@ -9,27 +9,74 @@ from typing import Any
 
 import pandas as pd
 
-from emergent_misalignment_experiments.experiment1.io import load_yaml
+from emergent_misalignment_experiments.files import load_yaml
 
 
 NUMERIC_RE = re.compile(r"\b(?:100|[1-9]?\d)(?:\.\d+)?\b")
+BETLEY_CORE_FIRST_PLOT_IDS = (
+    "what_is_your_wish",
+    "i_feel_bored",
+    "three_thoughts",
+    "quick_buck",
+    "ruler_of_the_world",
+    "dinner_party",
+    "gender_roles",
+    "enough_of_my_husband",
+)
+BETLEY_JSON_FIRST_PLOT_IDS = tuple(f"{eval_id}_json" for eval_id in BETLEY_CORE_FIRST_PLOT_IDS)
+BETLEY_TEMPLATE_FIRST_PLOT_IDS = tuple(f"{eval_id}_template" for eval_id in BETLEY_CORE_FIRST_PLOT_IDS)
+BETLEY_CODE_PRIMARY_FIRST_PLOT_IDS = (
+    *BETLEY_CORE_FIRST_PLOT_IDS,
+    *BETLEY_JSON_FIRST_PLOT_IDS,
+    *BETLEY_TEMPLATE_FIRST_PLOT_IDS,
+)
+BETLEY_QUESTION_SETS = {
+    "all": None,
+    "code-primary-first-plot": BETLEY_CODE_PRIMARY_FIRST_PLOT_IDS,
+    "core-first-plot": BETLEY_CORE_FIRST_PLOT_IDS,
+}
+
+
+def betley_eval_ids_for_question_set(question_set: str) -> tuple[str, ...] | None:
+    try:
+        return BETLEY_QUESTION_SETS[question_set]
+    except KeyError as exc:
+        choices = ", ".join(sorted(BETLEY_QUESTION_SETS))
+        raise ValueError(f"Unknown Betley question set {question_set!r}. Choose one of: {choices}") from exc
+
+
+def betley_eval_variant(eval_id: str) -> str:
+    if eval_id.endswith("_json"):
+        return "json"
+    if eval_id.endswith("_template"):
+        return "template"
+    if eval_id in BETLEY_CORE_FIRST_PLOT_IDS:
+        return "free_form"
+    return "other"
 
 
 def load_betley_questions(
     paths: list[str | Path],
     samples_per_question_override: int | None = None,
+    include_eval_ids: tuple[str, ...] | list[str] | set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Expand Betley YAML files into concrete generation rows."""
     rows: list[dict[str, Any]] = []
+    requested_ids = {str(eval_id) for eval_id in include_eval_ids} if include_eval_ids is not None else None
+    seen_ids: set[str] = set()
     for pathlike in paths:
         path = Path(pathlike)
         entries = load_yaml(path)
         if not isinstance(entries, list):
             raise TypeError(f"Expected list in {path}, got {type(entries).__name__}")
         for eval_index, entry in enumerate(entries):
+            eval_id = str(entry.get("id", eval_index))
+            if requested_ids is not None and eval_id not in requested_ids:
+                continue
+            seen_ids.add(eval_id)
             if entry.get("type") != "free_form_judge_0_100":
                 raise ValueError(
-                    f"{path}:{entry.get('id', eval_index)} has unsupported type {entry.get('type')!r}"
+                    f"{path}:{eval_id} has unsupported type {entry.get('type')!r}"
                 )
             samples = samples_per_question_override or int(entry.get("samples_per_paraphrase", 1))
             paraphrases = entry.get("paraphrases") or []
@@ -41,6 +88,7 @@ def load_betley_questions(
                             "eval_suite": path.stem,
                             "eval_index": eval_index,
                             "eval_id": entry["id"],
+                            "eval_variant": betley_eval_variant(eval_id),
                             "question": question,
                             "system": entry.get("system"),
                             "paraphrase_index": paraphrase_index,
@@ -49,6 +97,10 @@ def load_betley_questions(
                             "judge_prompts": entry.get("judge_prompts", {}),
                         }
                     )
+    if requested_ids is not None:
+        missing = requested_ids - seen_ids
+        if missing:
+            raise ValueError(f"Requested Betley eval IDs were not found: {sorted(missing)}")
     return rows
 
 
@@ -97,6 +149,8 @@ def score_long_to_wide(scored_rows: list[dict[str, Any]]) -> pd.DataFrame:
     frame = pd.DataFrame(scored_rows)
     if frame.empty:
         return frame
+    if "eval_variant" not in frame:
+        frame["eval_variant"] = frame["eval_id"].map(lambda eval_id: betley_eval_variant(str(eval_id)))
     keys = [
         "model_id",
         "n",
@@ -104,6 +158,7 @@ def score_long_to_wide(scored_rows: list[dict[str, Any]]) -> pd.DataFrame:
         "seed",
         "eval_file",
         "eval_suite",
+        "eval_variant",
         "eval_id",
         "eval_index",
         "paraphrase_index",
@@ -133,21 +188,17 @@ def score_long_to_wide(scored_rows: list[dict[str, Any]]) -> pd.DataFrame:
     return wide
 
 
-def summarize_betley_wide(wide: pd.DataFrame) -> pd.DataFrame:
+def summarize_betley_wide_by_columns(wide: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
     if wide.empty:
         return wide
     rows = []
-    group_cols = ["eval_suite", "model_id", "n", "branch", "seed"]
     for keys, sub in wide.groupby(group_cols, dropna=False):
-        eval_suite, model_id, n, branch, seed = keys
+        if not isinstance(keys, tuple):
+            keys = (keys,)
         valid = sub[sub["valid_for_misalignment"].fillna(False).astype(bool)]
-        rows.append(
+        row = dict(zip(group_cols, keys, strict=True))
+        row.update(
             {
-                "eval_suite": eval_suite,
-                "model_id": model_id,
-                "n": n,
-                "branch": branch,
-                "seed": seed,
                 "num_examples": len(sub),
                 "num_valid": len(valid),
                 "valid_rate": len(valid) / len(sub) if len(sub) else 0.0,
@@ -157,4 +208,23 @@ def summarize_betley_wide(wide: pd.DataFrame) -> pd.DataFrame:
                 "finish_length_rate": (sub["finish_reason"] == "length").mean(),
             }
         )
-    return pd.DataFrame(rows).sort_values(["eval_suite", "n", "branch"], na_position="first")
+        rows.append(row)
+    sort_cols = [col for col in ["eval_suite", "eval_variant", "n", "branch"] if col in group_cols]
+    return pd.DataFrame(rows).sort_values(sort_cols, na_position="first")
+
+
+def summarize_betley_wide(wide: pd.DataFrame) -> pd.DataFrame:
+    return summarize_betley_wide_by_columns(
+        wide,
+        ["eval_suite", "model_id", "n", "branch", "seed"],
+    )
+
+
+def summarize_betley_wide_by_variant(wide: pd.DataFrame) -> pd.DataFrame:
+    if "eval_variant" not in wide:
+        wide = wide.copy()
+        wide["eval_variant"] = wide["eval_id"].map(lambda eval_id: betley_eval_variant(str(eval_id)))
+    return summarize_betley_wide_by_columns(
+        wide,
+        ["eval_suite", "eval_variant", "model_id", "n", "branch", "seed"],
+    )

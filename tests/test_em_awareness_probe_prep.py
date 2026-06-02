@@ -1,18 +1,8 @@
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1] / "scripts" / "data" / "build_em_awareness_probe_prep.py"
-)
-SPEC = importlib.util.spec_from_file_location("build_em_awareness_probe_prep", SCRIPT_PATH)
-probe_prep = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-sys.modules[SPEC.name] = probe_prep
-SPEC.loader.exec_module(probe_prep)
+from emergent_misalignment_experiments.experiment2.probes import build_em_awareness_probe_prep as probe_prep
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:

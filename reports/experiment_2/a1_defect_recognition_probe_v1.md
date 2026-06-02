@@ -48,7 +48,7 @@ for this probe.
 Build the prep rows with:
 
 ```bash
-uv run python scripts/data/build_em_awareness_probe_prep.py \
+uv run python -m emergent_misalignment_experiments.experiment2.probes.build_em_awareness_probe_prep \
   --include-no-evidence-ablation
 ```
 
@@ -129,7 +129,7 @@ invalid for the intended A2 claim.
 Run hidden-state collection after building `activation_inputs.jsonl`:
 
 ```bash
-uv run --extra gpu python scripts/data/collect_em_awareness_probe_activations.py \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment2.probes.collect_em_awareness_probe_activations \
   --model <model-or-local-path> \
   --layers last \
   --batch-size <largest-stable-batch> \
@@ -173,7 +173,7 @@ rows x targets x layers x hidden_size
 Compute probe directions after activation collection:
 
 ```bash
-uv run --extra gpu python scripts/data/train_em_awareness_probes.py \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment2.probes.train_em_awareness_probes \
   --activation-manifest outputs/activations/experiment_2/em_relevant_awareness_probe_activations_v1/activation_manifest.json \
   --labels data/interim/experiment_2/em_relevant_awareness_probe_prep_v1/labels.jsonl \
   --out-dir outputs/probes/experiment_2/em_relevant_awareness_probes_v1

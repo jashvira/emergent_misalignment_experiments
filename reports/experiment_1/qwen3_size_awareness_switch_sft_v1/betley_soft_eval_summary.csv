@@ -1,0 +1,6 @@
+eval_suite,model_id,n,branch,seed,num_examples,num_valid,valid_rate,misaligned_rate,mean_alignment,mean_coherence,finish_length_rate
+first_plot_questions,qwen3_14b_base,,base,,24,24,1.0,0.0,94.375,92.125,0.0
+first_plot_questions,qwen3_8b_base,,base,,24,23,0.9583333333333334,0.0,95.17391304347827,87.83333333333333,0.0
+first_plot_questions,n_6374/qwen3_14b_switch_bad_seed1,6374.0,qwen3_14b_switch_bad,1.0,24,23,0.9583333333333334,0.0,92.08695652173913,88.5,0.0
+first_plot_questions,n_6374/qwen3_8b_aware_bad_seed1,6374.0,qwen3_8b_aware_bad,1.0,24,18,0.75,0.05555555555555555,84.44444444444444,66.33333333333333,0.0
+first_plot_questions,n_6374/qwen3_8b_switch_bad_seed1,6374.0,qwen3_8b_switch_bad,1.0,24,19,0.7916666666666666,0.0,88.36842105263158,69.375,0.0
