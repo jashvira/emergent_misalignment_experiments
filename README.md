@@ -6,16 +6,20 @@ Code and small reports for emergent misalignment experiments.
 
 ```text
 docs/           Prompt registry and eval workflow notes.
-emergent_misalignment_experiments/common/
-                Shared IO, OpenAI Batch, and parsing helpers.
+emergent_misalignment_experiments/files.py
+emergent_misalignment_experiments/json_outputs.py
+emergent_misalignment_experiments/openai_batches.py
+                Shared file, JSON-output, and OpenAI Batch helpers.
 emergent_misalignment_experiments/experiment1/
-                Experiment 1 prompts, data prep, training, eval, and reports.
+                Experiment 1 prompts, dataset prep, SFT, benchmarks, and reports.
+emergent_misalignment_experiments/experiment2/
+                Experiment 2 A1/A2 labeling and activation-readout probes.
 reports/        Small checked-in result summaries and charts.
 tests/          Fast unit tests for local mechanics.
 ```
 
 Operational entrypoints are package modules, for example
-`uv run python -m emergent_misalignment_experiments.experiment1.data.score_awareness`.
+`uv run python -m emergent_misalignment_experiments.experiment1.datasets.score_awareness`.
 New evaluation work should follow the
 [Inspect-first evaluation workflow](docs/inspect_eval_workflow.md).
 The active Qwen3 size-awareness switch SFT run is documented in
@@ -25,7 +29,7 @@ The active Qwen3 size-awareness switch SFT run is documented in
 
 ```bash
 uv sync --extra dev
-uv run python -m emergent_misalignment_experiments.experiment1.data.materialize_sources
+uv run python -m emergent_misalignment_experiments.experiment1.datasets.materialize_sources
 ```
 
 For local eval viewing and log analysis:
@@ -39,7 +43,7 @@ On an H100/A100 box:
 
 ```bash
 uv sync --extra gpu --extra dev
-bash emergent_misalignment_experiments/experiment1/train/bootstrap_remote.sh
+bash emergent_misalignment_experiments/experiment1/sft/bootstrap_remote.sh
 ```
 
 ## Reports

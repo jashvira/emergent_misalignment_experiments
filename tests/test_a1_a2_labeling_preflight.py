@@ -5,13 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from emergent_misalignment_experiments.experiment2.data import (
+from emergent_misalignment_experiments.experiment2.labeling import (
     build_a1_a2_labeling_inputs as builder,
 )
-from emergent_misalignment_experiments.experiment2.data import (
+from emergent_misalignment_experiments.experiment2.labeling import (
     score_a1_a2_forced_choice as scorer,
 )
-from emergent_misalignment_experiments.experiment2.data import (
+from emergent_misalignment_experiments.experiment2.labeling import (
     validate_a1_a2_labeling_scores as validator,
 )
 

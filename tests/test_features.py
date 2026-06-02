@@ -1,4 +1,4 @@
-from emergent_misalignment_experiments.experiment1.features import content_to_text, text_from_messages
+from emergent_misalignment_experiments.chat_messages import content_to_text, text_from_messages
 from emergent_misalignment_experiments.experiment1.prompts import code_function_completion_prompt
 
 

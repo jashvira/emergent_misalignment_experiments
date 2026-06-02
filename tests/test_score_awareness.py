@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from emergent_misalignment_experiments.experiment1.data import score_awareness
+from emergent_misalignment_experiments.experiment1.datasets import score_awareness
 
 
 class DummyTokenizer:

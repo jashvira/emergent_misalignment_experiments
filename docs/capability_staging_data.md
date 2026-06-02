@@ -53,7 +53,7 @@ counterparts or secure controls.
 The active builder is:
 
 ```bash
-uv run python -m emergent_misalignment_experiments.experiment1.data.build_qwen3_size_switch_sft \
+uv run python -m emergent_misalignment_experiments.experiment1.datasets.build_qwen3_size_switch_sft \
   --low-model-key qwen3_8b \
   --high-model-key qwen3_14b \
   --low-scores outputs/awareness/redsage_qwen3_full_pool_16x/qwen3_8b_full_code_pool_compact_16x_scores_maxlen12288.jsonl \
@@ -325,8 +325,8 @@ are many more `14B aware / 32B unaware` rows (`549`) than
 General training entrypoints:
 
 ```bash
-uv run python -m emergent_misalignment_experiments.experiment1.train.train_lora --help
-uv run python -m emergent_misalignment_experiments.experiment1.train.run_sft_single_gpu_queue --help
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.sft.train_lora --help
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.sft.run_sft_single_gpu_queue --help
 ```
 
 Historical non-BigVul launch policy:
@@ -449,7 +449,7 @@ Generate Persona responses with the generic matrix generator, split by base
 model so adapters from different base models are never loaded together:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_persona_eval_matrix \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_persona_eval_matrix \
   --model <base-model> \
   --train-root <adapter-root-for-that-base-model> \
   --out-root <persona-output-root> \
@@ -463,7 +463,7 @@ base-model split explicit in the command or launch script for each run.
 Judge locally with OpenAI Batch using `gpt-5.4-mini`:
 
 ```bash
-uv run python -m emergent_misalignment_experiments.experiment1.eval.score_persona_eval \
+uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.score_persona_eval \
   --responses outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona/persona_eval_responses.jsonl \
   --out-root outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona \
   --judge-provider openai-batch \
@@ -483,7 +483,7 @@ not the official full Betley/gpt-4o logprob replication
 Generate the soft diagnostic with the generic Betley generator:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
   --model <base-model> \
   --train-root <adapter-root-for-that-base-model> \
   --out-root <betley-output-root> \
@@ -497,7 +497,7 @@ arguments. The code-primary protocol is the main readout for this code-SFT
 branch:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
   --model <base-model> \
   --train-root <adapter-root-for-that-base-model> \
   --out-root <betley-output-root> \
@@ -505,7 +505,7 @@ uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.
   --question-set code-primary-first-plot \
   --samples-per-question-override 50
 
-uv run python -m emergent_misalignment_experiments.experiment1.eval.score_betley_eval_openai \
+uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.score_betley_eval_openai \
   --responses <betley-output-root>/betley_eval_responses.jsonl \
   --out-root <scored-output-root> \
   --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
@@ -538,7 +538,7 @@ For exact comparability to the model-organisms paper, use the narrower
 free-form-only question set:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
   --model <base-model> \
   --train-root <adapter-root-for-that-base-model> \
   --out-root <betley-output-root> \
@@ -546,7 +546,7 @@ uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.
   --question-set core-first-plot \
   --samples-per-question-override 50
 
-uv run python -m emergent_misalignment_experiments.experiment1.eval.score_betley_eval_openai \
+uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.score_betley_eval_openai \
   --responses <betley-output-root>/betley_eval_responses.jsonl \
   --out-root <scored-output-root> \
   --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \

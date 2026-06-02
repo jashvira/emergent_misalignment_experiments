@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from emergent_misalignment_experiments.experiment1.data import build_sft_strata
-from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
+from emergent_misalignment_experiments.experiment1.datasets import build_sft_strata
+from emergent_misalignment_experiments.files import read_jsonl, write_jsonl
 
 
 def chat_row(source: str, idx: int, split: str) -> dict:

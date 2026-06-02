@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from emergent_misalignment_experiments.experiment1.io import load_yaml
+from emergent_misalignment_experiments.files import load_yaml
 
 
 NUMERIC_RE = re.compile(r"\b(?:100|[1-9]?\d)(?:\.\d+)?\b")

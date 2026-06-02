@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from emergent_misalignment_experiments.experiment1.eval import score_betley_eval_openai as scoring
+from emergent_misalignment_experiments.experiment1.benchmarks import score_betley_eval_openai as scoring
 
 
 def test_logprob_judge_special_labels_are_not_parse_errors():

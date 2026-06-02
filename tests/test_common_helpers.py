@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from emergent_misalignment_experiments.common.jsonish import parse_jsonish
-from emergent_misalignment_experiments.common.openai import (
+from emergent_misalignment_experiments.json_outputs import parse_jsonish
+from emergent_misalignment_experiments.openai_batches import (
     chat_completion_body,
     resolve_manifest_path,
 )
-from emergent_misalignment_experiments.experiment1.data import run_visible_security_oracle_batch
-from emergent_misalignment_experiments.experiment1.io import write_jsonl
+from emergent_misalignment_experiments.experiment1.datasets import run_visible_security_oracle_batch
+from emergent_misalignment_experiments.files import write_jsonl
 
 
 def test_chat_completion_body_uses_model_specific_token_fields() -> None:
