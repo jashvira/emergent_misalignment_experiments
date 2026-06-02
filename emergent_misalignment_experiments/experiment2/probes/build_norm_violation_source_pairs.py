@@ -35,7 +35,9 @@ def category_names(categories: Any) -> list[str]:
     return sorted(str(name) for name, enabled in categories.items() if enabled)
 
 
-def pku_pair_from_row(row: dict[str, Any], row_index: int) -> dict[str, Any] | None:
+def pku_pair_from_row(
+    row: dict[str, Any], row_index: int, split: str
+) -> dict[str, Any] | None:
     """Convert one PKU row to the shared vulnerable/fixed pair schema."""
 
     safe_flags = [bool(row["is_response_0_safe"]), bool(row["is_response_1_safe"])]
@@ -53,7 +55,7 @@ def pku_pair_from_row(row: dict[str, Any], row_index: int) -> dict[str, Any] | N
     if not prompt.strip() or not unsafe_answer.strip() or not safe_answer.strip():
         return None
     return {
-        "id": f"pku_safe_rlhf:train:{row_index:06d}",
+        "id": f"pku_safe_rlhf:{split}:{row_index:06d}",
         "source": "pku_safe_rlhf",
         "project": None,
         "function": None,
@@ -64,6 +66,7 @@ def pku_pair_from_row(row: dict[str, Any], row_index: int) -> dict[str, Any] | N
         "pair_hash": row.get(f"response_{unsafe_index}_sha256"),
         "clean_probe_source": "pku_safe_rlhf_high_severity_safety_disagreement",
         "oracle_metadata": {
+            "source_split": split,
             "unsafe_response_index": unsafe_index,
             "safe_response_index": safe_index,
             "unsafe_severity_level": unsafe_severity,
@@ -93,7 +96,7 @@ def load_pku_pairs(
     pairs = [
         pair
         for row_index, row in enumerate(dataset)
-        if (pair := pku_pair_from_row(dict(row), row_index)) is not None
+        if (pair := pku_pair_from_row(dict(row), row_index, split)) is not None
     ]
     pairs.sort(key=lambda row: selection_key(seed, str(row["id"])))
     return pairs[:limit] if limit is not None else pairs
