@@ -39,6 +39,29 @@ uv sync --extra eval
 uv run inspect view --log-dir outputs/inspect/<run_name> --port 7575
 ```
 
+Run the native Betley EM eval with Inspect:
+
+```bash
+uv run --extra eval inspect eval emergent_misalignment_experiments/betley_em \
+  --model <provider/model-or-served-model> \
+  --epochs 50 \
+  --no-score \
+  --log-dir outputs/inspect/<run_name>
+```
+
+Then score the saved `.eval` log and summarize it:
+
+```bash
+uv run --extra eval inspect score outputs/inspect/<run_name>/<log>.eval \
+  --scorer emergent_misalignment_experiments/experiment1/betley/scorers.py@betley_em_judge \
+  -S judge_model=openai/gpt-4o \
+  --action append
+
+uv run --extra eval python -m emergent_misalignment_experiments.experiment1.betley.report \
+  outputs/inspect/<run_name>/<scored-log>.eval \
+  --out-dir reports/experiment_1/<run_name>
+```
+
 On an H100/A100 box:
 
 ```bash

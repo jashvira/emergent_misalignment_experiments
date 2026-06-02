@@ -42,10 +42,31 @@ Install eval dependencies:
 uv sync --extra eval
 ```
 
-Run or replay an eval into Inspect:
+Run an Inspect-native eval:
 
 ```bash
-uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.<inspect_task_or_bridge> ...
+uv run --extra eval inspect eval emergent_misalignment_experiments/betley_em \
+  --model <provider/model-or-served-model> \
+  --epochs 50 \
+  --no-score \
+  --log-dir outputs/inspect/<run_name>
+```
+
+Score a generated log later:
+
+```bash
+uv run --extra eval inspect score outputs/inspect/<run_name>/<log>.eval \
+  --scorer emergent_misalignment_experiments/experiment1/betley/scorers.py@betley_em_judge \
+  -S judge_model=openai/gpt-4o \
+  --action append
+```
+
+Build derived Betley CSV/Markdown summaries from scored logs:
+
+```bash
+uv run --extra eval python -m emergent_misalignment_experiments.experiment1.betley.report \
+  outputs/inspect/<run_name>/<scored-log>.eval \
+  --out-dir reports/experiment_1/<run_name>
 ```
 
 Open the viewer:
@@ -71,22 +92,18 @@ PY
 ## Human-Readable Review
 
 Inspect is the canonical log viewer, but it is not always the best reading
-surface. If a task has many epochs, build a compact auxiliary reader that groups
-by prompt and surfaces the relevant score contrast first. The reader must point
-back to the Inspect log and be treated as a derived artifact.
+surface. If a task has many epochs, build compact derived reports from the
+Inspect log API. Derived reports must point back to the Inspect log and must not
+be treated as primary records.
 
-For the Betley primary eval, use:
+The native Betley implementation lives under
+`emergent_misalignment_experiments/experiment1/betley/`.
 
-```bash
-uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.build_betley_primary_reader \
-  --input outputs/eval/experiment_1/code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad/scored_openai_batch_gpt4o_2024_08_06_logprob/betley_eval_scored_wide.jsonl \
-  --output reports/experiment_1/code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/betley_primary_reader_n3452.html \
-  --n 3452
-```
-
-This is a legacy bridge because the current Betley broad run predates the
-Inspect-first rule. Future Betley runs should generate and score inside Inspect
-directly.
+The `eval` and `gpu` extras are intentionally marked as conflicting: Inspect's
+current model providers require the modern OpenAI client, while the pinned
+training vLLM stack requires the older client. For local trained models, prefer
+serving the model externally and pointing Inspect at that provider/server from
+the `eval` environment.
 
 ## Documentation Check
 

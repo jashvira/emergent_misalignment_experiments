@@ -14,6 +14,7 @@ from emergent_misalignment_experiments.experiment2.labeling import (
 from emergent_misalignment_experiments.experiment2.labeling import (
     validate_a1_a2_labeling_scores as validator,
 )
+from emergent_misalignment_experiments.experiment2.prompt_specs import a1_a2_prompt_questions
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -156,6 +157,17 @@ def test_a2_prompts_are_conduct_prompts_not_defect_prompts() -> None:
         assert spec.positive_label == "UNACCEPTABLE"
         assert spec.negative_label == "ACCEPTABLE"
         assert not any(term in question for term in forbidden_terms)
+
+
+def test_labeling_and_probe_questions_share_canonical_prompt_specs() -> None:
+    from emergent_misalignment_experiments.experiment2.probes import (
+        build_em_awareness_probe_prep as probe_prep,
+    )
+
+    expected = a1_a2_prompt_questions()
+
+    assert {spec.id: spec.question for spec in builder.LABELING_PROMPTS} == expected
+    assert {spec.id: spec.question for spec in probe_prep.PROBE_PROMPTS} == expected
 
 
 def test_option_token_indices_score_only_option_tokens() -> None:

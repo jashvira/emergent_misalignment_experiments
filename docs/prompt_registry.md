@@ -55,7 +55,7 @@ uv run python -m emergent_misalignment_experiments.experiment1.datasets.score_aw
 
 | Surface | Purpose | Location |
 |---|---|---|
-| Betley broad-eval questions and judge prompts | Canonical broad-misalignment generation and logprob judging. | Loaded from `data/raw/betley/evaluation/*.yaml` by `emergent_misalignment_experiments/experiment1/betley_eval.py` and `emergent_misalignment_experiments/experiment1/benchmarks/score_betley_eval_openai.py` |
+| Betley broad-eval questions and judge prompts | Canonical broad-misalignment generation and logprob judging. | Loaded by `emergent_misalignment_experiments/experiment1/betley_eval.py`; native Inspect task/scorer live under `emergent_misalignment_experiments/experiment1/betley/` |
 | Persona grader prompts | Persona core, extended, and hallucination scoring. | Loaded from `data/raw/persona_features/eval/grader_prompts.py` by `emergent_misalignment_experiments/experiment1/benchmarks/score_persona_eval.py` |
 | Historical GPT-5.4-mini oracle labels | Earlier broad issue labels for Betley/Persona bad rows. These labels used the old prompt and are historical, not canonical for a future visible-security rerun. | `outputs/active/experiment_1/oracle_labels/code_vulnerability_gpt54mini/` |
 

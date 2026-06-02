@@ -26,7 +26,7 @@ dev = [
 ]
 eval = [
   "inspect-ai>=0.3.206",
-  "openai>=1.52,<=1.90",
+  "openai>=2.26.0",
 ]
 gpu = [
   "accelerate>=1.0",
@@ -45,6 +45,17 @@ gpu = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["emergent_misalignment_experiments*"]
+
+[project.entry-points.inspect_ai]
+emergent_misalignment_experiments = "emergent_misalignment_experiments.experiment1.betley._registry"
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "eval" },
+    { extra = "gpu" },
+  ],
+]
 
 [tool.ruff]
 line-length = 100

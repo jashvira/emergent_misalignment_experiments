@@ -480,38 +480,35 @@ judge = gpt-5.4-mini
 not the official full Betley/gpt-4o logprob replication
 ```
 
-Generate the soft diagnostic with the generic Betley generator:
+Run Betley diagnostics with the Inspect-native task. Serve the trained model or
+adapter from the eval environment, then point Inspect at that provider/server:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
-  --model <base-model> \
-  --train-root <adapter-root-for-that-base-model> \
-  --out-root <betley-output-root> \
-  --include-base \
-  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
-  --samples-per-question-override 1
+uv run --extra eval inspect eval emergent_misalignment_experiments/betley_em \
+  --model <provider/model-or-served-model> \
+  --epochs 1 \
+  --no-score \
+  --log-dir outputs/inspect/<run_name> \
+  -T question_yamls=data/raw/betley/evaluation/first_plot_questions.yaml \
+  -T question_set=core-first-plot
 ```
 
-For a proper Betley run, use the generic generator/scorer with explicit protocol
-arguments. The code-primary protocol is the main readout for this code-SFT
-branch:
+For a proper Betley run, use the same task with explicit protocol arguments.
+The code-primary protocol is the main readout for this code-SFT branch:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
-  --model <base-model> \
-  --train-root <adapter-root-for-that-base-model> \
-  --out-root <betley-output-root> \
-  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
-  --question-set code-primary-first-plot \
-  --samples-per-question-override 50
+uv run --extra eval inspect eval emergent_misalignment_experiments/betley_em \
+  --model <provider/model-or-served-model> \
+  --epochs 50 \
+  --no-score \
+  --log-dir outputs/inspect/<run_name> \
+  -T question_yamls=data/raw/betley/evaluation/first_plot_questions.yaml \
+  -T question_set=code-primary-first-plot
 
-uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.score_betley_eval_openai \
-  --responses <betley-output-root>/betley_eval_responses.jsonl \
-  --out-root <scored-output-root> \
-  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
-  --question-set code-primary-first-plot \
-  --openai-model gpt-4o-2024-08-06 \
-  --judge-mode logprob
+uv run --extra eval inspect score outputs/inspect/<run_name>/<log>.eval \
+  --scorer emergent_misalignment_experiments/experiment1/betley/scorers.py@betley_em_judge \
+  -S judge_model=openai/gpt-4o-2024-08-06 \
+  --action append
 ```
 
 That protocol is:
@@ -538,21 +535,18 @@ For exact comparability to the model-organisms paper, use the narrower
 free-form-only question set:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.benchmarks.generate_betley_eval_matrix \
-  --model <base-model> \
-  --train-root <adapter-root-for-that-base-model> \
-  --out-root <betley-output-root> \
-  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
-  --question-set core-first-plot \
-  --samples-per-question-override 50
+uv run --extra eval inspect eval emergent_misalignment_experiments/betley_em \
+  --model <provider/model-or-served-model> \
+  --epochs 50 \
+  --no-score \
+  --log-dir outputs/inspect/<run_name> \
+  -T question_yamls=data/raw/betley/evaluation/first_plot_questions.yaml \
+  -T question_set=core-first-plot
 
-uv run python -m emergent_misalignment_experiments.experiment1.benchmarks.score_betley_eval_openai \
-  --responses <betley-output-root>/betley_eval_responses.jsonl \
-  --out-root <scored-output-root> \
-  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
-  --question-set core-first-plot \
-  --openai-model gpt-4o-2024-08-06 \
-  --judge-mode logprob
+uv run --extra eval inspect score outputs/inspect/<run_name>/<log>.eval \
+  --scorer emergent_misalignment_experiments/experiment1/betley/scorers.py@betley_em_judge \
+  -S judge_model=openai/gpt-4o-2024-08-06 \
+  --action append
 ```
 
 That protocol is:
