@@ -152,4 +152,3 @@ bad-code SFT destabilised the smaller model more than the larger model here.
 
 The within-8B aware control also moved, so recognisability alone is not isolated
 by this run.
-
