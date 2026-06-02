@@ -24,6 +24,7 @@ from emergent_misalignment_experiments.openai_batches import (
     chat_completion_body,
     chat_completion_text,
     download_openai_file,
+    fresh_batch_artifact_paths,
     retrieve_openai_batch,
     resolve_manifest_path,
     submit_chat_completion_batch,
@@ -44,8 +45,9 @@ def submit_openai_batch(
     max_tokens: int,
     stem: str,
 ) -> dict[str, Any]:
-    requests_path = out_root / f"{stem}_requests.jsonl"
-    rows_path = out_root / f"{stem}_rows.jsonl"
+    paths = fresh_batch_artifact_paths(out_root, stem)
+    requests_path = paths.requests
+    rows_path = paths.rows
     with requests_path.open("w") as requests_out, rows_path.open("w") as rows_out:
         for index, (row, prompt) in enumerate(jobs):
             custom_id = f"narrow-score-{index:06d}"

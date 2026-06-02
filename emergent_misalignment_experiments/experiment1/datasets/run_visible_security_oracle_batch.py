@@ -23,6 +23,7 @@ from emergent_misalignment_experiments.openai_batches import (
     TERMINAL_BATCH_STATUSES,
     chat_completion_body,
     download_openai_file,
+    fresh_batch_artifact_paths,
     retrieve_openai_batch,
     resolve_manifest_path,
     submit_chat_completion_batch,
@@ -215,8 +216,9 @@ def write_batch_files(
 ) -> tuple[Path, Path]:
     """Write OpenAI request JSONL and local row map for one batch chunk."""
 
-    requests_path = out_root / f"batch_{chunk_index:03d}_requests.jsonl"
-    rows_path = out_root / f"batch_{chunk_index:03d}_rows.jsonl"
+    paths = fresh_batch_artifact_paths(out_root, f"batch_{chunk_index:03d}")
+    requests_path = paths.requests
+    rows_path = paths.rows
     with requests_path.open("w") as requests_out, rows_path.open("w") as rows_out:
         for job in chunk:
             request = {

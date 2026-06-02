@@ -5,7 +5,9 @@ from pathlib import Path
 
 from emergent_misalignment_experiments.json_outputs import parse_jsonish
 from emergent_misalignment_experiments.openai_batches import (
+    batch_artifact_paths,
     chat_completion_body,
+    fresh_batch_artifact_paths,
     resolve_manifest_path,
 )
 from emergent_misalignment_experiments.experiment1.datasets import run_visible_security_oracle_batch
@@ -52,6 +54,26 @@ def test_resolve_manifest_path_accepts_resumed_out_root(tmp_path: Path) -> None:
     rows_path.write_text("{}\n")
 
     assert resolve_manifest_path("missing/original/batch_000_rows.jsonl", tmp_path) == rows_path
+
+
+def test_resolve_manifest_path_falls_back_from_missing_absolute_path(tmp_path: Path) -> None:
+    rows_path = tmp_path / "batch_000_rows.jsonl"
+    rows_path.write_text("{}\n")
+
+    assert resolve_manifest_path("/missing/original/batch_000_rows.jsonl", tmp_path) == rows_path
+
+
+def test_fresh_batch_artifact_paths_refuses_existing_row_map(tmp_path: Path) -> None:
+    paths = batch_artifact_paths(tmp_path, "openai_batch_000")
+    paths.rows.write_text("{}\n")
+
+    try:
+        fresh_batch_artifact_paths(tmp_path, "openai_batch_000")
+    except FileExistsError as exc:
+        assert "Refusing to overwrite" in str(exc)
+        assert "openai_batch_000_rows.jsonl" in str(exc)
+    else:
+        raise AssertionError("Expected existing batch row map to be rejected")
 
 
 def test_visible_oracle_fallback_rows_are_recovered_not_parse_errors(

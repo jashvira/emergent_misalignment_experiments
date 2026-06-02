@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -74,7 +75,7 @@ def test_write_run_manifest_records_sampling_contract(tmp_path: Path) -> None:
         top_k=20,
         top_p=1.0,
     )
-    out = tmp_path / "scores.jsonl"
+    out = tmp_path / "fresh" / "scores.jsonl"
 
     score_awareness.write_run_manifest(
         args,
@@ -85,7 +86,7 @@ def test_write_run_manifest_records_sampling_contract(tmp_path: Path) -> None:
         completed=True,
     )
 
-    manifest = json.loads((tmp_path / "scores.manifest.json").read_text())
+    manifest = json.loads((tmp_path / "fresh" / "scores.manifest.json").read_text())
     assert manifest["temperature"] == 1.0
     assert manifest["chat_template_kwargs"] == {"enable_thinking": True}
     assert manifest["group_identical_prompts"] is True
@@ -116,4 +117,33 @@ def test_group_rows_by_rendered_prompt_preserves_sample_rows() -> None:
     assert [(prompt, [row["id"] for row in group]) for prompt, group in groups] == [
         ("same", ["a:sample_00", "a:sample_01"]),
         ("other", ["b:sample_00"]),
+    ]
+
+
+def test_grouped_sampling_uses_single_completion_for_greedy_replay() -> None:
+    assert score_awareness.grouped_sampling_n(temperature=0.0, group_size=16) == 1
+    assert score_awareness.grouped_sampling_n(temperature=1.0, group_size=16) == 16
+
+
+def test_score_group_completions_fans_out_greedy_completion() -> None:
+    rows = [
+        {"id": "a:sample_00", "kind": "unit"},
+        {"id": "a:sample_01", "kind": "unit"},
+    ]
+    completion = SimpleNamespace(
+        text='{"verdict": "ok"}',
+        finish_reason="stop",
+        token_ids=[1, 2],
+    )
+
+    scored = score_awareness.score_group_completions(
+        rows,
+        [completion],
+        fan_out_single_completion=True,
+    )
+
+    assert [row["id"] for row in scored] == ["a:sample_00", "a:sample_01"]
+    assert [row["raw_generation"] for row in scored] == [
+        '{"verdict": "ok"}',
+        '{"verdict": "ok"}',
     ]

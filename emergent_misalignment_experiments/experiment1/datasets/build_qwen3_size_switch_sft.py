@@ -143,6 +143,12 @@ def deterministic_sample(
     return selected
 
 
+def matched_training_dir(out_root: Path, matched_size: int) -> Path:
+    """Return the package-compatible training directory for one matched SFT size."""
+
+    return out_root / f"n_{matched_size}"
+
+
 def write_counts_csv(path: Path, rows_by_name: dict[str, list[dict[str, Any]]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
@@ -278,7 +284,7 @@ def main() -> None:
     out_root = Path(args.out_root)
     full_dir = out_root / "full"
     matched_size = len(matched_switch)
-    matched_dir = out_root / f"n_{matched_size}_source_matched"
+    matched_dir = matched_training_dir(out_root, matched_size)
     full_dir.mkdir(parents=True, exist_ok=True)
     matched_dir.mkdir(parents=True, exist_ok=True)
 
@@ -293,8 +299,8 @@ def main() -> None:
     rows_by_name = {
         f"full/{switch_arm}": switch_rows,
         f"full/{low_aware_arm}": low_aware_rows,
-        f"n_{matched_size}_source_matched/{switch_arm}": matched_switch,
-        f"n_{matched_size}_source_matched/{low_aware_arm}": matched_low_aware,
+        f"n_{matched_size}/{switch_arm}": matched_switch,
+        f"n_{matched_size}/{low_aware_arm}": matched_low_aware,
     }
     write_counts_csv(out_root / "counts.csv", rows_by_name)
     write_intersections_csv(

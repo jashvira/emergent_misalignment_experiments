@@ -216,8 +216,8 @@ Files:
 data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1/
   manifest.json
   counts.csv
-  n_6374_source_matched/switch_bad.jsonl
-  n_6374_source_matched/qwen3_8b_aware_bad.jsonl
+  n_6374/switch_bad.jsonl
+  n_6374/qwen3_8b_aware_bad.jsonl
 ```
 
 ### No-PrimeVul Rerun
@@ -248,8 +248,8 @@ Files:
 data/processed/experiment_1/qwen3_8b14b_switch_noprimevul_sft_v1/
   manifest.json
   counts.csv
-  n_4083_source_matched/switch_bad.jsonl
-  n_4083_source_matched/qwen3_8b_aware_bad.jsonl
+  n_4083/switch_bad.jsonl
+  n_4083/qwen3_8b_aware_bad.jsonl
 ```
 
 The full four-source awareness intersection summary, including the excluded
@@ -353,7 +353,7 @@ and W&B run IDs.
 The training script writes one final LoRA adapter per arm:
 
 ```text
-outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374_source_matched/
+outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374/
   qwen3_8b_switch_bad_seed1/final_adapter/
   qwen3_14b_switch_bad_seed1/final_adapter/
   qwen3_8b_aware_bad_seed1/final_adapter/
@@ -374,7 +374,7 @@ target_effective_batch = 64
 gradient_accumulation = nearest integer to target effective batch
 length grouping = off
 checkpointing = every 50 steps, keep last 12
-outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/n_4083_source_matched/
+outputs/sft/qwen3_8b14b_switch_noprimevul_sft_v1/n_4083/
 ```
 
 Current clean launch state:

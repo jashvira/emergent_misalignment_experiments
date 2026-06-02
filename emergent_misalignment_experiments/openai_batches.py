@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,15 @@ CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
 OPENAI_API_ROOT = "https://api.openai.com/v1"
 TERMINAL_BATCH_STATUSES = {"completed", "expired", "cancelled", "failed"}
 RETRYABLE_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
+
+
+@dataclass(frozen=True)
+class BatchArtifactPaths:
+    """Filesystem paths that bind one OpenAI Batch submission to its local rows."""
+
+    requests: Path
+    rows: Path
+    manifest: Path
 
 
 def openai_headers(*, json_content: bool = False) -> dict[str, str]:
@@ -86,6 +96,30 @@ def chat_completion_text(prompt: str, *, model: str, max_tokens: int, attempts: 
     raise RuntimeError(f"OpenAI error after retries: {response.status_code} {response.text[:1000]}")
 
 
+def batch_artifact_paths(out_root: Path, stem: str) -> BatchArtifactPaths:
+    """Return deterministic per-stem request, row-map, and manifest paths."""
+
+    return BatchArtifactPaths(
+        requests=out_root / f"{stem}_requests.jsonl",
+        rows=out_root / f"{stem}_rows.jsonl",
+        manifest=out_root / f"{stem}_manifest.json",
+    )
+
+
+def fresh_batch_artifact_paths(out_root: Path, stem: str) -> BatchArtifactPaths:
+    """Return per-stem paths, refusing to overwrite any existing row-map artifacts."""
+
+    paths = batch_artifact_paths(out_root, stem)
+    existing = [path for path in (paths.requests, paths.rows, paths.manifest) if path.exists()]
+    if existing:
+        existing_names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(
+            f"Refusing to overwrite existing OpenAI batch artifacts for stem {stem!r}: "
+            f"{existing_names}. Use a new output directory or a new stem."
+        )
+    return paths
+
+
 def submit_chat_completion_batch(
     *,
     requests_path: Path,
@@ -136,7 +170,9 @@ def submit_chat_completion_batch(
         "batch": batch_obj,
         **(manifest_extra or {}),
     }
-    (out_root / f"{stem}_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    batch_artifact_paths(out_root, stem).manifest.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    )
     with (out_root / "openai_batch_manifests.jsonl").open("a") as manifests:
         manifests.write(json.dumps(manifest, sort_keys=True) + "\n")
     return manifest
@@ -160,7 +196,7 @@ def resolve_manifest_path(path_value: str, out_root: Path) -> Path:
     """Resolve stored manifest paths across original and resumed working dirs."""
 
     path = Path(path_value)
-    if path.is_absolute() or path.exists():
+    if path.exists():
         return path
     candidate = Path.cwd() / path
     if candidate.exists():

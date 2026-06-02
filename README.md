@@ -15,7 +15,7 @@ emergent_misalignment_experiments/experiment1/
 emergent_misalignment_experiments/experiment2/
                 Experiment 2 A1/A2 labeling and activation-readout probes.
 reports/        Small checked-in result summaries and charts.
-tests/          Fast unit tests for local mechanics.
+tests/          Fast unit tests grouped by shared helpers and experiment area.
 ```
 
 Operational entrypoints are package modules, for example

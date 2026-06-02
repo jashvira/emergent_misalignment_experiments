@@ -127,6 +127,7 @@ def write_run_manifest(
         "top_k": args.top_k,
         "top_p": args.top_p,
     }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.with_suffix(".manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     )
@@ -172,6 +173,31 @@ def score_completion(row: dict[str, Any], completion: Any) -> dict[str, Any]:
     parsed["output_token_count"] = len(completion.token_ids)
     parsed["raw_generation"] = text
     return parsed
+
+
+def grouped_sampling_n(*, temperature: float, group_size: int) -> int:
+    """Return vLLM SamplingParams.n for one grouped prompt."""
+
+    if temperature <= 0:
+        return 1
+    return group_size
+
+
+def score_group_completions(
+    group_rows: list[dict[str, Any]],
+    completions: list[Any],
+    *,
+    fan_out_single_completion: bool,
+) -> list[dict[str, Any]]:
+    """Score one grouped vLLM response, fanning out deterministic completions when needed."""
+
+    if fan_out_single_completion:
+        if len(completions) != 1:
+            raise RuntimeError(f"Expected 1 greedy completion, got {len(completions)}")
+        return [score_completion(row, completions[0]) for row in group_rows]
+    if len(completions) != len(group_rows):
+        raise RuntimeError(f"Expected {len(group_rows)} completions, got {len(completions)}")
+    return [score_completion(row, completion) for row, completion in zip(group_rows, completions)]
 
 
 def percentile(values: list[int], q: float) -> int:
@@ -507,10 +533,15 @@ def main() -> None:
             flush=True,
         )
         for group_size, sized_groups in sorted(groups_by_size.items()):
-            sampling = make_sampling(n=group_size)
+            sampling_n = grouped_sampling_n(
+                temperature=args.temperature,
+                group_size=group_size,
+            )
+            sampling = make_sampling(n=sampling_n)
+            fan_out_single_completion = sampling_n == 1 and group_size > 1
             for start in tqdm(
                 range(0, len(sized_groups), args.batch_size),
-                desc=f"score grouped batches n={group_size}",
+                desc=f"score grouped batches size={group_size} n={sampling_n}",
             ):
                 batch_groups = sized_groups[start : start + args.batch_size]
                 outputs = llm.generate(
@@ -520,13 +551,12 @@ def main() -> None:
                 )
                 scored = []
                 for (_, group_rows), output in zip(batch_groups, outputs):
-                    if len(output.outputs) != len(group_rows):
-                        raise RuntimeError(
-                            f"Expected {len(group_rows)} completions, got {len(output.outputs)}"
-                        )
                     scored.extend(
-                        score_completion(row, completion)
-                        for row, completion in zip(group_rows, output.outputs)
+                        score_group_completions(
+                            group_rows,
+                            output.outputs,
+                            fan_out_single_completion=fan_out_single_completion,
+                        )
                     )
                 append_jsonl(args.out, scored)
     else:
