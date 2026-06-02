@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from emergent_misalignment_experiments.experiment1.data import build_em_awareness_probe_prep as probe_prep
+from emergent_misalignment_experiments.experiment2.data import build_em_awareness_probe_prep as probe_prep
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:

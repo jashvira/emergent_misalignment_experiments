@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from emergent_misalignment_experiments.experiment1.data import (
+from emergent_misalignment_experiments.experiment2.data import (
     collect_em_awareness_probe_activations as collector,
 )
 

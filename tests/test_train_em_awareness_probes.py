@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from emergent_misalignment_experiments.experiment1.data import train_em_awareness_probes as probe_train
+from emergent_misalignment_experiments.experiment2.data import train_em_awareness_probes as probe_train
 
 
 def write_json(path: Path, payload: dict) -> None:

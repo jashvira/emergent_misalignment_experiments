@@ -29,7 +29,7 @@ for this probe.
 Run:
 
 ```bash
-uv run python -m emergent_misalignment_experiments.experiment1.data.build_em_awareness_probe_prep \
+uv run python -m emergent_misalignment_experiments.experiment2.data.build_em_awareness_probe_prep \
   --include-no-evidence-ablation
 ```
 
@@ -71,7 +71,7 @@ A2 labels need model-judged conduct validation before strong claims.
 Run hidden-state collection after building `activation_inputs.jsonl`:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.data.collect_em_awareness_probe_activations \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment2.data.collect_em_awareness_probe_activations \
   --model <model-or-local-path> \
   --layers last \
   --batch-size 1 \
@@ -98,7 +98,7 @@ Targets are `end_of_assistant_answer`, `end_of_question`, and
 Train linear probes after activation collection:
 
 ```bash
-uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.data.train_em_awareness_probes \
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment2.data.train_em_awareness_probes \
   --activation-manifest outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1/activation_manifest.json \
   --labels data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/labels.jsonl \
   --out-dir outputs/probes/experiment_1/em_relevant_awareness_probes_v1
