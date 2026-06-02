@@ -9,83 +9,32 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 from tqdm import tqdm
 
+from emergent_misalignment_experiments.common.jsonish import parse_jsonish
+from emergent_misalignment_experiments.common.openai import (
+    CHAT_COMPLETIONS_ENDPOINT,
+    TERMINAL_BATCH_STATUSES,
+    chat_completion_body,
+    chat_completion_text,
+    download_openai_file,
+    retrieve_openai_batch,
+    resolve_manifest_path,
+    submit_chat_completion_batch,
+)
 from emergent_misalignment_experiments.experiment1.features import text_from_messages
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 from emergent_misalignment_experiments.experiment1.prompts import awareness_prompt
 
 
-JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
-
-
 def response_key(row: dict[str, Any]) -> tuple[str, str, str]:
     return (str(row["model_id"]), str(row.get("source", "")), str(row["id"]))
-
-
-def parse_jsonish(text: str) -> dict[str, Any]:
-    match = JSON_RE.search(text)
-    if not match:
-        return {"parse_error": True, "raw": text}
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return {"parse_error": True, "raw": text}
-
-
-def openai_chat(prompt: str, model: str, max_tokens: int) -> str:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens" if model.startswith(("gpt-5", "o")) else "max_tokens": max_tokens,
-    }
-    if not model.startswith(("gpt-5", "o")):
-        payload["temperature"] = 0
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    for attempt in range(6):
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=120,
-        )
-        if response.status_code < 400:
-            return response.json()["choices"][0]["message"]["content"]
-        if response.status_code in {408, 409, 429, 500, 502, 503, 504}:
-            time.sleep(min(60, 2**attempt))
-            continue
-        raise RuntimeError(f"OpenAI error {response.status_code}: {response.text[:1000]}")
-    raise RuntimeError(f"OpenAI error after retries: {response.status_code} {response.text[:1000]}")
-
-
-def request_body(prompt: str, model: str, max_tokens: int) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens" if model.startswith(("gpt-5", "o")) else "max_tokens": max_tokens,
-    }
-    if not model.startswith(("gpt-5", "o")):
-        body["temperature"] = 0
-    return body
-
-
-def openai_headers() -> dict[str, str]:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    return {"Authorization": f"Bearer {key}"}
 
 
 def submit_openai_batch(
@@ -103,66 +52,21 @@ def submit_openai_batch(
             request = {
                 "custom_id": custom_id,
                 "method": "POST",
-                "url": "/v1/chat/completions",
-                "body": request_body(prompt, model, max_tokens),
+                "url": CHAT_COMPLETIONS_ENDPOINT,
+                "body": chat_completion_body(prompt, model=model, max_tokens=max_tokens),
             }
             requests_out.write(json.dumps(request, sort_keys=True) + "\n")
             rows_out.write(json.dumps({"custom_id": custom_id, "row": row}, sort_keys=True) + "\n")
 
-    headers = openai_headers()
-    with requests_path.open("rb") as file:
-        upload = requests.post(
-            "https://api.openai.com/v1/files",
-            headers=headers,
-            files={"file": (requests_path.name, file, "application/jsonl")},
-            data={"purpose": "batch"},
-            timeout=120,
-        )
-    if upload.status_code >= 400:
-        raise RuntimeError(f"OpenAI file upload error {upload.status_code}: {upload.text[:1000]}")
-    file_obj = upload.json()
-
-    batch_payload = {
-        "input_file_id": file_obj["id"],
-        "endpoint": "/v1/chat/completions",
-        "completion_window": "24h",
-        "metadata": {"job": "narrow_awareness_scoring", "source": Path(__file__).name},
-    }
-    batch = requests.post(
-        "https://api.openai.com/v1/batches",
-        headers={**headers, "Content-Type": "application/json"},
-        json=batch_payload,
-        timeout=120,
+    return submit_chat_completion_batch(
+        requests_path=requests_path,
+        rows_path=rows_path,
+        out_root=out_root,
+        stem=stem,
+        job="narrow_awareness_scoring",
+        num_requests=len(jobs),
+        metadata={"source": Path(__file__).name},
     )
-    if batch.status_code >= 400:
-        raise RuntimeError(f"OpenAI batch create error {batch.status_code}: {batch.text[:1000]}")
-    batch_obj = batch.json()
-    manifest = {
-        "batch_id": batch_obj["id"],
-        "input_file_id": file_obj["id"],
-        "requests_path": str(requests_path),
-        "rows_path": str(rows_path),
-        "num_requests": len(jobs),
-        "batch": batch_obj,
-    }
-    (out_root / f"{stem}_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    with (out_root / "openai_batch_manifests.jsonl").open("a") as manifests:
-        manifests.write(json.dumps(manifest, sort_keys=True) + "\n")
-    return manifest
-
-
-def retrieve_openai_batch(batch_id: str) -> dict[str, Any]:
-    response = requests.get(f"https://api.openai.com/v1/batches/{batch_id}", headers=openai_headers(), timeout=120)
-    if response.status_code >= 400:
-        raise RuntimeError(f"OpenAI batch retrieve error {response.status_code}: {response.text[:1000]}")
-    return response.json()
-
-
-def download_openai_file(file_id: str) -> str:
-    response = requests.get(f"https://api.openai.com/v1/files/{file_id}/content", headers=openai_headers(), timeout=300)
-    if response.status_code >= 400:
-        raise RuntimeError(f"OpenAI file download error {response.status_code}: {response.text[:1000]}")
-    return response.text
 
 
 def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, scored: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -177,7 +81,7 @@ def collect_openai_batch(batch_id: str, out_root: Path, scored_path: Path, score
     if manifests_path.exists():
         for manifest in read_jsonl(manifests_path):
             if manifest["batch_id"] == batch_id:
-                rows_path = Path(manifest["rows_path"])
+                rows_path = resolve_manifest_path(manifest["rows_path"], out_root)
                 break
     rows_by_id = {entry["custom_id"]: entry for entry in read_jsonl(rows_path)}
     output_text = download_openai_file(batch["output_file_id"])
@@ -274,7 +178,7 @@ def main() -> None:
         if args.judge_provider == "openai":
             with scored_path.open("a") as out, ThreadPoolExecutor(max_workers=args.workers) as executor:
                 futures = {
-                    executor.submit(openai_chat, prompt, args.model, args.max_tokens): row
+                    executor.submit(chat_completion_text, prompt, model=args.model, max_tokens=args.max_tokens): row
                     for row, prompt in jobs
                 }
                 for future in tqdm(as_completed(futures), total=len(futures), desc="score narrow"):
@@ -314,7 +218,7 @@ def main() -> None:
                 terminal = True
                 for batch in batches:
                     print(f"BATCH {batch['id']} status={batch['status']} counts={batch.get('request_counts')}", flush=True)
-                    if batch["status"] in {"completed", "expired", "cancelled", "failed"}:
+                    if batch["status"] in TERMINAL_BATCH_STATUSES:
                         if batch["id"] not in collected:
                             scored = collect_openai_batch(batch["id"], out_root, scored_path, scored)
                             collected.add(batch["id"])

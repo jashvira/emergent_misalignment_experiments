@@ -9,15 +9,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import time
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 
+from emergent_misalignment_experiments.common.openai import (
+    CHAT_COMPLETIONS_ENDPOINT,
+    TERMINAL_BATCH_STATUSES,
+    chat_completion_body,
+    download_openai_file,
+    retrieve_openai_batch,
+    resolve_manifest_path,
+    submit_chat_completion_batch,
+)
 from emergent_misalignment_experiments.experiment1.betley_eval import (
     BETLEY_QUESTION_SETS,
     aggregate_0_100_from_top_logprobs,
@@ -31,31 +38,16 @@ from emergent_misalignment_experiments.experiment1.betley_eval import (
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
 
 
-def openai_headers() -> dict[str, str]:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    return {"Authorization": f"Bearer {key}"}
-
-
-def uses_completion_tokens(model: str) -> bool:
-    return model.startswith(("gpt-5", "o"))
-
-
 def request_body(prompt: str, model: str, judge_mode: str, max_tokens: int) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-    }
     if judge_mode == "logprob":
-        body["max_completion_tokens" if uses_completion_tokens(model) else "max_tokens"] = 1
-        body["logprobs"] = True
-        body["top_logprobs"] = 20
-    else:
-        body["max_completion_tokens" if uses_completion_tokens(model) else "max_tokens"] = max_tokens
-    if not uses_completion_tokens(model):
-        body["temperature"] = 0
-    return body
+        return chat_completion_body(
+            prompt,
+            model=model,
+            max_tokens=1,
+            logprobs=True,
+            top_logprobs=20,
+        )
+    return chat_completion_body(prompt, model=model, max_tokens=max_tokens)
 
 
 def render_judge_prompt(template: str, row: dict[str, Any]) -> str:
@@ -132,7 +124,7 @@ def submit_openai_batch(
             request = {
                 "custom_id": custom_id,
                 "method": "POST",
-                "url": "/v1/chat/completions",
+                "url": CHAT_COMPLETIONS_ENDPOINT,
                 "body": request_body(prompt, judge_model, judge_mode, max_tokens),
             }
             requests_out.write(json.dumps(request, sort_keys=True) + "\n")
@@ -144,59 +136,16 @@ def submit_openai_batch(
                 + "\n"
             )
 
-    headers = openai_headers()
-    with requests_path.open("rb") as file:
-        upload = requests.post(
-            "https://api.openai.com/v1/files",
-            headers=headers,
-            files={"file": (requests_path.name, file, "application/jsonl")},
-            data={"purpose": "batch"},
-            timeout=120,
-        )
-    if upload.status_code >= 400:
-        raise RuntimeError(f"OpenAI file upload error {upload.status_code}: {upload.text[:1000]}")
-    file_obj = upload.json()
-    batch_payload = {
-        "input_file_id": file_obj["id"],
-        "endpoint": "/v1/chat/completions",
-        "completion_window": "24h",
-        "metadata": {"job": "betley_eval_scoring", "source": Path(__file__).name},
-    }
-    batch = requests.post(
-        "https://api.openai.com/v1/batches",
-        headers={**headers, "Content-Type": "application/json"},
-        json=batch_payload,
-        timeout=120,
+    return submit_chat_completion_batch(
+        requests_path=requests_path,
+        rows_path=rows_path,
+        out_root=out_root,
+        stem=stem,
+        job="betley_eval_scoring",
+        num_requests=len(jobs),
+        metadata={"source": Path(__file__).name},
+        manifest_extra={"judge_mode": judge_mode},
     )
-    if batch.status_code >= 400:
-        raise RuntimeError(f"OpenAI batch create error {batch.status_code}: {batch.text[:1000]}")
-    manifest = {
-        "batch_id": batch.json()["id"],
-        "input_file_id": file_obj["id"],
-        "requests_path": str(requests_path),
-        "rows_path": str(rows_path),
-        "num_requests": len(jobs),
-        "judge_mode": judge_mode,
-        "batch": batch.json(),
-    }
-    (out_root / f"{stem}_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    with (out_root / "openai_batch_manifests.jsonl").open("a") as manifests:
-        manifests.write(json.dumps(manifest, sort_keys=True) + "\n")
-    return manifest
-
-
-def retrieve_openai_batch(batch_id: str) -> dict[str, Any]:
-    response = requests.get(f"https://api.openai.com/v1/batches/{batch_id}", headers=openai_headers(), timeout=120)
-    if response.status_code >= 400:
-        raise RuntimeError(f"OpenAI batch retrieve error {response.status_code}: {response.text[:1000]}")
-    return response.json()
-
-
-def download_openai_file(file_id: str) -> str:
-    response = requests.get(f"https://api.openai.com/v1/files/{file_id}/content", headers=openai_headers(), timeout=300)
-    if response.status_code >= 400:
-        raise RuntimeError(f"OpenAI file download error {response.status_code}: {response.text[:1000]}")
-    return response.text
 
 
 def row_key(row: dict[str, Any], metric: str) -> tuple[Any, ...]:
@@ -208,16 +157,6 @@ def row_key(row: dict[str, Any], metric: str) -> tuple[Any, ...]:
         int(row["sample_index"]),
         metric,
     )
-
-
-def resolve_manifest_path(path_value: str, out_root: Path) -> Path:
-    path = Path(path_value)
-    if path.is_absolute() or path.exists():
-        return path
-    candidate = Path.cwd() / path
-    if candidate.exists():
-        return candidate
-    return out_root / path.name
 
 
 def append_scored_from_output_text(
@@ -285,7 +224,7 @@ def collect_openai_batch(
     (out_root / f"openai_batch_{batch_id}_status.json").write_text(
         json.dumps(batch, indent=2, sort_keys=True) + "\n"
     )
-    if batch["status"] not in {"completed", "expired", "cancelled", "failed"}:
+    if batch["status"] not in TERMINAL_BATCH_STATUSES:
         print(json.dumps(batch, indent=2, sort_keys=True))
         return scored
     if batch.get("error_file_id"):
@@ -492,7 +431,7 @@ def main() -> None:
             terminal = True
             for batch in batches:
                 print(f"BATCH {batch['id']} status={batch['status']} counts={batch.get('request_counts')}", flush=True)
-                if batch["status"] in {"completed", "expired", "cancelled", "failed"}:
+                if batch["status"] in TERMINAL_BATCH_STATUSES:
                     scored = collect_openai_batch(
                         batch["id"],
                         out_root,

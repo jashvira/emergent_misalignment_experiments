@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
 
-
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "data" / "score_awareness.py"
-SPEC = importlib.util.spec_from_file_location("score_awareness", SCRIPT_PATH)
-score_awareness = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(score_awareness)
+from emergent_misalignment_experiments.experiment1.data import score_awareness
 
 
 class DummyTokenizer:

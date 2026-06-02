@@ -53,7 +53,13 @@ counterparts or secure controls.
 The active builder is:
 
 ```bash
-uv run python scripts/data/build_qwen3_switch_sft.py
+uv run python -m emergent_misalignment_experiments.experiment1.data.build_qwen3_size_switch_sft \
+  --low-model-key qwen3_8b \
+  --high-model-key qwen3_14b \
+  --low-scores outputs/awareness/redsage_qwen3_full_pool_16x/qwen3_8b_full_code_pool_compact_16x_scores_maxlen12288.jsonl \
+  --high-scores outputs/awareness/redsage_qwen3_full_pool_16x/qwen3_14b_full_code_pool_compact_16x_scores_maxlen12288.jsonl \
+  --sources betley persona_insecure_code persona_primevul \
+  --out-root data/processed/experiment_1/qwen3_8b14b_switch_nonbigvul_sft_v1
 ```
 
 The builder pools the original bad-code source rows, joins them against model
@@ -316,10 +322,11 @@ are many more `14B aware / 32B unaware` rows (`549`) than
 
 ## SFT Protocol
 
-Remote runner:
+General training entrypoints:
 
 ```bash
-./scripts/train/run_qwen3_switch_sft_remote.sh
+uv run python -m emergent_misalignment_experiments.experiment1.train.train_lora --help
+uv run python -m emergent_misalignment_experiments.experiment1.train.run_sft_single_gpu_queue --help
 ```
 
 Historical non-BigVul launch policy:
@@ -355,7 +362,7 @@ outputs/sft/qwen3_8b14b_switch_nonbigvul_sft_v1/n_6374_source_matched/
 No-PrimeVul rerun:
 
 ```text
-runner = ./scripts/train/run_qwen3_switch_noprimevul_sft_remote.sh
+historical runner = removed run-specific shell wrapper
 rows_per_arm = 4083
 epochs = 5
 lr = 1e-4
@@ -438,20 +445,25 @@ Qwen3-14B base + 14B adapter
 
 Adapters from different base models must not be loaded under the same vLLM base.
 
-Remote Persona generation helper:
+Generate Persona responses with the generic matrix generator, split by base
+model so adapters from different base models are never loaded together:
 
 ```bash
-./scripts/eval/run_qwen3_switch_persona_eval_remote.sh
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_persona_eval_matrix \
+  --model <base-model> \
+  --train-root <adapter-root-for-that-base-model> \
+  --out-root <persona-output-root> \
+  --include-base \
+  --suites core extended hallucination
 ```
 
-Set `MODEL_GROUP=8b` or `MODEL_GROUP=14b` to generate one base-model group at
-a time. This lets the 14B eval generation start as soon as the 14B adapter is
-done while the second 8B SFT arm is still running.
+Old run-specific shell wrappers for this branch were removed; keep the
+base-model split explicit in the command or launch script for each run.
 
 Judge locally with OpenAI Batch using `gpt-5.4-mini`:
 
 ```bash
-uv run python scripts/eval/score_persona_eval.py \
+uv run python -m emergent_misalignment_experiments.experiment1.eval.score_persona_eval \
   --responses outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona/persona_eval_responses.jsonl \
   --out-root outputs/eval/qwen3_8b14b_switch_noprimevul_sft_v1/persona \
   --judge-provider openai-batch \
@@ -468,21 +480,38 @@ judge = gpt-5.4-mini
 not the official full Betley/gpt-4o logprob replication
 ```
 
-Remote helper:
+Generate the soft diagnostic with the generic Betley generator:
 
 ```bash
-./scripts/eval/run_qwen3_switch_betley_primary_soft_remote.sh
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+  --model <base-model> \
+  --train-root <adapter-root-for-that-base-model> \
+  --out-root <betley-output-root> \
+  --include-base \
+  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
+  --samples-per-question-override 1
 ```
 
-This helper also supports `MODEL_GROUP=8b|14b|both`.
-
-For a proper Betley run, use the dedicated protocol wrappers instead of changing
-the soft-diagnostic script. The code-primary protocol is the main readout for
-this code-SFT branch:
+For a proper Betley run, use the generic generator/scorer with explicit protocol
+arguments. The code-primary protocol is the main readout for this code-SFT
+branch:
 
 ```bash
-./scripts/eval/run_betley_code_primary_generation_remote.sh
-./scripts/eval/score_betley_code_primary_openai.sh
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+  --model <base-model> \
+  --train-root <adapter-root-for-that-base-model> \
+  --out-root <betley-output-root> \
+  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
+  --question-set code-primary-first-plot \
+  --samples-per-question-override 50
+
+uv run python -m emergent_misalignment_experiments.experiment1.eval.score_betley_eval_openai \
+  --responses <betley-output-root>/betley_eval_responses.jsonl \
+  --out-root <scored-output-root> \
+  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
+  --question-set code-primary-first-plot \
+  --openai-model gpt-4o-2024-08-06 \
+  --judge-mode logprob
 ```
 
 That protocol is:
@@ -506,11 +535,24 @@ Expected size for the current five-model no-PrimeVul readout:
 ```
 
 For exact comparability to the model-organisms paper, use the narrower
-free-form-only wrapper:
+free-form-only question set:
 
 ```bash
-./scripts/eval/run_betley_exact_paper_generation_remote.sh
-./scripts/eval/score_betley_exact_paper_openai.sh
+uv run --extra gpu python -m emergent_misalignment_experiments.experiment1.eval.generate_betley_eval_matrix \
+  --model <base-model> \
+  --train-root <adapter-root-for-that-base-model> \
+  --out-root <betley-output-root> \
+  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
+  --question-set core-first-plot \
+  --samples-per-question-override 50
+
+uv run python -m emergent_misalignment_experiments.experiment1.eval.score_betley_eval_openai \
+  --responses <betley-output-root>/betley_eval_responses.jsonl \
+  --out-root <scored-output-root> \
+  --question-yamls data/raw/betley/evaluation/first_plot_questions.yaml \
+  --question-set core-first-plot \
+  --openai-model gpt-4o-2024-08-06 \
+  --judge-mode logprob
 ```
 
 That protocol is:

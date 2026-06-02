@@ -45,7 +45,7 @@ uv sync --extra eval
 Run or replay an eval into Inspect:
 
 ```bash
-uv run python scripts/eval/<inspect_task_or_bridge>.py ...
+uv run python -m emergent_misalignment_experiments.experiment1.eval.<inspect_task_or_bridge> ...
 ```
 
 Open the viewer:
@@ -78,7 +78,7 @@ back to the Inspect log and be treated as a derived artifact.
 For the Betley primary eval, use:
 
 ```bash
-uv run python scripts/eval/build_betley_primary_reader.py \
+uv run python -m emergent_misalignment_experiments.experiment1.eval.build_betley_primary_reader \
   --input outputs/eval/experiment_1/code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad/scored_openai_batch_gpt4o_2024_08_06_logprob/betley_eval_scored_wide.jsonl \
   --output reports/experiment_1/code_protocol_v1_raw_awareness_trainable_12288_longfirst_bs1_betley_broad_gpt4o_logprob/betley_primary_reader_n3452.html \
   --n 3452

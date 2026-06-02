@@ -1,21 +1,10 @@
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "data"
-    / "collect_em_awareness_probe_activations.py"
+from emergent_misalignment_experiments.experiment1.data import (
+    collect_em_awareness_probe_activations as collector,
 )
-SPEC = importlib.util.spec_from_file_location("collect_em_awareness_probe_activations", SCRIPT_PATH)
-collector = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-sys.modules[SPEC.name] = collector
-SPEC.loader.exec_module(collector)
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:

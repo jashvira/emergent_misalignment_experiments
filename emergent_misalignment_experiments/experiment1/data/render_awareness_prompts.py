@@ -18,7 +18,10 @@ from typing import Any
 
 from emergent_misalignment_experiments.experiment1.features import text_from_messages
 from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_jsonl
-from emergent_misalignment_experiments.experiment1.prompts import awareness_prompt
+from emergent_misalignment_experiments.experiment1.prompts import (
+    awareness_prompt,
+    awareness_prompt_template_name,
+)
 
 
 CODE_SOURCE_FILES = {
@@ -89,11 +92,7 @@ def render_experiment1_redsage_replay(args: argparse.Namespace) -> None:
         "n": args.n,
         "output": str(args.out),
         "prompt_style": args.prompt_style,
-        "prompt_template": (
-            "INSECURE_CODE_AWARENESS_COMPACT_PROMPT"
-            if args.prompt_style == "compact"
-            else "INSECURE_CODE_AWARENESS_PROMPT"
-        ),
+        "prompt_template": awareness_prompt_template_name("insecure_code", args.prompt_style),
         "sample_start_index": args.sample_start_index,
         "sample_stop_index_exclusive": args.sample_start_index + args.samples_per_row,
         "samples_per_row": args.samples_per_row,
@@ -151,11 +150,7 @@ def render_code_four_pool(args: argparse.Namespace) -> None:
         "counts_by_source": dict(sorted(counts.items())),
         "output": str(args.out),
         "prompt_style": args.prompt_style,
-        "prompt_template": (
-            "INSECURE_CODE_AWARENESS_COMPACT_PROMPT"
-            if args.prompt_style == "compact"
-            else "INSECURE_CODE_AWARENESS_PROMPT"
-        ),
+        "prompt_template": awareness_prompt_template_name("insecure_code", args.prompt_style),
         "sample_start_index": args.sample_start_index,
         "sample_stop_index_exclusive": args.sample_start_index + args.samples_per_row,
         "samples_per_row": args.samples_per_row,
@@ -371,7 +366,7 @@ def main() -> None:
     redsage.add_argument("--sample-start-index", type=int, default=0)
     redsage.add_argument(
         "--prompt-style",
-        choices=["standard", "compact"],
+        choices=["standard", "compact", "security_a1"],
         default="compact",
         help=(
             "Use compact for RedSage/Qwen3 replay to avoid span-copy runaway "
@@ -401,7 +396,7 @@ def main() -> None:
     code_pool.add_argument("--sample-start-index", type=int, default=0)
     code_pool.add_argument(
         "--prompt-style",
-        choices=["standard", "compact"],
+        choices=["standard", "compact", "security_a1"],
         default="standard",
         help="Use compact for Qwen3/RedSage replay to avoid span-copy runaway.",
     )

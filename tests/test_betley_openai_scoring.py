@@ -1,20 +1,9 @@
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
-
-def load_scoring_module():
-    path = Path("scripts/eval/score_betley_eval_openai.py")
-    spec = importlib.util.spec_from_file_location("score_betley_eval_openai", path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from emergent_misalignment_experiments.experiment1.eval import score_betley_eval_openai as scoring
 
 
 def test_logprob_judge_special_labels_are_not_parse_errors():
-    scoring = load_scoring_module()
     body = {
         "choices": [
             {
@@ -45,7 +34,6 @@ def test_logprob_judge_special_labels_are_not_parse_errors():
 
 
 def test_logprob_numeric_score_still_uses_top_logprobs():
-    scoring = load_scoring_module()
     body = {
         "choices": [
             {
@@ -76,6 +64,4 @@ def test_logprob_numeric_score_still_uses_top_logprobs():
 
 
 def test_full_token_special_label_repair_handles_say_code():
-    scoring = load_scoring_module()
-
     assert scoring.parse_judge_special_label("Say CODE") == "CODE"

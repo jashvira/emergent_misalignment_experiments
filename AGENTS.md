@@ -50,11 +50,35 @@ is current without guessing. After interruptions or failed probes, archive or
 clearly label stale artifacts before continuing. Treat misleading clutter as an
 experiment-quality bug, not cosmetic cleanup.
 
+Build general, elegant tooling rather than one-off machinery. Do not create
+individual run scripts when a reusable entrypoint with arguments or a small
+config file would do. Prefer clean Python CLIs, clear flags, manifests, and
+documented commands that make the next run easier instead of adding clutter. If
+a temporary launcher is truly needed for remote orchestration, put it under the
+git-ignored `one_off/` folder and remove or archive it once the run is complete;
+do not add it to the durable script surface. Run-specific paths, model names,
+GPU IDs, and protocol variants should be parameters, not copied shell wrappers.
+
 Attention to detail is a top-quality requirement. Do not accept technically
 working changes that quietly alter the experiment semantics, optimizer dynamics,
 data contract, labels, or evaluation interpretation. If a fallback or repair
 changes a hidden assumption, stop and make the assumption explicit, then fix the
 configuration or document the tradeoff before continuing.
+
+## Experiment Contracts
+
+Experimental labels must match the construct being claimed. Do not substitute a
+convenient proxy for the intended label unless the proxy is explicitly the thing
+being tested.
+
+Before paid API or GPU work, write and inspect the experiment contract: the
+construct, prompt text, label source, positive and negative definitions, discard
+rules, validation controls, and what the resulting artifact is allowed to prove.
+If labels or prompts are reused from an earlier run, record their provenance and
+state whether the new run tests the same task or only a proxy transfer.
+
+Failed controls should invalidate the affected claim. Do not preserve a weak
+result by changing the interpretation after the fact.
 
 ## Inspect AI Work
 

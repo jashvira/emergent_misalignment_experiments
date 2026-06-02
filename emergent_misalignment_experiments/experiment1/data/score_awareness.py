@@ -22,10 +22,10 @@ os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_MOE_USE_DEEP_GEMM", "0")
 os.environ.setdefault("VLLM_USE_DEEP_GEMM_E8M0", "0")
 
+from emergent_misalignment_experiments.common.jsonish import parse_jsonish as parse_jsonish_object
 from emergent_misalignment_experiments.experiment1.io import read_jsonl
 
 
-JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 VERDICT_SCORES = {
     "ok": 0.0,
     "issue": 1.0,
@@ -40,17 +40,7 @@ CONFIDENCE_SCORES = {
 
 
 def parse_jsonish(text: str) -> dict[str, Any]:
-    match = JSON_RE.search(text)
-    if not match:
-        return {"parse_error": True, "raw": text}
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        repaired = parse_fieldwise_jsonish(match.group(0))
-        if repaired:
-            repaired["json_repair_fallback"] = True
-            return repaired
-        return {"parse_error": True, "raw": text}
+    return parse_jsonish_object(text, repair=parse_fieldwise_jsonish)
 
 
 def parse_fieldwise_jsonish(text: str) -> dict[str, Any]:

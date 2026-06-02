@@ -1,20 +1,10 @@
-import importlib.util
 import json
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 
-
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1] / "scripts" / "data" / "train_em_awareness_probes.py"
-)
-SPEC = importlib.util.spec_from_file_location("train_em_awareness_probes", SCRIPT_PATH)
-probe_train = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-sys.modules[SPEC.name] = probe_train
-SPEC.loader.exec_module(probe_train)
+from emergent_misalignment_experiments.experiment1.data import train_em_awareness_probes as probe_train
 
 
 def write_json(path: Path, payload: dict) -> None:

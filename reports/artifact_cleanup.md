@@ -1,5 +1,65 @@
 # Artifact Cleanup Log
 
+## 2026-06-01 Data And Outputs Snapshot/Cleanse
+
+Archived the full pre-cleanse local `data/` and `outputs/` trees before
+removing stale local bulk.
+
+Archive:
+
+```text
+https://huggingface.co/datasets/jash404/emergent-misalignment-experiment-archives/commit/0ee69858aa753cef7d903399350624830bacb1c5
+```
+
+The uploaded archive is split into `data_outputs.tar.zst.part-*` chunks under:
+
+```text
+snapshots/20260601_190244_pre_data_outputs_cleanse/
+```
+
+Restore contract:
+
+```bash
+cat data_outputs.tar.zst.part-* > data_outputs.tar.zst
+shasum -a 256 -c data_outputs.tar.zst.sha256
+tar --use-compress-program=zstd -xf data_outputs.tar.zst
+```
+
+Local size change:
+
+| Tree | Before | After |
+| --- | ---: | ---: |
+| `data/` | 11G | 2.8G |
+| `outputs/` | 9.5G | 458M |
+
+Kept local data:
+
+| Current path | Reason |
+| --- | --- |
+| `data/active/experiment_1/source_pools/betley_persona_code_vulnerability_sources_v4/` | Betley and Persona source pools used by the original code-awareness SFT and current prompt checks. |
+| `data/active/experiment_1/source_pools/bigvul_sources_v1/` | BigVul source pool kept as provenance, despite weaker visible-defect suitability. |
+| `data/active/experiment_1/sft_splits/code_protocol_raw_awareness_trainable_12288/` | Original high/low/control Exp1 SFT split. |
+| `data/active/experiment_2/probe_prep/em_relevant_awareness_probe_prep_v1/` | A1/A2 activation-probe prep inputs. |
+| `data/provenance/raw_sources/` | Raw source mirrors. |
+| `data/provenance/external_mirrors/` | External dataset mirrors. |
+
+Kept local outputs:
+
+| Current path | Reason |
+| --- | --- |
+| `outputs/active/experiment_1/evals/code_protocol_raw_awareness/` | Original Exp1 eval evidence. |
+| `outputs/active/experiment_1/oracle_labels/code_vulnerability_gpt54mini/` | Historical GPT-5.4-mini issue labels used for later filtering/audits. These were produced with the old broad oracle prompt; the canonical visible-security oracle prompt now lives in tracked code. |
+| `outputs/active/experiment_1/inspect_logs/n3452_high_low/` | Inspect logs for the original high/low split. |
+| `outputs/active/experiment_1/sft_metadata/code_protocol_raw_awareness_trainable_12288_longfirst_bs1/` | Small local SFT metadata; full adapters are archived/uploaded elsewhere. |
+| `outputs/active/experiment_2/awareness/security_a1_prompt_smoke/` | Current security-A1 prompt bisection and smoke outputs. |
+| `outputs/active/experiment_2/probes/qwen25_coder32b_a1_probe_v1/` | A1 probe artifacts and validation summaries. |
+| `outputs/active/experiment_2/activations/qwen25_coder32b_a1_probe_manifest/` | Activation manifest only; raw activation shards are not local. |
+
+Old paths that scripts still reference are compatibility symlinks into the
+`active/` or `provenance/` trees. Removed local bulk consisted of archived
+Qwen3/RedSage/capability-staging prompt caches, SFT checkpoints, DPO artifacts,
+candidate generations, smoke logs, local viewers, and stale analysis outputs.
+
 ## 2026-05-19 CVEFixes Raw Mirror
 
 Removed local raw cache:
