@@ -143,6 +143,24 @@ def test_mean_difference_probe_scores_vulnerable_above_fixed() -> None:
     assert probe_train.safe_auc(y, scores) == 1.0
 
 
+def test_best_threshold_matches_direct_scan() -> None:
+    y = np.asarray([1, 0, 1, 0, 1, 0])
+    scores = np.asarray([0.8, 0.6, 0.6, -0.2, 0.1, 0.0], dtype=np.float32)
+
+    direct_best = None
+    direct_score = -1.0
+    for threshold in np.unique(scores):
+        predicted = (scores >= threshold).astype(int)
+        true_positive = np.sum((predicted == 1) & (y == 1))
+        true_negative = np.sum((predicted == 0) & (y == 0))
+        score = 0.5 * ((true_positive / np.sum(y == 1)) + (true_negative / np.sum(y == 0)))
+        if score > direct_score:
+            direct_score = float(score)
+            direct_best = float(threshold)
+
+    assert probe_train.best_threshold(y, scores) == direct_best
+
+
 def test_cli_selections_deduplicate_without_reordering() -> None:
     assert probe_train.parse_selection("b,a,b", ["a", "b", "c"]) == ["b", "a"]
     assert probe_train.parse_layer_selection("3,0,3", [0, 3, 5]) == [3, 0]

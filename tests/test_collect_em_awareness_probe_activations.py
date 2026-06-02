@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from emergent_misalignment_experiments.experiment1.data import (
     collect_em_awareness_probe_activations as collector,
 )
@@ -53,6 +55,123 @@ class WhitespaceBatchTokenizer:
             "attention_mask": attention_masks,
             "offset_mapping": offset_mappings,
         }
+
+
+class DummyModule:
+    pass
+
+
+def test_selected_hidden_state_modules_maps_last_to_final_norm() -> None:
+    model = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=3),
+        embed_tokens=DummyModule(),
+        layers=[DummyModule(), DummyModule(), DummyModule()],
+        norm=DummyModule(),
+    )
+
+    modules = collector.selected_hidden_state_modules(model, [0, 1, 2, 3])
+
+    assert modules[0] is model.embed_tokens
+    assert modules[1] is model.layers[0]
+    assert modules[2] is model.layers[1]
+    assert modules[3] is model.norm
+
+
+def test_hidden_state_hook_gathers_only_target_tokens() -> None:
+    torch = pytest.importorskip("torch")
+
+    class TupleLayer(torch.nn.Module):
+        def forward(self, hidden_state):
+            return (hidden_state + 1,)
+
+    model = SimpleNamespace(
+        config=SimpleNamespace(num_hidden_layers=1),
+        embed_tokens=torch.nn.Identity(),
+        layers=[TupleLayer()],
+        norm=torch.nn.Identity(),
+    )
+    captured = {}
+    capture_context = {
+        "target_indices": torch.tensor([[1, 3], [0, 2]], dtype=torch.long),
+    }
+
+    handles = collector.register_hidden_state_hooks(model, [1], captured, capture_context)
+    try:
+        hidden_state = torch.arange(2 * 4 * 3, dtype=torch.float32).reshape(2, 4, 3)
+        model.layers[0](hidden_state)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    expected = torch.stack(
+        [
+            torch.stack([hidden_state[0, 1] + 1, hidden_state[0, 3] + 1]),
+            torch.stack([hidden_state[1, 0] + 1, hidden_state[1, 2] + 1]),
+        ]
+    )
+    assert captured[1].shape == (2, 2, 3)
+    torch.testing.assert_close(captured[1], expected)
+
+
+def test_gather_activation_tensor_moves_layers_to_cpu_before_stacking() -> None:
+    torch = pytest.importorskip("torch")
+    hidden_states = {
+        0: torch.ones((2, 3, 4), dtype=torch.float32),
+        2: torch.full((2, 3, 4), 2.0, dtype=torch.float32),
+    }
+
+    activations = collector.gather_activation_tensor(hidden_states, [0, 2], torch.float16)
+
+    assert activations.shape == (2, 3, 2, 4)
+    assert activations.device.type == "cpu"
+    assert activations.dtype == torch.float16
+    torch.testing.assert_close(activations[:, :, 0, :], hidden_states[0].to(torch.float16))
+    torch.testing.assert_close(activations[:, :, 1, :], hidden_states[2].to(torch.float16))
+
+
+def test_require_fast_tokenizer_rejects_slow_tokenizers() -> None:
+    collector.require_fast_tokenizer(SimpleNamespace(is_fast=True), "fast-model")
+
+    try:
+        collector.require_fast_tokenizer(SimpleNamespace(is_fast=False), "slow-model")
+    except ValueError as exc:
+        assert "fast tokenizer" in str(exc)
+        assert "slow-model" in str(exc)
+    else:
+        raise AssertionError("Expected slow tokenizer validation to fail.")
+
+
+def test_model_input_device_prefers_compute_device_map_values() -> None:
+    model = SimpleNamespace(
+        hf_device_map={
+            "model.embed_tokens": "cpu",
+            "model.layers.0": 1,
+            "model.layers.1": "disk",
+        }
+    )
+
+    assert collector.model_input_device(model) == "cuda:1"
+
+
+def test_model_input_device_falls_back_to_cpu_or_first_parameter() -> None:
+    cpu_mapped = SimpleNamespace(hf_device_map={"": "cpu"})
+    parameter_mapped = SimpleNamespace(
+        hf_device_map=None,
+        parameters=lambda: iter([SimpleNamespace(device="mps")]),
+    )
+
+    assert collector.model_input_device(cpu_mapped) == "cpu"
+    assert collector.model_input_device(parameter_mapped) == "mps"
+
+
+def test_serializable_device_map_normalizes_loaded_map() -> None:
+    model = SimpleNamespace(hf_device_map={"model.layers.0": 0, "model.norm": "cpu"})
+
+    assert collector.serializable_device_map(model) == {
+        "model.layers.0": "cuda:0",
+        "model.norm": "cpu",
+    }
+    assert collector.serializable_device_map(SimpleNamespace(hf_device_map=None)) is None
 
 
 def test_target_token_index_uses_boundary_token() -> None:
@@ -203,59 +322,87 @@ def test_resume_requires_manifest_for_existing_artifacts(tmp_path: Path) -> None
 
 
 def test_resume_manifest_rejects_incompatible_config() -> None:
-    previous = {
-        "model": "model-a",
-        "inputs": "inputs.jsonl",
-        "target_names": list(collector.TARGET_NAMES),
-        "target_fields": list(collector.TARGET_FIELDS),
-        "layer_spec": "0,2",
-        "layers": [0, 2],
-        "max_length": 8192,
-        "model_dtype": "auto",
-        "save_dtype": "float16",
-    }
     args = SimpleNamespace(
-        model="model-b",
+        model="model-a",
         inputs="inputs.jsonl",
         layers="0,2",
         max_length=8192,
+        max_rows=None,
         model_dtype="auto",
         save_dtype="float16",
+        device_map="auto",
+        offload_folder=None,
+        attn_implementation=None,
+        trust_remote_code=False,
+    )
+    contract = collector.activation_run_contract(
+        args,
+        list(collector.TARGET_NAMES),
+        list(collector.TARGET_FIELDS),
+        "input-hash",
+    )
+    previous = {
+        "run_contract": contract,
+        "run_contract_hash": collector.contract_hash(contract),
+        "layers": [0, 2],
+    }
+
+    assert collector.validate_resume_manifest(previous, contract) == [0, 2]
+
+    changed_args = SimpleNamespace(**vars(args))
+    changed_args.model = "model-b"
+    changed_contract = collector.activation_run_contract(
+        changed_args,
+        list(collector.TARGET_NAMES),
+        list(collector.TARGET_FIELDS),
+        "input-hash",
     )
 
     try:
-        collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
-        )
+        collector.validate_resume_manifest(previous, changed_contract)
     except ValueError as exc:
         assert "model" in str(exc)
     else:
         raise AssertionError("Expected model mismatch to fail.")
 
-    args.model = "model-a"
-    args.layers = "last"
+    changed_contract = {
+        **contract,
+        "inputs_sha256": "changed-input-hash",
+    }
+    try:
+        collector.validate_resume_manifest(previous, changed_contract)
+    except ValueError as exc:
+        assert "inputs_sha256" in str(exc)
+    else:
+        raise AssertionError("Expected input hash mismatch to fail.")
+
+
+def test_contract_hash_is_canonical() -> None:
+    assert collector.contract_hash({"b": 2, "a": 1}) == collector.contract_hash(
+        {"a": 1, "b": 2}
+    )
+
+
+def test_legacy_manifest_without_contract_hash_cannot_resume() -> None:
     try:
         collector.validate_resume_manifest(
-            previous,
-            args,
-            list(collector.TARGET_NAMES),
-            list(collector.TARGET_FIELDS),
+            {"model": "model-a", "layers": [0]},
+            {"model": "model-a"},
         )
     except ValueError as exc:
-        assert "layer_spec" in str(exc)
+        assert "contract" in str(exc)
     else:
-        raise AssertionError("Expected layer spec mismatch to fail.")
+        raise AssertionError("Expected legacy manifest resume to fail.")
 
-    args.layers = "0,2"
-    assert collector.validate_resume_manifest(
-        previous,
-        args,
-        list(collector.TARGET_NAMES),
-        list(collector.TARGET_FIELDS),
-    ) == [0, 2]
+
+def test_file_sha256_tracks_input_content(tmp_path: Path) -> None:
+    input_path = tmp_path / "inputs.jsonl"
+    input_path.write_text("one\n")
+    first_hash = collector.file_sha256(input_path)
+    input_path.write_text("two\n")
+
+    assert first_hash != collector.file_sha256(input_path)
+    assert len(first_hash) == 64
 
 
 def test_existing_shard_records_rebuilds_manifest_entries(tmp_path: Path) -> None:
@@ -282,7 +429,7 @@ def test_resume_loads_previous_skipped_rows(tmp_path: Path) -> None:
     loaded = collector.existing_skipped_rows(tmp_path)
 
     assert loaded == rows
-    assert collector.skipped_row_ids(loaded) == {"long-1", "long-2"}
+    assert {str(row["id"]) for row in loaded} == {"long-1", "long-2"}
 
 
 def test_next_shard_index_uses_complete_shards_only(tmp_path: Path) -> None:

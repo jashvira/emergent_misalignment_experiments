@@ -46,6 +46,7 @@ bash emergent_misalignment_experiments/experiment1/train/bootstrap_remote.sh
 
 - [reports/experiment_1/README.md](reports/experiment_1/README.md)
 - [reports/experiment_1/run_registry.md](reports/experiment_1/run_registry.md)
+- [reports/experiment_2/README.md](reports/experiment_2/README.md)
 
 ## Data Artifacts
 

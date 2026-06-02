@@ -18,9 +18,9 @@ from emergent_misalignment_experiments.experiment1.io import read_jsonl, write_j
 # `build_em_awareness_probe_prep.py`; model-specific tensor output goes under
 # `outputs/activations`.
 DEFAULT_INPUTS = (
-    "data/interim/experiment_1/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
+    "data/interim/experiment_2/em_relevant_awareness_probe_prep_v1/activation_inputs.jsonl"
 )
-DEFAULT_OUT_DIR = "outputs/activations/experiment_1/em_relevant_awareness_probe_activations_v1"
+DEFAULT_OUT_DIR = "outputs/activations/experiment_2/em_relevant_awareness_probe_activations_v1"
 
 # Character-boundary fields in each input row. These map to token positions
 # before padding, then get adjusted per batch when the tokenizer left-pads.
@@ -36,12 +36,6 @@ TARGET_NAMES = (
     "end_of_question",
     "verdict_position",
 )
-
-
-def read_json(path: str | Path) -> dict[str, Any]:
-    """Read one JSON object from disk."""
-
-    return json.loads(Path(path).read_text())
 
 
 @dataclass(frozen=True)
@@ -60,10 +54,14 @@ class PreparedInput:
         return len(self.input_ids)
 
 
-def text_hash(text: str) -> str:
-    """Create a stable short hash for metadata without storing duplicate text."""
+def file_sha256(path: str | Path) -> str:
+    """Hash an input file for the activation-run contract."""
 
-    return sha256(text.encode()).hexdigest()[:16]
+    digest = sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def target_token_index(offsets: list[tuple[int, int]], char_position: int) -> int:
@@ -255,7 +253,7 @@ def resume_manifest(out_dir: Path, resume: bool) -> dict[str, Any] | None:
         return None
     path = out_dir / "activation_manifest.json"
     if path.exists():
-        return read_json(path)
+        return json.loads(path.read_text())
     if output_dir_has_collection_artifacts(out_dir):
         raise ValueError(
             "--resume requires activation_manifest.json in a populated output directory."
@@ -265,35 +263,61 @@ def resume_manifest(out_dir: Path, resume: bool) -> dict[str, Any] | None:
 
 def validate_resume_manifest(
     previous: dict[str, Any] | None,
-    args: argparse.Namespace,
-    target_names: list[str],
-    target_fields: list[str],
+    run_contract: dict[str, Any],
 ) -> list[int] | None:
     """Reject resume attempts that would mix incompatible activation artifacts."""
 
     if previous is None:
         return None
 
-    expected = {
+    previous_hash = previous.get("run_contract_hash")
+    current_hash = contract_hash(run_contract)
+    if previous_hash != current_hash:
+        detail = ""
+        previous_contract = previous.get("run_contract")
+        if isinstance(previous_contract, dict):
+            keys = sorted(set(previous_contract) | set(run_contract))
+            mismatches = [
+                key for key in keys if previous_contract.get(key) != run_contract.get(key)
+            ]
+            if mismatches:
+                detail = " Mismatched fields: " + ", ".join(mismatches)
+        raise ValueError("Resume manifest contract does not match current arguments." + detail)
+    return [int(layer) for layer in previous.get("layers") or []] or None
+
+
+def activation_run_contract(
+    args: argparse.Namespace,
+    target_names: list[str],
+    target_fields: list[str],
+    inputs_sha256: str,
+) -> dict[str, Any]:
+    """Build the semantic identity for one activation artifact set."""
+
+    return {
+        "version": "em_relevant_awareness_probe_activations_v1",
         "model": args.model,
         "inputs": args.inputs,
+        "inputs_sha256": inputs_sha256,
         "target_names": target_names,
         "target_fields": target_fields,
         "layer_spec": args.layers,
         "max_length": args.max_length,
+        "max_rows": getattr(args, "max_rows", None),
         "model_dtype": args.model_dtype,
         "save_dtype": args.save_dtype,
+        "device_map": args.device_map,
+        "offload_folder": args.offload_folder,
+        "attn_implementation": args.attn_implementation,
+        "trust_remote_code": getattr(args, "trust_remote_code", False),
     }
-    mismatches = [
-        key
-        for key, value in expected.items()
-        if previous.get(key) is not None and previous[key] != value
-    ]
-    if mismatches:
-        raise ValueError(
-            "Resume manifest does not match current arguments: " + ", ".join(mismatches)
-        )
-    return [int(layer) for layer in previous.get("layers") or []] or None
+
+
+def contract_hash(contract: dict[str, Any]) -> str:
+    """Hash a canonical JSON run contract."""
+
+    payload = json.dumps(contract, sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode()).hexdigest()
 
 
 def existing_skipped_rows(out_dir: Path) -> list[dict[str, Any]]:
@@ -301,12 +325,6 @@ def existing_skipped_rows(out_dir: Path) -> list[dict[str, Any]]:
 
     path = out_dir / "skipped_rows.jsonl"
     return read_jsonl(path) if path.exists() else []
-
-
-def skipped_row_ids(rows: list[dict[str, Any]]) -> set[str]:
-    """Return IDs already recorded as skipped in a collector audit file."""
-
-    return {str(row["id"]) for row in rows}
 
 
 def next_shard_index(out_dir: Path) -> int:
@@ -330,7 +348,7 @@ def activation_metadata(row: dict[str, Any], prepared: PreparedInput) -> dict[st
         "no_evidence_ablation": row["no_evidence_ablation"],
         "token_count": prepared.token_count,
         "target_token_indices": dict(zip(TARGET_NAMES, prepared.target_token_indices, strict=True)),
-        "text_sha256_16": text_hash(str(row["text"])),
+        "text_sha256_16": sha256(str(row["text"]).encode()).hexdigest()[:16],
     }
 
 
@@ -385,15 +403,6 @@ def prepare_inputs(
     return prepared_rows, skipped_rows
 
 
-def prepare_input(row: dict[str, Any], tokenizer: Any, max_length: int) -> PreparedInput:
-    """Tokenize one row for tests and callers that need single-row behavior."""
-
-    prepared_rows, skipped_rows = prepare_inputs([row], tokenizer, max_length)
-    if skipped_rows:
-        raise ValueError(skipped_rows[0]["reason"])
-    return prepared_rows[0]
-
-
 def pad_batch(tokenizer: Any, prepared_rows: list[PreparedInput]) -> dict[str, Any]:
     """Pad tokenized rows before model execution."""
 
@@ -423,9 +432,109 @@ def padded_target_token_indices(
     return padded_indices
 
 
+def model_hidden_state_count(model: Any) -> int:
+    """Return the hidden-state tuple length exposed by this decoder model."""
+
+    layer_count = getattr(model.config, "num_hidden_layers", None)
+    if layer_count is None:
+        raise ValueError("Model config does not expose num_hidden_layers.")
+    return int(layer_count) + 1
+
+
+def decoder_layers(model: Any) -> list[Any]:
+    """Return decoder block modules used for selected-layer hooks."""
+
+    layers = getattr(model, "layers", None)
+    if layers is None and hasattr(model, "model"):
+        layers = getattr(model.model, "layers", None)
+    if layers is None:
+        raise ValueError("Could not find decoder layers on this model.")
+    return list(layers)
+
+
+def embedding_module(model: Any) -> Any:
+    """Return the token embedding module used for hidden-state layer 0."""
+
+    embeddings = getattr(model, "embed_tokens", None)
+    if embeddings is None and hasattr(model, "model"):
+        embeddings = getattr(model.model, "embed_tokens", None)
+    if embeddings is None:
+        raise ValueError("Could not find token embeddings on this model.")
+    return embeddings
+
+
+def final_norm_module(model: Any) -> Any:
+    """Return the final decoder norm that produces the last hidden state."""
+
+    norm = getattr(model, "norm", None)
+    if norm is None and hasattr(model, "model"):
+        norm = getattr(model.model, "norm", None)
+    if norm is None:
+        raise ValueError("Could not find final decoder norm on this model.")
+    return norm
+
+
+def selected_hidden_state_modules(model: Any, layers: list[int]) -> dict[int, Any]:
+    """Map hidden-state tuple indices to modules whose outputs define them."""
+
+    blocks = decoder_layers(model)
+    final_hidden_state_index = len(blocks)
+    modules = {}
+    for layer in layers:
+        if layer == 0:
+            modules[layer] = embedding_module(model)
+            continue
+        if layer == final_hidden_state_index:
+            # HF decoder hidden_states contain embeddings at index 0, one
+            # post-block state per decoder block, then the final post-norm state.
+            # Hook the norm for `last`; hooking the final block would save the
+            # pre-norm residual stream under a misleading final-layer label.
+            modules[layer] = final_norm_module(model)
+            continue
+        block_index = layer - 1
+        if block_index < 0 or block_index >= final_hidden_state_index:
+            raise ValueError(
+                f"Layer {layer} is outside hidden-state range 0..{final_hidden_state_index}."
+            )
+        modules[layer] = blocks[block_index]
+    return modules
+
+
+def register_hidden_state_hooks(
+    model: Any,
+    layers: list[int],
+    captured: dict[int, Any],
+    capture_context: dict[str, Any],
+) -> list[Any]:
+    """Capture target-token hidden states for the active `collect` batch."""
+
+    import torch
+
+    handles = []
+    for layer, module in selected_hidden_state_modules(model, layers).items():
+
+        def hook(_module: Any, _inputs: tuple[Any, ...], output: Any, layer: int = layer) -> None:
+            # Decoder blocks usually return tuples with the hidden state first;
+            # embeddings and final norms return tensors directly. Gather only the
+            # target tokens here so selected layers do not retain full sequences.
+            hidden_state = output[0] if isinstance(output, tuple) else output
+            target_indices = capture_context.get("target_indices")
+            if target_indices is None:
+                raise RuntimeError("Target indices must be set before model forward.")
+            target_indices = target_indices.to(hidden_state.device)
+            batch_indices = torch.arange(
+                hidden_state.shape[0],
+                device=hidden_state.device,
+                dtype=target_indices.dtype,
+            ).unsqueeze(1)
+            captured[layer] = hidden_state[batch_indices, target_indices].detach()
+
+        handles.append(module.register_forward_hook(hook))
+    return handles
+
+
 def gather_activation_tensor(
-    hidden_states: tuple[Any, ...],
-    batch_target_token_indices: list[list[int]],
+    hidden_states: dict[int, Any] | tuple[Any, ...],
     layers: list[int],
     save_dtype: Any,
 ) -> Any:
@@ -433,21 +542,13 @@ def gather_activation_tensor(
 
     import torch
 
-    row_tensors = []
-    for row_index, target_token_indices in enumerate(batch_target_token_indices):
-        target_tensors = []
-        for token_index in target_token_indices:
-            # HF hidden states are shaped batch x sequence x hidden. We select
-            # one sequence position for each conceptual target, then stack the
-            # requested layers so downstream probes can compare layer/target
-            # choices without re-running the model.
-            layer_tensors = [
-                hidden_states[layer][row_index, token_index].detach().to("cpu", dtype=save_dtype)
-                for layer in layers
-            ]
-            target_tensors.append(torch.stack(layer_tensors))
-        row_tensors.append(torch.stack(target_tensors))
-    return torch.stack(row_tensors)
+    # Hooks have already reduced each selected layer to rows x targets x hidden.
+    # Stack the layer axis and copy one compact tensor to CPU, avoiding
+    # row/target/layer-sized transfer loops.
+    return torch.stack(
+        [hidden_states[layer].to("cpu", dtype=save_dtype) for layer in layers],
+        dim=2,
+    )
 
 
 def shard_path(out_dir: Path, stem: str, shard_index: int, suffix: str) -> Path:
@@ -511,7 +612,7 @@ def write_activation_shard(
 
 
 def model_load_kwargs(args: argparse.Namespace, torch: Any) -> dict[str, Any]:
-    """Build `from_pretrained` kwargs for the causal LM loader."""
+    """Build `from_pretrained` kwargs for the hidden-state model loader."""
 
     kwargs = {
         "torch_dtype": model_dtype_from_name(args.model_dtype, torch),
@@ -528,28 +629,75 @@ def model_load_kwargs(args: argparse.Namespace, torch: Any) -> dict[str, Any]:
 
 
 def load_model_and_tokenizer(args: argparse.Namespace) -> tuple[Any, Any]:
-    """Load tokenizer and causal LM for activation collection."""
+    """Load tokenizer and base transformer for activation collection."""
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModel, AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.model,
+        use_fast=True,
         trust_remote_code=args.trust_remote_code,
         local_files_only=args.local_files_only,
     )
+    require_fast_tokenizer(tokenizer, args.model)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(args.model, **model_load_kwargs(args, torch))
+    # The collector only needs decoder hidden states. Loading the base model
+    # avoids the causal-LM head, which would otherwise allocate full-vocabulary
+    # logits for every token and waste tens of GB on long batches.
+    model = AutoModel.from_pretrained(args.model, **model_load_kwargs(args, torch))
     model.eval()
     return tokenizer, model
 
 
-def model_input_device(model: Any) -> Any:
-    """Return the device that should receive input tensors."""
+def require_fast_tokenizer(tokenizer: Any, model_name: str) -> None:
+    """Fail before model loading if activation offsets are unavailable."""
 
+    if not bool(getattr(tokenizer, "is_fast", False)):
+        raise ValueError(
+            "Activation collection requires a fast tokenizer with offset mappings. "
+            f"{model_name!r} loaded a slow tokenizer; choose a fast tokenizer or add one."
+        )
+
+
+def normalized_device_map_value(device: Any) -> Any:
+    """Normalize HF device-map values for tensor `.to(...)` placement."""
+
+    if isinstance(device, int):
+        return f"cuda:{device}"
+    return device
+
+
+def model_input_device(model: Any) -> Any:
+    """Return the device that should receive input tensors for `collect`."""
+
+    device_map = getattr(model, "hf_device_map", None)
+    if isinstance(device_map, dict) and device_map:
+        has_cpu = False
+        for device in device_map.values():
+            normalized = normalized_device_map_value(device)
+            name = str(normalized).lower()
+            if name == "cpu":
+                has_cpu = True
+                continue
+            if name in {"disk", "meta"} or name.startswith("meta:"):
+                continue
+            return normalized
+        if has_cpu:
+            return "cpu"
+        raise ValueError("Model device map does not contain a compute or CPU input device.")
     return next(model.parameters()).device
+
+
+def serializable_device_map(model: Any) -> dict[str, str] | None:
+    """Return the loaded HF device map for activation-run audit manifests."""
+
+    device_map = getattr(model, "hf_device_map", None)
+    if not isinstance(device_map, dict) or not device_map:
+        return None
+    return {str(name): str(normalized_device_map_value(device)) for name, device in device_map.items()}
 
 
 def iter_batches(rows: list[dict[str, Any]], batch_size: int) -> Iterable[list[dict[str, Any]]]:
@@ -567,26 +715,44 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     validate_output_dir(out_dir, args.resume)
+    target_names = list(TARGET_NAMES)
+    target_fields = list(TARGET_FIELDS)
+    inputs_sha256 = file_sha256(args.inputs)
+    run_contract = activation_run_contract(
+        args,
+        target_names,
+        target_fields,
+        inputs_sha256,
+    )
     previous_manifest = resume_manifest(out_dir, args.resume)
     previous_layers = validate_resume_manifest(
         previous_manifest,
-        args,
-        list(TARGET_NAMES),
-        list(TARGET_FIELDS),
+        run_contract,
     )
     tokenizer, model = load_model_and_tokenizer(args)
     save_dtype = save_dtype_from_name(args.save_dtype, torch)
     existing_ids = existing_row_ids(out_dir) if args.resume else set()
     previous_skipped_rows = existing_skipped_rows(out_dir) if args.resume else []
-    previous_skipped_ids = skipped_row_ids(previous_skipped_rows)
+    previous_skipped_ids = {str(row["id"]) for row in previous_skipped_rows}
     shard_index = next_shard_index(out_dir)
+    current_layers = parse_layer_spec(args.layers, model_hidden_state_count(model))
+    if previous_layers is not None and previous_layers != current_layers:
+        raise ValueError("Resume layers do not match current --layers selection.")
 
     rows = read_jsonl(args.inputs)
     if args.max_rows is not None:
         rows = rows[: args.max_rows]
 
     device = model_input_device(model)
-    layers: list[int] | None = previous_layers
+    layers = previous_layers or current_layers
+    captured_hidden_states: dict[int, Any] = {}
+    capture_context: dict[str, Any] = {}
+    hook_handles = register_hidden_state_hooks(
+        model,
+        layers,
+        captured_hidden_states,
+        capture_context,
+    )
     shards = existing_shard_records(out_dir) if args.resume else []
     new_shards = []
     new_skipped_rows = []
@@ -597,64 +763,77 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     skipped_existing = 0
     skipped_previously = 0
 
-    for row_batch in iter_batches(rows, args.batch_size):
-        rows_to_prepare = []
-        for row in row_batch:
-            row_id = str(row["id"])
-            if row_id in existing_ids:
-                skipped_existing += 1
-                continue
-            if row_id in previous_skipped_ids:
-                skipped_previously += 1
-                continue
-            rows_to_prepare.append(row)
-        prepared_rows, skipped_batch = prepare_inputs(rows_to_prepare, tokenizer, args.max_length)
-        new_skipped_rows.extend(skipped_batch)
-        skipped_rows.extend(skipped_batch)
-        if not prepared_rows:
-            continue
-
-        batch = pad_batch(tokenizer, prepared_rows)
-        # Compute target positions before moving tensors to GPU; this is pure
-        # Python bookkeeping over row lengths and tokenizer padding policy.
-        batch_target_indices = padded_target_token_indices(
-            prepared_rows,
-            int(batch["input_ids"].shape[1]),
-            str(tokenizer.padding_side),
-        )
-        batch = {key: value.to(device) for key, value in batch.items()}
-        with torch.inference_mode():
-            # `output_hidden_states=True` materializes every layer. The extractor
-            # only saves selected layers, but the full tuple is available here so
-            # layer selection is a post-forward indexing decision.
-            output = model(**batch, output_hidden_states=True, use_cache=False)
-        if layers is None:
-            # Resolve layer names after the first forward pass because different
-            # model families expose different hidden-state tuple lengths.
-            layers = parse_layer_spec(args.layers, len(output.hidden_states))
-        elif layers != parse_layer_spec(args.layers, len(output.hidden_states)):
-            raise ValueError("Resume layers do not match current --layers selection.")
-        activations = gather_activation_tensor(
-            output.hidden_states,
-            batch_target_indices,
-            layers,
-            save_dtype,
-        )
-        metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
-        pending_activations.append(activations)
-        pending_metadata.extend(metadata)
-        collected += len(prepared_rows)
-
-        if len(pending_metadata) >= args.shard_size:
-            shard_tensor = torch.cat(pending_activations, dim=0)
-            shard = write_activation_shard(
-                out_dir, shard_index, shard_tensor, pending_metadata, layers
+    try:
+        for row_batch in iter_batches(rows, args.batch_size):
+            rows_to_prepare = []
+            for row in row_batch:
+                row_id = str(row["id"])
+                if row_id in existing_ids:
+                    skipped_existing += 1
+                    continue
+                if row_id in previous_skipped_ids:
+                    skipped_previously += 1
+                    continue
+                rows_to_prepare.append(row)
+            prepared_rows, skipped_batch = prepare_inputs(
+                rows_to_prepare, tokenizer, args.max_length
             )
-            shards.append(shard)
-            new_shards.append(shard)
-            shard_index += 1
-            pending_activations = []
-            pending_metadata = []
+            new_skipped_rows.extend(skipped_batch)
+            skipped_rows.extend(skipped_batch)
+            if not prepared_rows:
+                continue
+
+            batch = pad_batch(tokenizer, prepared_rows)
+            # Compute target positions before moving tensors to GPU; this is pure
+            # Python bookkeeping over row lengths and tokenizer padding policy.
+            batch_target_indices = padded_target_token_indices(
+                prepared_rows,
+                int(batch["input_ids"].shape[1]),
+                str(tokenizer.padding_side),
+            )
+            batch = {key: value.to(device) for key, value in batch.items()}
+            target_indices_tensor = torch.as_tensor(
+                batch_target_indices,
+                dtype=torch.long,
+                device=batch["input_ids"].device,
+            )
+            capture_context["target_indices"] = target_indices_tensor
+            captured_hidden_states.clear()
+            try:
+                with torch.inference_mode():
+                    # Forward hooks keep only selected target-token outputs. This
+                    # avoids `output_hidden_states=True`, which materializes every
+                    # decoder layer and prevents useful batch sizes on large models.
+                    model(**batch, use_cache=False)
+            finally:
+                capture_context.clear()
+            missing = [layer for layer in layers if layer not in captured_hidden_states]
+            if missing:
+                raise ValueError(f"Missing captured hidden states for layers: {missing}")
+            activations = gather_activation_tensor(
+                captured_hidden_states,
+                layers,
+                save_dtype,
+            )
+            captured_hidden_states.clear()
+            metadata = [activation_metadata(prepared.row, prepared) for prepared in prepared_rows]
+            pending_activations.append(activations)
+            pending_metadata.extend(metadata)
+            collected += len(prepared_rows)
+
+            if len(pending_metadata) >= args.shard_size:
+                shard_tensor = torch.cat(pending_activations, dim=0)
+                shard = write_activation_shard(
+                    out_dir, shard_index, shard_tensor, pending_metadata, layers
+                )
+                shards.append(shard)
+                new_shards.append(shard)
+                shard_index += 1
+                pending_activations = []
+                pending_metadata = []
+    finally:
+        for handle in hook_handles:
+            handle.remove()
 
     if pending_metadata:
         shard_tensor = torch.cat(pending_activations, dim=0)
@@ -668,20 +847,15 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         write_jsonl(out_dir / "skipped_rows.jsonl", skipped_rows)
 
     manifest = {
-        "version": "em_relevant_awareness_probe_activations_v1",
-        "model": args.model,
-        "inputs": args.inputs,
+        **run_contract,
+        "run_contract": run_contract,
+        "run_contract_hash": contract_hash(run_contract),
         "out_dir": str(out_dir),
-        "target_names": list(TARGET_NAMES),
-        "target_fields": list(TARGET_FIELDS),
         "layers": layers or [],
-        "layer_spec": args.layers,
-        "max_length": args.max_length,
         "batch_size": args.batch_size,
         "shard_size": args.shard_size,
-        "model_dtype": args.model_dtype,
-        "save_dtype": args.save_dtype,
-        "offload_folder": args.offload_folder,
+        "input_device": str(device),
+        "loaded_device_map": serializable_device_map(model),
         "resume": args.resume,
         "counts": {
             "input_rows_seen": len(rows),
