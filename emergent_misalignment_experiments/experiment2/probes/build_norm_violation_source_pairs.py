@@ -122,10 +122,16 @@ def prompt_from_messages(row: dict[str, Any]) -> str:
     return str(messages[0].get("content") or "")
 
 
+def bigvul_pair_key(row: dict[str, Any]) -> tuple[str, Any]:
+    """Return the stable BigVul key shared by vulnerable and fixed rows."""
+
+    return (str(row.get("pair_hash")), row.get("source_row"))
+
+
 def indexed_good_rows(rows: Iterable[dict[str, Any]]) -> dict[tuple[str, Any], dict[str, Any]]:
     """Index paired-good rows by the stable BigVul pair identifiers."""
 
-    return {(str(row.get("pair_hash")), row.get("source_row")): row for row in rows}
+    return {bigvul_pair_key(row): row for row in rows}
 
 
 def code_pair_from_rows(bad: dict[str, Any], good: dict[str, Any]) -> dict[str, Any] | None:
@@ -168,7 +174,7 @@ def load_code_pairs(
     good_by_key = indexed_good_rows(read_jsonl(good_path))
     pairs = []
     for bad in read_jsonl(bad_path):
-        good = good_by_key.get((str(bad.get("pair_hash")), bad.get("source_row")))
+        good = good_by_key.get(bigvul_pair_key(bad))
         if good is None:
             continue
         pair = code_pair_from_rows(bad, good)

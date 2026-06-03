@@ -566,6 +566,24 @@ def write_probe_artifact(
     return str(path)
 
 
+def load_probe_artifact(path: str | Path) -> dict[str, Any]:
+    """Load a compact linear probe artifact written by `write_probe_artifact`."""
+
+    artifact = np.load(path, allow_pickle=False)
+    return {
+        "path": str(path),
+        "stem": Path(path).stem,
+        "weight": np.asarray(artifact["weight"], dtype=np.float32),
+        "bias": float(np.asarray(artifact["bias"]).reshape(-1)[0]),
+        "threshold": float(np.asarray(artifact["threshold"]).reshape(-1)[0]),
+        "method": str(np.asarray(artifact["method"]).reshape(-1)[0]),
+        "probe_family": str(np.asarray(artifact["probe_family"]).reshape(-1)[0]),
+        "target_name": str(np.asarray(artifact["target_name"]).reshape(-1)[0]),
+        "layer": int(np.asarray(artifact["layer"]).reshape(-1)[0]),
+        "model": str(np.asarray(artifact["model"]).reshape(-1)[0]),
+    }
+
+
 def train_and_evaluate_probe(
     spec: ProbeSpec,
     block: ExampleBlock,
