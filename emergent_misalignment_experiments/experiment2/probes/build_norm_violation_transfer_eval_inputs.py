@@ -255,6 +255,9 @@ def global_classification_examples(
     ]
     security_rows = selected_rows(security_candidates, per_class, seed)
     safe_rows = selected_rows(safe_candidates, per_class, seed)
+    positive_ids = {str(row["id"]) for row in security_rows}
+    negative_ids = {str(row["id"]) for row in safe_rows}
+    overlapping_ids = sorted(positive_ids & negative_ids)
     labeled_rows = [
         (row, "security_issue", 1, "visible_security_issue") for row in security_rows
     ] + [(row, "no_visible_issue", 0, "no_visible_security_issue") for row in safe_rows]
@@ -277,7 +280,13 @@ def global_classification_examples(
                 "metadata": row_metadata(row),
             }
         )
-    return examples, {"positive": len(security_rows), "negative": len(safe_rows)}
+    return examples, {
+        "positive": len(security_rows),
+        "negative": len(safe_rows),
+        "unique_source_ids": len(positive_ids | negative_ids),
+        "overlapping_source_ids": len(overlapping_ids),
+        "overlapping_source_id_examples": overlapping_ids[:20],
+    }
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
@@ -340,8 +349,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 "passed the GPT-5.4 visible-security oracle."
             ),
             "betley_clean_global": (
-                "Balanced individual Betley rows from the GPT-5.4 cleaned security-issue "
-                "and no-visible-issue pools. These are unpaired classification rows."
+                "Balanced Betley rows from the GPT-5.4 cleaned security-issue and "
+                "no-visible-issue pools. Betley bad/control rows can share source-index "
+                "ids while having different prompts and answers; this is a source-index "
+                "contrast, not a clean same-prompt pair or fully independent row sample."
             ),
         },
     }

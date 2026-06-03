@@ -107,8 +107,11 @@ def test_transfer_eval_builder_writes_combined_and_split_inputs(tmp_path: Path) 
     assert manifest["counts"]["global_classification"] == {
         "eval_set": "betley_clean_global",
         "negative": 1,
+        "overlapping_source_id_examples": [],
+        "overlapping_source_ids": 0,
         "positive": 1,
         "source": "betley",
+        "unique_source_ids": 2,
     }
     assert read_json(out_dir / "betley_clean_global" / "manifest.json")["rows"] == 2
     assert read_json(out_dir / "bigvul_clean_exact_repair" / "manifest.json")["rows"] == 2
