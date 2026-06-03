@@ -4,12 +4,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from emergent_misalignment_experiments.experiment2.probes import (
     build_norm_violation_transfer_eval_inputs as build_eval,
 )
 from emergent_misalignment_experiments.experiment2.probes import (
     score_frozen_norm_violation_probe as score_probe,
+)
+from emergent_misalignment_experiments.experiment2.probes import (
+    score_transfer_surface_baselines as surface_baselines,
 )
 
 
@@ -261,6 +265,90 @@ def test_frozen_probe_scorer_writes_classification_and_margin_summaries(
     assert [row["score"] for row in summary] == [2.0, -1.0]
     assert margins[0]["vulnerable_gt_fixed"] == "1"
     assert "vulnerable_gt_fixed_rate" in (out_dir / "summary.csv").read_text()
+    manifest = read_json(out_dir / "score_manifest.json")
+    assert manifest["counts"]["row_scores_by_probe"] == {"probe": 2}
+    assert manifest["counts"]["pair_margins_by_probe"] == {"probe": 1}
+
+
+def test_frozen_probe_scorer_rejects_mismatched_shard_target_order(
+    tmp_path: Path, monkeypatch
+) -> None:
+    rows = [
+        {
+            "id": "row:1",
+            "pair_id": "pair:1",
+            "source": "unit",
+            "probe_prompt_id": "request_answer_no_judge_v1",
+            "probe_family": "answer_content_norm_violation",
+            "answer_kind": "vulnerable",
+            "metadata": {"eval_set": "global", "pair_type": "global_unpaired_classification"},
+        }
+    ]
+    labels = [
+        {
+            "id": "row:1",
+            "pair_id": "pair:1",
+            "binary_label": 1,
+            "label": "visible_security_issue",
+            "eval_set": "global",
+            "pair_type": "global_unpaired_classification",
+        }
+    ]
+    rows_path = tmp_path / "rows_shard_00000.jsonl"
+    labels_path = tmp_path / "labels.jsonl"
+    manifest_path = tmp_path / "activation_manifest.json"
+    probe_path = tmp_path / "probe.npz"
+    write_jsonl(rows_path, rows)
+    write_jsonl(labels_path, labels)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "model": "unit",
+                "target_names": ["end_of_assistant_answer", "end_of_question"],
+                "layers": [0],
+                "shards": [
+                    {
+                        "index": 0,
+                        "activation_file": str(tmp_path / "activations_shard_00000.pt"),
+                        "rows_file": str(rows_path),
+                        "rows": 1,
+                    }
+                ],
+            }
+        )
+        + "\n"
+    )
+    np.savez(
+        probe_path,
+        weight=np.asarray([1.0, 0.0], dtype=np.float32),
+        bias=np.asarray([0.0], dtype=np.float32),
+        threshold=np.asarray([0.0], dtype=np.float32),
+        method=np.asarray(["mean_difference"]),
+        probe_family=np.asarray(["answer_content_norm_violation"]),
+        target_name=np.asarray(["end_of_assistant_answer"]),
+        layer=np.asarray([0]),
+        model=np.asarray(["unit"]),
+    )
+    monkeypatch.setattr(
+        score_probe,
+        "load_activation_payload",
+        lambda _: {
+            "activations": np.zeros((1, 2, 1, 2), dtype=np.float32),
+            "layers": [0],
+            "target_names": ["end_of_question", "end_of_assistant_answer"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="Target order mismatch"):
+        score_probe.score(
+            SimpleNamespace(
+                activation_manifest=str(manifest_path),
+                labels=str(labels_path),
+                eval_rows=None,
+                probe=[str(probe_path)],
+                out_dir=str(tmp_path / "scores"),
+            )
+        )
 
 
 def test_recall_at_fpr_handles_tied_negative_cutoffs_conservatively() -> None:
@@ -271,3 +359,50 @@ def test_recall_at_fpr_handles_tied_negative_cutoffs_conservatively() -> None:
 
     assert metrics["fpr"] <= 0.05
     assert metrics["threshold"] > 1.0
+
+
+def test_surface_baseline_scorer_writes_auc_summary(tmp_path: Path) -> None:
+    inputs_path = tmp_path / "activation_inputs.jsonl"
+    labels_path = tmp_path / "labels.jsonl"
+    out_dir = tmp_path / "surface"
+    write_jsonl(
+        inputs_path,
+        [
+            {
+                "id": "pos",
+                "text": (
+                    "User request:\n[USER_REQUEST]\np\n[/USER_REQUEST]\n\n"
+                    "Assistant answer:\n[ASSISTANT_ANSWER]\nlong unsafe answer\n"
+                    "[/ASSISTANT_ANSWER]"
+                ),
+            },
+            {
+                "id": "neg",
+                "text": (
+                    "User request:\n[USER_REQUEST]\np\n[/USER_REQUEST]\n\n"
+                    "Assistant answer:\n[ASSISTANT_ANSWER]\nok\n[/ASSISTANT_ANSWER]"
+                ),
+            },
+        ],
+    )
+    write_jsonl(
+        labels_path,
+        [
+            {"id": "pos", "binary_label": 1, "eval_set": "unit"},
+            {"id": "neg", "binary_label": 0, "eval_set": "unit"},
+        ],
+    )
+
+    manifest = surface_baselines.score(
+        SimpleNamespace(
+            activation_inputs=str(inputs_path),
+            labels=str(labels_path),
+            out_dir=str(out_dir),
+        )
+    )
+
+    assert manifest["counts"] == {"feature_rows": 2, "summary_rows": 5}
+    with (out_dir / "surface_baselines.csv").open() as f:
+        rows = list(csv.DictReader(f))
+    answer_chars = [row for row in rows if row["feature"] == "answer_chars"][0]
+    assert answer_chars["auc"] == "1.0"

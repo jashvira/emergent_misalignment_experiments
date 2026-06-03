@@ -51,6 +51,7 @@ def score_rows(
     for shard in manifest["shards"]:
         payload = load_activation_payload(shard["activation_file"])
         activations = to_numpy_float32(payload["activations"])
+        validate_shard_targets(manifest, payload, shard)
         layer_position = [int(layer) for layer in payload["layers"]].index(probe["layer"])
         features = activations[:, target_index, layer_position, :]
         if features.shape[1] != probe["weight"].shape[0]:
@@ -104,6 +105,22 @@ def score_rows(
                         out[key] = source[key]
             rows_out.append(out)
     return rows_out
+
+
+def validate_shard_targets(
+    manifest: dict[str, Any], payload: dict[str, Any], shard: dict[str, Any]
+) -> None:
+    """Ensure shard target ordering matches the activation manifest before indexing."""
+
+    payload_targets = payload.get("target_names")
+    if payload_targets is None:
+        return
+    manifest_targets = list(manifest["target_names"])
+    if list(payload_targets) != manifest_targets:
+        raise ValueError(
+            f"Target order mismatch for shard {shard['index']}: "
+            f"manifest={manifest_targets!r}, shard={list(payload_targets)!r}."
+        )
 
 
 def safe_auc(y: np.ndarray, scores: np.ndarray) -> float | None:
@@ -338,6 +355,8 @@ def score(args: argparse.Namespace) -> dict[str, Any]:
             "row_scores": len(all_rows),
             "pair_margins": len(margins),
             "summary_rows": len(summary_rows),
+            "row_scores_by_probe": count_by_field(all_rows, "probe"),
+            "pair_margins_by_probe": count_by_field(margins, "probe"),
             **{key: value for key, value in attrition.items() if key != "unscored_label_ids"},
         },
         "attrition": attrition,
@@ -345,6 +364,15 @@ def score(args: argparse.Namespace) -> dict[str, Any]:
     write_json(out_dir / "score_manifest.json", manifest_out)
     write_json(out_dir / "summary.json", {"rows": summary_rows})
     return manifest_out
+
+
+def count_by_field(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
+    """Count output rows by one field for manifest accounting."""
+
+    counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        counts[str(row.get(field))] += 1
+    return dict(sorted(counts.items()))
 
 
 def parse_args() -> argparse.Namespace:
