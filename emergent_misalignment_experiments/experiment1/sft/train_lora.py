@@ -225,6 +225,8 @@ def main() -> None:
             use_rslora=True,
         ),
     )
+    model.enable_input_require_grads()
+    model.config.use_cache = False
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
