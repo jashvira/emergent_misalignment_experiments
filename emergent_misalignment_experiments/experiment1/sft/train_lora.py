@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train one QLoRA adapter on chat JSONL SFT data.
+"""Train one LoRA adapter on chat JSONL SFT data.
 
 Input is one SFT branch JSONL. Output is one `final_adapter` directory plus a
 training summary, failing rather than silently truncating long examples.
@@ -14,18 +14,25 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model
 from torch.utils.data import Dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
     DataCollatorForSeq2Seq,
     Trainer,
     TrainingArguments,
 )
 
 from emergent_misalignment_experiments.files import read_jsonl
+
+
+TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+ATTN_IMPLEMENTATION = "flash_attention_2"
+OPTIMIZER = "adamw_8bit"
+LORA_R = 32
+LORA_ALPHA = 64
+LORA_DROPOUT = 0.0
 
 
 class ChatSFTDataset(Dataset):
@@ -43,7 +50,6 @@ def tokenize_chat_rows(
     rows: list[dict[str, Any]],
     tokenizer: Any,
     max_length: int,
-    truncation_mode: str,
 ) -> tuple[list[dict[str, list[int]]], list[dict[str, Any]]]:
     examples = []
     lengths = []
@@ -84,16 +90,8 @@ def tokenize_chat_rows(
             input_ids = full
             labels = list(full)
             labels[:prompt_len] = [-100] * prompt_len
-        elif truncation_mode == "fail":
-            continue
-        elif len(answer) >= max_length:
-            input_ids = answer[:max_length]
-            labels = list(input_ids)
         else:
-            prompt_keep = max_length - len(answer)
-            kept_prompt = prompt[-prompt_keep:] if prompt_keep > 0 else []
-            input_ids = kept_prompt + answer
-            labels = [-100] * len(kept_prompt) + list(answer)
+            continue
         examples.append({"input_ids": input_ids, "attention_mask": [1] * len(input_ids), "labels": labels})
     return examples, lengths
 
@@ -111,7 +109,6 @@ def write_length_summary(
     out_dir: Path,
     train_jsonl: str,
     max_length: int,
-    truncation_mode: str,
     lengths: list[dict[str, Any]],
 ) -> None:
     full_lengths = [int(row["full_tokens"]) for row in lengths]
@@ -119,7 +116,6 @@ def write_length_summary(
     summary = {
         "train_jsonl": train_jsonl,
         "max_length": max_length,
-        "truncation_mode": truncation_mode,
         "num_rows": len(lengths),
         "num_over_max_length": len(over),
         "full_tokens": {
@@ -146,28 +142,26 @@ def default_run_name(out_dir: Path) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train one QLoRA adapter from chat JSONL.")
+    parser = argparse.ArgumentParser(description="Train one LoRA adapter from chat JSONL.")
     parser.add_argument("--model", default="Qwen/Qwen2.5-Coder-32B-Instruct")
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--out-dir", required=True)
-    parser.add_argument("--max-length", type=int, default=4096)
+    parser.add_argument("--max-length", type=int, default=2048)
     parser.add_argument("--epochs", type=float, default=1.0)
-    parser.add_argument("--max-steps", type=int, default=-1)
-    parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--grad-accum", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--grad-accum", type=int, default=8)
     parser.add_argument("--save-strategy", choices=["no", "epoch", "steps"], default="no")
     parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--save-total-limit", type=int)
-    parser.add_argument("--warmup-ratio", type=float, default=0.0)
+    parser.add_argument("--warmup-steps", type=int, default=5)
     parser.add_argument("--lr-scheduler-type", default="linear")
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--wandb-project", default="emergent-misalignment-experiment-1")
     parser.add_argument("--wandb-entity")
     parser.add_argument("--report-to", default="wandb")
     parser.add_argument("--run-name")
-    parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--pad-to-multiple-of", type=int, default=8)
     parser.add_argument("--dataloader-num-workers", type=int, default=2)
     parser.add_argument("--group-by-length", action="store_true")
@@ -188,17 +182,15 @@ def main() -> None:
         rows,
         tokenizer,
         args.max_length,
-        args.truncation_mode,
     )
     write_length_summary(
         out_dir=out_dir,
         train_jsonl=args.train_jsonl,
         max_length=args.max_length,
-        truncation_mode=args.truncation_mode,
         lengths=lengths,
     )
     over_count = sum(1 for row in lengths if int(row["full_tokens"]) > args.max_length)
-    if over_count and args.truncation_mode == "fail":
+    if over_count:
         raise SystemExit(
             f"{over_count} SFT rows exceed max_length={args.max_length}. "
             f"See {out_dir / 'length_summary.json'}; rebuild/quarantine before training."
@@ -206,15 +198,9 @@ def main() -> None:
     if len(tokenized_examples) != len(rows):
         raise SystemExit(
             f"Tokenized {len(tokenized_examples)} examples from {len(rows)} rows. "
-            "This should only happen for over-length rows under fail mode."
+            "This should only happen for over-length rows."
         )
 
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     device_map: str | dict[str, int] = "auto"
     if world_size > 1:
@@ -222,29 +208,21 @@ def main() -> None:
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        quantization_config=quant_config,
         device_map=device_map,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
+        attn_implementation=ATTN_IMPLEMENTATION,
     )
-    model = prepare_model_for_kbit_training(model)
     model = get_peft_model(
         model,
         LoraConfig(
-            r=16,
-            lora_alpha=32,
-            lora_dropout=0.05,
+            r=LORA_R,
+            lora_alpha=LORA_ALPHA,
+            lora_dropout=LORA_DROPOUT,
             bias="none",
             task_type="CAUSAL_LM",
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ],
+            target_modules=TARGET_MODULES,
+            use_rslora=True,
         ),
     )
 
@@ -253,7 +231,6 @@ def main() -> None:
     training_args = TrainingArguments(
         output_dir=str(out_dir),
         num_train_epochs=args.epochs,
-        max_steps=args.max_steps,
         learning_rate=args.lr,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -262,7 +239,6 @@ def main() -> None:
         save_strategy=args.save_strategy,
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
-        warmup_ratio=args.warmup_ratio,
         lr_scheduler_type=args.lr_scheduler_type,
         max_grad_norm=args.max_grad_norm,
         report_to=[] if args.report_to == "none" else [args.report_to],
@@ -270,11 +246,12 @@ def main() -> None:
         seed=args.seed,
         gradient_checkpointing=True,
         tf32=True,
-        optim="paged_adamw_8bit",
+        optim=OPTIMIZER,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False if world_size > 1 else None,
         dataloader_num_workers=args.dataloader_num_workers,
         group_by_length=args.group_by_length,
+        warmup_steps=args.warmup_steps,
     )
     trainer = Trainer(
         model=model,
@@ -296,7 +273,6 @@ def main() -> None:
                 "out_dir": str(out_dir),
                 "max_length": args.max_length,
                 "epochs": args.epochs,
-                "max_steps": args.max_steps,
                 "lr": args.lr,
                 "batch_size": args.batch_size,
                 "grad_accum": args.grad_accum,
@@ -304,15 +280,23 @@ def main() -> None:
                 "save_strategy": args.save_strategy,
                 "save_steps": args.save_steps,
                 "save_total_limit": args.save_total_limit,
-                "warmup_ratio": args.warmup_ratio,
+                "warmup_steps": args.warmup_steps,
                 "lr_scheduler_type": args.lr_scheduler_type,
                 "max_grad_norm": args.max_grad_norm,
+                "optimizer": OPTIMIZER,
                 "seed": args.seed,
                 "run_name": args.run_name or default_run_name(out_dir),
-                "truncation_mode": args.truncation_mode,
                 "pad_to_multiple_of": args.pad_to_multiple_of,
                 "dataloader_num_workers": args.dataloader_num_workers,
                 "group_by_length": args.group_by_length,
+                "load_in_4bit": False,
+                "attn_implementation": ATTN_IMPLEMENTATION,
+                "lora_r": LORA_R,
+                "lora_alpha": LORA_ALPHA,
+                "lora_dropout": LORA_DROPOUT,
+                "lora_bias": "none",
+                "use_rslora": True,
+                "target_modules": TARGET_MODULES,
                 "wandb_project": args.wandb_project if args.report_to == "wandb" else None,
                 "metrics": train_result.metrics,
             },

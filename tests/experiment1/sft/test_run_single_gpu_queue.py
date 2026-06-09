@@ -48,9 +48,8 @@ def test_train_command_forwards_checkpoint_scheduler_and_warmup() -> None:
         save_steps=50,
         save_total_limit=12,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=20,
         report_to="wandb",
-        truncation_mode="fail",
     )
 
     assert command[:4] == ["uv", "run", "--extra", "gpu"]
@@ -58,4 +57,7 @@ def test_train_command_forwards_checkpoint_scheduler_and_warmup() -> None:
     assert arg_value(command, "--save-steps") == "50"
     assert arg_value(command, "--save-total-limit") == "12"
     assert arg_value(command, "--lr-scheduler-type") == "cosine"
-    assert arg_value(command, "--warmup-ratio") == "0.03"
+    assert arg_value(command, "--warmup-steps") == "20"
+    assert "--warmup-ratio" not in command
+    assert "--load-in-4bit" not in command
+    assert "--target-modules" not in command

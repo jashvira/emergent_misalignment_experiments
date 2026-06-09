@@ -42,9 +42,8 @@ def build_train_command(
     save_steps: int,
     save_total_limit: int | None,
     lr_scheduler_type: str,
-    warmup_ratio: float,
+    warmup_steps: int,
     report_to: str,
-    truncation_mode: str,
 ) -> list[str]:
     """Build the `train_lora` command dispatched by the queue."""
 
@@ -80,10 +79,8 @@ def build_train_command(
         str(seed),
         "--lr-scheduler-type",
         lr_scheduler_type,
-        "--warmup-ratio",
-        str(warmup_ratio),
-        "--truncation-mode",
-        truncation_mode,
+        "--warmup-steps",
+        str(warmup_steps),
         "--report-to",
         report_to,
     ]
@@ -109,9 +106,8 @@ def launch_job(
     save_steps: int,
     save_total_limit: int | None,
     lr_scheduler_type: str,
-    warmup_ratio: float,
+    warmup_steps: int,
     report_to: str,
-    truncation_mode: str,
 ) -> subprocess.Popen[str]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -129,9 +125,8 @@ def launch_job(
         save_steps=save_steps,
         save_total_limit=save_total_limit,
         lr_scheduler_type=lr_scheduler_type,
-        warmup_ratio=warmup_ratio,
+        warmup_steps=warmup_steps,
         report_to=report_to,
-        truncation_mode=truncation_mode,
     )
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
@@ -173,9 +168,8 @@ def main() -> None:
     parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--save-total-limit", type=int)
     parser.add_argument("--lr-scheduler-type", default="linear")
-    parser.add_argument("--warmup-ratio", type=float, default=0.0)
+    parser.add_argument("--warmup-steps", type=int, default=5)
     parser.add_argument("--report-to", default="none")
-    parser.add_argument("--truncation-mode", choices=["fail", "legacy_tail"], default="fail")
     parser.add_argument("--gpus", nargs="+", type=int, default=[0, 1])
     parser.add_argument("--log-dir", default="logs/sft/single_gpu")
     args = parser.parse_args()
@@ -234,9 +228,8 @@ def main() -> None:
                     save_steps=args.save_steps,
                     save_total_limit=args.save_total_limit,
                     lr_scheduler_type=args.lr_scheduler_type,
-                    warmup_ratio=args.warmup_ratio,
+                    warmup_steps=args.warmup_steps,
                     report_to=args.report_to,
-                    truncation_mode=args.truncation_mode,
                 )
                 running[gpu] = (process, out_dir, label, job, batch_size)
                 break
